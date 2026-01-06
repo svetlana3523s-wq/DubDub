@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Scene {
+  id          String    @id @default(cuid())
+  title       String
+  s3Key       String    // scenes/scene1.mp4
+  durationSec Float
+  rolesCount  Int
+  cueJson     String    // JSON: [{roleIndex, startSec, durationSec}]
+  createdAt   DateTime  @default(now())
+  sessions    Session[]
+}
+
+model Session {
+  id              String        @id @default(cuid())
+  mode            String        @default("absurd")
+  topic           String
+  status          String        @default("lobby") // lobby | recording | rendering | ready
+  sceneId         String
+  scene           Scene         @relation(fields: [sceneId], references: [id])
+  maxPlayers      Int
+  createdByTgUserId String
+  createdAt       DateTime      @default(now())
+  participants    Participant[]
+  takes           Take[]
+  render          Render?
+
+  @@index([createdByTgUserId])
+  @@index([status])
+}
+
+model Participant {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tgUserId    String
+  displayName String
+  roleIndex   Int
+  joinedAt    DateTime @default(now())
+
+  @@unique([sessionId, tgUserId])
+  @@unique([sessionId, roleIndex])
+  @@index([tgUserId])
+}
+
+model Take {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roleIndex   Int
+  s3Key       String   // uploads/<sessionId>/<roleIndex>.webm
+  durationSec Float
+  createdAt   DateTime @default(now())
+
+  @@unique([sessionId, roleIndex])
+}
+
+model Render {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status    String   @default("pending") // pending | rendering | ready | failed
+  s3Key     String?  // renders/<sessionId>.mp4
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
