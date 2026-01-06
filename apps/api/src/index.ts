@@ -92,5 +92,5 @@ try {
   process.exit(1);
 }
 
-export { bot };
+// Bot instance is used internally
 
