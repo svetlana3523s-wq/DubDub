@@ -1,5 +1,5 @@
 import { Worker, Job } from "bullmq";
-import Redis from "ioredis";
+import * as IORedis from "ioredis";
 import { PrismaClient } from "@prisma/client";
 import { renderVideo } from "./render.js";
 import { config } from "./config.js";
@@ -7,6 +7,7 @@ import type { Cue } from "@dubdub/shared";
 
 const prisma = new PrismaClient();
 
+const Redis = (IORedis as any).default || IORedis;
 const redis = new Redis(config.redisUrl, {
   maxRetriesPerRequest: null,
 });
