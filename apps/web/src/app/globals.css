@@ -49,11 +49,12 @@ body::before {
 
   .btn-primary {
     @apply btn bg-accent-primary text-white;
-    @apply shadow-lg shadow-accent-primary/25;
+    box-shadow: 0 10px 15px -3px rgba(255, 77, 109, 0.25);
   }
 
   .btn-secondary {
-    @apply btn bg-tg-secondary text-tg-text border border-white/10;
+    @apply btn bg-tg-secondary text-tg-text;
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .btn-tg {
@@ -61,13 +62,15 @@ body::before {
   }
 
   .card {
-    @apply bg-tg-secondary/80 backdrop-blur-xl rounded-2xl p-5;
-    @apply border border-white/5;
+    @apply backdrop-blur-xl rounded-2xl p-5;
+    background: rgba(26, 26, 26, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .badge {
     @apply inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium;
-    @apply bg-accent-primary/15 text-accent-primary;
+    background: rgba(255, 77, 109, 0.15);
+    @apply text-accent-primary;
   }
 }
 
