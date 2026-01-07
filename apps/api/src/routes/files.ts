@@ -150,7 +150,7 @@ export function getProxyUrl(type: "scene" | "render" | "preview", ...args: strin
     case "scene":
       return `${baseUrl}/files/scenes/${args[0]}`;
     case "render":
-      return `${baseUrl}/files/renders/${args[0]}`;
+      return `${baseUrl}/files/renders/${args[0]}.mp4`;
     case "preview":
       return `${baseUrl}/files/previews/${args[0]}/${args[1]}`;
     default:

@@ -327,7 +327,7 @@ export default function SessionPage({ params }: PageProps) {
           <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <VideoPlayer
               key={`full-${session.myRoleIndex}`}
-              src={session.sceneUrl}
+              src={`${session.sceneUrl}?v=full`}
               muted={false}
               showTimeRange={false}
               label="📺 Посмотри сцену (переключи режим звука):"
@@ -356,7 +356,7 @@ export default function SessionPage({ params }: PageProps) {
             </div>
             <VideoPlayer
               key={`fragment-${session.myRoleIndex}`}
-              src={session.sceneUrl}
+              src={`${session.sceneUrl}?v=fragment`}
               startTime={myCue?.startSec || 0}
               endTime={myCue ? myCue.startSec + myCue.durationSec : undefined}
               muted={true}
