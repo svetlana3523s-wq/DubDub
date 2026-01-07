@@ -153,13 +153,24 @@ export default function ResultPage({ params }: PageProps) {
         )}
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-          <button onClick={handleShare} className="btn-tg">
-            📤 Поделиться
-          </button>
-          <Link href="/create" className="btn-primary text-center">
-            🎬 Ещё раз
-          </Link>
+        <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+          {/* Download button - prominent */}
+          <a
+            href={render.videoUrl}
+            download={`dubdub-${sessionId}.mp4`}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            📥 Скачать видео
+          </a>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={handleShare} className="btn-tg">
+              📤 Поделиться
+            </button>
+            <Link href="/create" className="btn-primary text-center">
+              🎬 Ещё раз
+            </Link>
+          </div>
         </div>
       </div>
     </div>

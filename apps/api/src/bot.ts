@@ -18,7 +18,21 @@ interface PendingScene {
   title?: string;
 }
 
+// Состояние диалога для редактирования сцен
+interface PendingEdit {
+  userId: number;
+  sceneId: string;
+  step: "awaiting_sceneId" | "awaiting_new_cues";
+  scene?: {
+    id: string;
+    title: string;
+    duration: number;
+    currentCues: Array<{ roleIndex: number; startSec: number; durationSec: number }>;
+  };
+}
+
 const pendingScenes = new Map<number, PendingScene>();
+const pendingEdits = new Map<number, PendingEdit>();
 
 function isAdmin(userId: number): boolean {
   return config.adminTgUserIds.includes(String(userId));
@@ -121,6 +135,7 @@ export function createBot(): Telegraf {
     if (isUserAdmin) {
       helpText += "👑 Админ-команды:\n" +
         "/scenes — список сцен\n" +
+        "/edit_cues — редактировать тайминги\n" +
         "/stats — статистика\n" +
         "Отправь видео — добавить новую сцену\n\n";
     }
@@ -196,11 +211,110 @@ export function createBot(): Telegraf {
   // /cancel - отмена текущей операции
   bot.command("cancel", async (ctx) => {
     const userId = ctx.from?.id;
-    if (userId && pendingScenes.has(userId)) {
+    if (userId) {
+      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId);
       pendingScenes.delete(userId);
-      await ctx.reply("❌ Операция отменена");
+      pendingEdits.delete(userId);
+      if (hadPending) {
+        await ctx.reply("❌ Операция отменена", {
+          reply_markup: { remove_keyboard: true },
+        });
+      }
     }
   });
+
+  // /edit_cues - редактирование таймингов сцены (только админ)
+  bot.command("edit_cues", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId || !isAdmin(userId)) {
+      return ctx.reply("⛔ Нет доступа");
+    }
+
+    // Получаем ID сцены из аргумента или показываем список
+    const args = ctx.message.text.split(" ").slice(1);
+    
+    if (args.length === 0) {
+      // Показываем список сцен для выбора
+      const scenes = await prisma.scene.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+
+      if (scenes.length === 0) {
+        return ctx.reply("Сцен пока нет.");
+      }
+
+      const list = scenes.map((s, i) => {
+        const cues = JSON.parse(s.cueJson) as Array<{ roleIndex: number; startSec: number; durationSec: number }>;
+        const cueStr = cues.map((c, j) => `${c.startSec}-${c.startSec + c.durationSec}`).join(", ");
+        return `${i + 1}. *${s.title}*\n   Тайминги: \`${cueStr}\`\n   ID: \`${s.id}\``;
+      }).join("\n\n");
+
+      pendingEdits.set(userId, {
+        userId,
+        sceneId: "",
+        step: "awaiting_sceneId",
+      });
+
+      await ctx.reply(
+        `🎬 Выбери сцену для редактирования:\n\n${list}\n\nОтправь ID сцены:`,
+        { 
+          parse_mode: "Markdown",
+          reply_markup: {
+            keyboard: [[{ text: "❌ Отмена" }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
+      );
+      return;
+    }
+
+    // ID сцены передан в команде
+    const sceneId = args[0]!;
+    await startCueEditing(ctx, userId, sceneId);
+  });
+
+  // Helper: начать редактирование cues
+  async function startCueEditing(ctx: Context, userId: number, sceneId: string) {
+    const scene = await prisma.scene.findUnique({ where: { id: sceneId } });
+
+    if (!scene) {
+      await ctx.reply(`❌ Сцена "${sceneId}" не найдена`);
+      return;
+    }
+
+    const cues = JSON.parse(scene.cueJson) as Array<{ roleIndex: number; startSec: number; durationSec: number }>;
+    const currentCuesStr = cues.map(c => `${c.startSec}-${c.startSec + c.durationSec}`).join(", ");
+
+    pendingEdits.set(userId, {
+      userId,
+      sceneId: scene.id,
+      step: "awaiting_new_cues",
+      scene: {
+        id: scene.id,
+        title: scene.title,
+        duration: scene.durationSec,
+        currentCues: cues,
+      },
+    });
+
+    await ctx.reply(
+      `🎬 Редактирование: *${scene.title}*\n\n` +
+      `⏱ Длительность видео: ${scene.durationSec}s\n` +
+      `📍 Текущие тайминги: \`${currentCuesStr}\`\n\n` +
+      `Введи новые тайминги в формате:\n` +
+      `\`1-5, 6-10, 12-16\``,
+      { 
+        parse_mode: "Markdown",
+        reply_markup: {
+          keyboard: [[{ text: "❌ Отмена" }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
+      }
+    );
+  }
 
   // Обработка видео от админа
   bot.on(message("video"), async (ctx) => {
@@ -247,26 +361,37 @@ export function createBot(): Telegraf {
     }
   });
 
-  // Обработка текстовых сообщений (для диалога добавления сцены)
+  // Обработка текстовых сообщений (для диалога добавления/редактирования сцены)
   bot.on(message("text"), async (ctx) => {
     const userId = ctx.from?.id;
     const text = ctx.message.text;
 
     if (!userId) return;
 
+    // Отмена
+    if (text === "❌ Отмена" || text.toLowerCase() === "отмена") {
+      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId);
+      pendingScenes.delete(userId);
+      pendingEdits.delete(userId);
+      if (hadPending) {
+        await ctx.reply("❌ Отменено", {
+          reply_markup: { remove_keyboard: true },
+        });
+      }
+      return;
+    }
+
+    // Проверяем, есть ли активный диалог редактирования
+    const pendingEdit = pendingEdits.get(userId);
+    if (pendingEdit) {
+      await handleEditDialog(ctx, userId, text, pendingEdit);
+      return;
+    }
+
     // Проверяем, есть ли активный диалог добавления сцены
     const pending = pendingScenes.get(userId);
     
     if (!pending) return; // Нет активного диалога
-
-    // Отмена
-    if (text === "❌ Отмена" || text.toLowerCase() === "отмена") {
-      pendingScenes.delete(userId);
-      await ctx.reply("❌ Отменено", {
-        reply_markup: { remove_keyboard: true },
-      });
-      return;
-    }
 
     // Шаг 1: Получаем название
     if (pending.step === "awaiting_title") {
@@ -369,6 +494,79 @@ export function createBot(): Telegraf {
       }
     }
   });
+
+  // Helper: обработка диалога редактирования
+  async function handleEditDialog(ctx: Context, userId: number, text: string, pendingEdit: PendingEdit) {
+    // Шаг 1: Выбор сцены по ID
+    if (pendingEdit.step === "awaiting_sceneId") {
+      const sceneId = text.trim();
+      await startCueEditing(ctx, userId, sceneId);
+      return;
+    }
+
+    // Шаг 2: Новые тайминги
+    if (pendingEdit.step === "awaiting_new_cues" && pendingEdit.scene) {
+      const cues = parseCues(text);
+
+      if (!cues) {
+        await ctx.reply(
+          "❌ Неверный формат. Используй: `1-5, 6-10, 12-16`\n" +
+          "Попробуй ещё раз:",
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      // Проверяем, что тайминги в пределах видео
+      const maxEnd = Math.max(...cues.map(c => c.end));
+      if (maxEnd > pendingEdit.scene.duration + 1) {
+        await ctx.reply(
+          `❌ Тайминг ${maxEnd}s выходит за пределы видео (${pendingEdit.scene.duration}s).\n` +
+          `Попробуй ещё раз:`
+        );
+        return;
+      }
+
+      try {
+        // Формируем новый cueJson
+        const cueJson = JSON.stringify(
+          cues.map((c, i) => ({
+            roleIndex: i,
+            startSec: c.start,
+            durationSec: c.end - c.start,
+          }))
+        );
+
+        // Обновляем сцену
+        await prisma.scene.update({
+          where: { id: pendingEdit.sceneId },
+          data: {
+            cueJson,
+            rolesCount: cues.length,
+          },
+        });
+
+        pendingEdits.delete(userId);
+
+        await ctx.reply(
+          `✅ Тайминги обновлены!\n\n` +
+          `📝 Сцена: ${pendingEdit.scene.title}\n` +
+          `🎭 Реплик: ${cues.length}\n\n` +
+          `Новые тайминги:\n` +
+          cues.map((c, i) => `  Игрок ${i + 1}: ${c.start}s — ${c.end}s`).join("\n"),
+          { reply_markup: { remove_keyboard: true } }
+        );
+
+      } catch (err) {
+        console.error("Cue update error:", err);
+        pendingEdits.delete(userId);
+        await ctx.reply(
+          "❌ Ошибка обновления. Попробуй ещё раз.",
+          { reply_markup: { remove_keyboard: true } }
+        );
+      }
+    }
+  }
 
   // Error handling
   bot.catch((err, ctx) => {

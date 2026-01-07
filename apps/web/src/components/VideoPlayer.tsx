@@ -6,11 +6,13 @@ interface VideoPlayerProps {
   src: string;
   startTime?: number;
   endTime?: number;
+  muted?: boolean;  // Allow sound by default
 }
 
-export function VideoPlayer({ src, startTime = 0, endTime }: VideoPlayerProps) {
+export function VideoPlayer({ src, startTime = 0, endTime, muted = false }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(muted);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -55,13 +57,22 @@ export function VideoPlayer({ src, startTime = 0, endTime }: VideoPlayerProps) {
     }
   };
 
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (video) {
+      video.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
   return (
     <div className="relative group rounded-xl overflow-hidden">
       <video
         ref={videoRef}
         src={src}
         className="w-full"
-        muted
+        muted={isMuted}
         playsInline
         preload="metadata"
       />
@@ -78,6 +89,14 @@ export function VideoPlayer({ src, startTime = 0, endTime }: VideoPlayerProps) {
         >
           ▶️
         </div>
+      </button>
+
+      {/* Mute button */}
+      <button
+        onClick={toggleMute}
+        className="absolute top-2 right-2 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-lg hover:bg-black/80 transition-colors"
+      >
+        {isMuted ? "🔇" : "🔊"}
       </button>
 
       {/* Time range indicator */}
