@@ -3,7 +3,7 @@ import { storage } from "../lib/storage.js";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../config.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { bot } from "../index.js";
+import { bot } from "../lib/bot-instance.js";
 
 /**
  * File proxy routes - serves files from S3 through the API

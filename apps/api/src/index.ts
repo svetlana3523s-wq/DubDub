@@ -9,7 +9,7 @@ import { rendersRoutes } from "./routes/renders.js";
 import { healthRoutes } from "./routes/health.js";
 import { adminRoutes } from "./routes/admin.js";
 import { filesRoutes } from "./routes/files.js";
-import { createBot } from "./bot.js";
+import { bot } from "./lib/bot-instance.js";
 
 const fastify = Fastify({
   logger: {
@@ -38,9 +38,6 @@ await fastify.register(rateLimit, {
   timeWindow: "1 minute",
   redis,
 });
-
-// Create bot BEFORE routes (so routes can use it)
-export const bot = createBot();
 
 // Routes
 await fastify.register(healthRoutes);
