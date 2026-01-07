@@ -86,6 +86,7 @@ export default function SessionPage({ params }: PageProps) {
       if (isSolo) {
         if (data.myRoleIndex !== null && data.takes.length < totalRoles) {
           setHasRecorded(false);  // Reset for next role
+          setRetakeUsed(false);   // Reset retake for next role
           setViewState("record");
         } else {
           setViewState("finish");
@@ -152,10 +153,17 @@ export default function SessionPage({ params }: PageProps) {
     if (!initData) return;
 
     try {
+      console.log("[Record] Starting upload...");
       await api.uploadTake(initData, sessionId, audioBlob);
+      console.log("[Record] Upload success, fetching session...");
       setHasRecorded(true);
       const data = await fetchSession();
       if (data) {
+        console.log("[Record] Session fetched:", {
+          myRoleIndex: data.myRoleIndex,
+          takes: data.takes.length,
+          totalCues: data.session.sceneMeta.cues.length,
+        });
         determineViewState(data);
       }
     } catch (err) {
@@ -318,6 +326,7 @@ export default function SessionPage({ params }: PageProps) {
           {/* Full scene with original audio - FIRST */}
           <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <VideoPlayer
+              key={`full-${session.myRoleIndex}`}
               src={session.sceneUrl}
               muted={false}
               showTimeRange={false}
@@ -344,6 +353,7 @@ export default function SessionPage({ params }: PageProps) {
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
             <VideoPlayer
+              key={`fragment-${session.myRoleIndex}`}
               src={session.sceneUrl}
               startTime={myCue?.startSec || 0}
               endTime={myCue ? myCue.startSec + myCue.durationSec : undefined}
@@ -355,6 +365,7 @@ export default function SessionPage({ params }: PageProps) {
           {/* Recorder */}
           <div className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
             <VoiceRecorder
+              key={`recorder-${session.myRoleIndex}`}
               maxDuration={cueDuration + 2}
               onRecordComplete={handleRecordComplete}
               disabled={hasRecorded && retakeUsed}
