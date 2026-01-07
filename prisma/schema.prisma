@@ -12,8 +12,9 @@ model Scene {
   title       String
   s3Key       String    // scenes/scene1.mp4
   durationSec Float
+  fps         Float     @default(25)  // frames per second
   rolesCount  Int
-  cueJson     String    // JSON: [{roleIndex, startSec, durationSec}]
+  cueJson     String    // JSON: [{roleIndex, startFrame, durationFrames}] - stored in frames!
   createdAt   DateTime  @default(now())
   sessions    Session[]
 }

@@ -1,18 +1,27 @@
 export type SessionStatus = "lobby" | "recording" | "rendering" | "ready";
 export type RenderStatus = "pending" | "rendering" | "ready" | "failed";
 
+// Cue for client (in seconds with milliseconds)
 export interface Cue {
   roleIndex: number;
-  startSec: number;
-  durationSec: number;
+  startSec: number;      // Converted from frames for display
+  durationSec: number;   // Converted from frames for display
+}
+
+// Cue stored in database (in frames for precision)
+export interface CueFrames {
+  roleIndex: number;
+  startFrame: number;
+  durationFrames: number;
 }
 
 export interface SceneMeta {
   id: string;
   title: string;
   durationSec: number;
+  fps: number;
   rolesCount: number;
-  cues: Cue[];
+  cues: Cue[];  // Already converted to seconds for client
 }
 
 export interface TelegramUser {

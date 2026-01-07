@@ -14,6 +14,7 @@ import {
   type FinishSessionResponse,
   type SceneMeta,
   type Cue,
+  type CueFrames,
 } from "@dubdub/shared";
 import { spawn } from "child_process";
 import { promisify } from "util";
@@ -39,14 +40,35 @@ function getRandomTopic(): string {
   return TOPICS[Math.floor(Math.random() * TOPICS.length)] ?? TOPICS[0]!;
 }
 
-function parseCues(cueJson: string): Cue[] {
-  return JSON.parse(cueJson) as Cue[];
+/**
+ * Parse cueJson - supports both old format (seconds) and new format (frames)
+ */
+function parseCuesFromJson(cueJson: string, fps: number): Cue[] {
+  const raw = JSON.parse(cueJson) as any[];
+  
+  return raw.map((cue) => {
+    // New format: frames
+    if ('startFrame' in cue) {
+      return {
+        roleIndex: cue.roleIndex,
+        startSec: cue.startFrame / fps,
+        durationSec: cue.durationFrames / fps,
+      };
+    }
+    // Old format: seconds (backwards compatibility)
+    return {
+      roleIndex: cue.roleIndex,
+      startSec: cue.startSec,
+      durationSec: cue.durationSec,
+    };
+  });
 }
 
 function buildSceneMeta(scene: {
   id: string;
   title: string;
   durationSec: number;
+  fps: number;
   rolesCount: number;
   cueJson: string;
 }): SceneMeta {
@@ -54,8 +76,9 @@ function buildSceneMeta(scene: {
     id: scene.id,
     title: scene.title,
     durationSec: scene.durationSec,
+    fps: scene.fps,
     rolesCount: scene.rolesCount,
-    cues: parseCues(scene.cueJson),
+    cues: parseCuesFromJson(scene.cueJson, scene.fps),
   };
 }
 
@@ -128,6 +151,40 @@ async function createPreview(
   });
 }
 
+/**
+ * Trim audio to exact duration (cut off anything longer)
+ */
+async function trimAudio(
+  inputBuffer: Buffer,
+  maxDurationSec: number
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn("ffmpeg", [
+      "-i", "pipe:0",
+      "-t", String(maxDurationSec),
+      "-c:a", "libopus",
+      "-f", "webm",
+      "pipe:1",
+    ]);
+
+    const chunks: Buffer[] = [];
+
+    ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
+    ffmpeg.stderr.on("data", () => {}); // Ignore stderr
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve(Buffer.concat(chunks));
+      } else {
+        reject(new Error(`ffmpeg trim failed with code ${code}`));
+      }
+    });
+
+    ffmpeg.stdin.write(inputBuffer);
+    ffmpeg.stdin.end();
+  });
+}
+
 export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
   // Create session
   fastify.post<{ Body: { maxPlayers: number } }>(
@@ -137,11 +194,38 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const body = createSessionSchema.parse(request.body);
       const user = request.tgUser;
 
-      // Get first available scene
-      const scene = await prisma.scene.findFirst();
+      // Get scenes the user has already completed
+      const completedSessions = await prisma.session.findMany({
+        where: {
+          status: "ready",
+          participants: {
+            some: { tgUserId: user.id },
+          },
+        },
+        select: { sceneId: true },
+      });
+      const usedSceneIds = completedSessions.map((s) => s.sceneId);
+
+      // Find a scene the user hasn't played yet
+      let scene = await prisma.scene.findFirst({
+        where: {
+          id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
+        },
+        orderBy: { createdAt: "desc" }, // Prefer newer scenes
+      });
+
+      // If all scenes played, pick any (reset cycle)
+      if (!scene) {
+        scene = await prisma.scene.findFirst({
+          orderBy: { createdAt: "desc" },
+        });
+      }
+
       if (!scene) {
         return reply.status(500).send({ error: "No scenes available" });
       }
+
+      console.log(`[Session] User ${user.id} gets scene ${scene.id} (used: ${usedSceneIds.length})`);
 
       const topic = getRandomTopic();
 
@@ -437,6 +521,11 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       // Role index for this take
       const takeRoleIndex = isSolo ? currentTurn : participant.roleIndex;
 
+      // Get cue duration for this role
+      const cue = sceneCues.find(c => c.roleIndex === takeRoleIndex);
+      const cueDuration = cue?.durationSec || 5;
+      console.log("[Take] Cue duration for role", takeRoleIndex, ":", cueDuration);
+
       // Get uploaded file
       const data = await request.file();
       if (!data) {
@@ -451,7 +540,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       for await (const chunk of data.file) {
         chunks.push(chunk);
       }
-      const audioBuffer = Buffer.concat(chunks);
+      let audioBuffer = Buffer.concat(chunks);
 
       console.log("[Take] Audio buffer size:", audioBuffer.length);
 
@@ -474,21 +563,25 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         durationSec = 5; // Default
       }
 
-      // If duration is 0 or couldn't be determined, use default
+      // If duration is 0 or couldn't be determined, use cue duration
       if (durationSec <= 0) {
-        console.log("[Take] Duration not detected, using default 5 sec");
-        durationSec = 5;
+        console.log("[Take] Duration not detected, using cue duration:", cueDuration);
+        durationSec = cueDuration;
       }
 
-      // Validate duration (relaxed: 1-60 seconds)
-      if (durationSec > 60) {
-        console.log("[Take] Duration too long:", durationSec);
-        return reply.status(400).send({
-          error: `Audio too long. Max: 60 seconds. Got: ${durationSec.toFixed(1)}s`,
-        });
+      // Trim audio if longer than cue duration
+      if (durationSec > cueDuration) {
+        console.log("[Take] Trimming audio from", durationSec, "to", cueDuration);
+        try {
+          audioBuffer = await trimAudio(audioBuffer, cueDuration);
+          durationSec = cueDuration;
+        } catch (err) {
+          console.error("[Take] Trim failed:", err);
+          // Continue with original if trim fails
+        }
       }
 
-      console.log("[Take] Proceeding with duration:", durationSec);
+      console.log("[Take] Final duration:", durationSec);
 
       // Upload to S3
       const s3Key = storage.keys.upload(id, takeRoleIndex);

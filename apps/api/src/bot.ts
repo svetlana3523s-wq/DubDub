@@ -14,6 +14,8 @@ interface PendingScene {
   userId: number;
   fileId: string;
   duration: number;
+  fps: number;
+  totalFrames: number;
   step: "awaiting_title" | "awaiting_cues";
   title?: string;
 }
@@ -27,7 +29,8 @@ interface PendingEdit {
     id: string;
     title: string;
     duration: number;
-    currentCues: Array<{ roleIndex: number; startSec: number; durationSec: number }>;
+    fps: number;
+    totalFrames: number;
   };
 }
 
@@ -38,12 +41,13 @@ function isAdmin(userId: number): boolean {
   return config.adminTgUserIds.includes(String(userId));
 }
 
-async function getVideoDuration(filePath: string): Promise<number> {
+async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: number }> {
   return new Promise((resolve, reject) => {
     const ffprobe = spawn("ffprobe", [
       "-v", "error",
-      "-show_entries", "format=duration",
-      "-of", "csv=p=0",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=r_frame_rate,duration:format=duration",
+      "-of", "json",
       filePath,
     ]);
 
@@ -54,7 +58,20 @@ async function getVideoDuration(filePath: string): Promise<number> {
 
     ffprobe.on("close", (code) => {
       if (code === 0) {
-        resolve(parseFloat(output.trim()) || 0);
+        try {
+          const json = JSON.parse(output);
+          // Get duration from format or stream
+          const duration = parseFloat(json.format?.duration || json.streams?.[0]?.duration || "0");
+          
+          // Parse fps from r_frame_rate (e.g., "25/1" or "30000/1001")
+          const fpsStr = json.streams?.[0]?.r_frame_rate || "25/1";
+          const [num, den] = fpsStr.split("/").map(Number);
+          const fps = den ? num / den : 25;
+          
+          resolve({ duration, fps: Math.round(fps * 100) / 100 });
+        } catch {
+          resolve({ duration: 0, fps: 25 });
+        }
       } else {
         reject(new Error("ffprobe failed"));
       }
@@ -78,20 +95,23 @@ async function downloadTelegramFile(
   return { buffer, path: tmpPath };
 }
 
-function parseCues(text: string): Array<{ start: number; end: number }> | null {
-  // Форматы: "1-5, 6-10, 12-16" или "1-5 6-10 12-16"
+/**
+ * Parse cues in FRAMES format: "0-125, 150-275" (integers)
+ */
+function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: number }> | null {
+  // Форматы: "0-125, 150-275" или "0-125 150-275"
   const parts = text.split(/[,\s]+/).filter(Boolean);
-  const cues: Array<{ start: number; end: number }> = [];
+  const cues: Array<{ startFrame: number; endFrame: number }> = [];
 
   for (const part of parts) {
-    const match = part.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+    const match = part.match(/^(\d+)-(\d+)$/);
     if (!match) return null;
     
-    const start = parseFloat(match[1]!);
-    const end = parseFloat(match[2]!);
+    const startFrame = parseInt(match[1]!, 10);
+    const endFrame = parseInt(match[2]!, 10);
     
-    if (isNaN(start) || isNaN(end) || start >= end) return null;
-    cues.push({ start, end });
+    if (isNaN(startFrame) || isNaN(endFrame) || startFrame >= endFrame) return null;
+    cues.push({ startFrame, endFrame });
   }
 
   return cues.length > 0 ? cues : null;
@@ -284,8 +304,20 @@ export function createBot(): Telegraf {
       return;
     }
 
-    const cues = JSON.parse(scene.cueJson) as Array<{ roleIndex: number; startSec: number; durationSec: number }>;
-    const currentCuesStr = cues.map(c => `${c.startSec}-${c.startSec + c.durationSec}`).join(", ");
+    const fps = scene.fps;
+    const totalFrames = Math.round(scene.durationSec * fps);
+    const rawCues = JSON.parse(scene.cueJson) as any[];
+    
+    // Format cues for display (handle both old and new formats)
+    const cueStr = rawCues.map(c => {
+      if ('startFrame' in c) {
+        return `${c.startFrame}-${c.startFrame + c.durationFrames}`;
+      }
+      // Old format - convert to frames
+      const startFrame = Math.round(c.startSec * fps);
+      const endFrame = Math.round((c.startSec + c.durationSec) * fps);
+      return `${startFrame}-${endFrame}`;
+    }).join(", ");
 
     pendingEdits.set(userId, {
       userId,
@@ -295,16 +327,19 @@ export function createBot(): Telegraf {
         id: scene.id,
         title: scene.title,
         duration: scene.durationSec,
-        currentCues: cues,
+        fps,
+        totalFrames,
       },
     });
 
     await ctx.reply(
       `🎬 Редактирование: *${scene.title}*\n\n` +
-      `⏱ Длительность видео: ${scene.durationSec}s\n` +
-      `📍 Текущие тайминги: \`${currentCuesStr}\`\n\n` +
-      `Введи новые тайминги в формате:\n` +
-      `\`1-5, 6-10, 12-16\``,
+      `⏱ Длительность: ${scene.durationSec}s\n` +
+      `🎞 FPS: ${fps}\n` +
+      `📊 Всего кадров: ${totalFrames}\n` +
+      `📍 Текущие тайминги (в кадрах): \`${cueStr}\`\n\n` +
+      `Введи новые тайминги В КАДРАХ:\n` +
+      `\`0-125, 150-275\``,
       { 
         parse_mode: "Markdown",
         reply_markup: {
@@ -328,9 +363,10 @@ export function createBot(): Telegraf {
     try {
       await ctx.reply("⏳ Обрабатываю видео...");
 
-      // Скачиваем и получаем длительность
+      // Скачиваем и получаем информацию
       const { path: tmpPath, buffer } = await downloadTelegramFile(bot, video.file_id);
-      const duration = await getVideoDuration(tmpPath);
+      const { duration, fps } = await getVideoInfo(tmpPath);
+      const totalFrames = Math.round(duration * fps);
       
       // Удаляем временный файл
       await unlink(tmpPath).catch(() => {});
@@ -340,12 +376,16 @@ export function createBot(): Telegraf {
         userId,
         fileId: video.file_id,
         duration: Math.round(duration * 10) / 10,
+        fps,
+        totalFrames,
         step: "awaiting_title",
       });
 
       await ctx.reply(
         `📹 Видео получено!\n` +
-        `⏱ Длительность: ${duration.toFixed(1)} сек\n\n` +
+        `⏱ Длительность: ${duration.toFixed(1)} сек\n` +
+        `🎞 FPS: ${fps}\n` +
+        `📊 Всего кадров: ${totalFrames}\n\n` +
         `Введи название сцены:`,
         {
           reply_markup: {
@@ -401,25 +441,26 @@ export function createBot(): Telegraf {
 
       await ctx.reply(
         `👍 Название: "${pending.title}"\n\n` +
-        `Теперь введи тайминги реплик в формате:\n` +
-        `\`1-5, 6-10, 12-16\`\n\n` +
-        `Это означает:\n` +
-        `• Игрок 1: с 1 по 5 сек\n` +
-        `• Игрок 2: с 6 по 10 сек\n` +
-        `• Игрок 3: с 12 по 16 сек\n\n` +
-        `⏱ Длительность видео: ${pending.duration} сек`,
+        `Теперь введи тайминги реплик В КАДРАХ:\n` +
+        `\`0-125, 150-275, 300-425\`\n\n` +
+        `Это означает (при ${pending.fps} fps):\n` +
+        `• Игрок 1: кадры 0-125 (${(0/pending.fps).toFixed(2)}-${(125/pending.fps).toFixed(2)} сек)\n` +
+        `• Игрок 2: кадры 150-275\n` +
+        `• И т.д.\n\n` +
+        `📊 Всего кадров: ${pending.totalFrames}\n` +
+        `🎞 FPS: ${pending.fps}`,
         { parse_mode: "Markdown" }
       );
       return;
     }
 
-    // Шаг 2: Получаем тайминги
+    // Шаг 2: Получаем тайминги В КАДРАХ
     if (pending.step === "awaiting_cues") {
-      const cues = parseCues(text);
+      const cues = parseCuesFrames(text);
 
       if (!cues) {
         await ctx.reply(
-          "❌ Неверный формат. Используй: `1-5, 6-10, 12-16`\n" +
+          "❌ Неверный формат. Используй ЦЕЛЫЕ числа (кадры): `0-125, 150-275`\n" +
           "Попробуй ещё раз:",
           { parse_mode: "Markdown" }
         );
@@ -427,10 +468,10 @@ export function createBot(): Telegraf {
       }
 
       // Проверяем, что тайминги в пределах видео
-      const maxEnd = Math.max(...cues.map(c => c.end));
-      if (maxEnd > pending.duration + 1) {
+      const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
+      if (maxEndFrame > pending.totalFrames + pending.fps) {
         await ctx.reply(
-          `❌ Тайминг ${maxEnd}s выходит за пределы видео (${pending.duration}s).\n` +
+          `❌ Кадр ${maxEndFrame} выходит за пределы видео (${pending.totalFrames} кадров).\n` +
           `Попробуй ещё раз:`
         );
         return;
@@ -449,12 +490,12 @@ export function createBot(): Telegraf {
         // Загружаем в S3
         await storage.upload(s3Key, buffer, "video/mp4");
 
-        // Формируем cueJson
+        // Формируем cueJson В КАДРАХ (новый формат!)
         const cueJson = JSON.stringify(
           cues.map((c, i) => ({
             roleIndex: i,
-            startSec: c.start,
-            durationSec: c.end - c.start,
+            startFrame: c.startFrame,
+            durationFrames: c.endFrame - c.startFrame,
           }))
         );
 
@@ -465,6 +506,7 @@ export function createBot(): Telegraf {
             title: pending.title!,
             s3Key,
             durationSec: pending.duration,
+            fps: pending.fps,
             rolesCount: cues.length,
             cueJson,
           },
@@ -473,14 +515,22 @@ export function createBot(): Telegraf {
         // Очищаем состояние
         pendingScenes.delete(userId);
 
+        // Показываем и кадры и секунды
+        const fps = pending.fps;
+        const cueInfo = cues.map((c, i) => {
+          const startSec = (c.startFrame / fps).toFixed(2);
+          const endSec = (c.endFrame / fps).toFixed(2);
+          return `  Игрок ${i + 1}: кадры ${c.startFrame}-${c.endFrame} (${startSec}s — ${endSec}s)`;
+        }).join("\n");
+
         await ctx.reply(
           `✅ Сцена добавлена!\n\n` +
           `📝 Название: ${pending.title}\n` +
           `🆔 ID: ${sceneId}\n` +
           `⏱ Длительность: ${pending.duration}s\n` +
+          `🎞 FPS: ${fps}\n` +
           `🎭 Реплик: ${cues.length}\n\n` +
-          `Тайминги:\n` +
-          cues.map((c, i) => `  Игрок ${i + 1}: ${c.start}s — ${c.end}s`).join("\n"),
+          `Тайминги:\n${cueInfo}`,
           { reply_markup: { remove_keyboard: true } }
         );
 
@@ -504,13 +554,13 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // Шаг 2: Новые тайминги
+    // Шаг 2: Новые тайминги В КАДРАХ
     if (pendingEdit.step === "awaiting_new_cues" && pendingEdit.scene) {
-      const cues = parseCues(text);
+      const cues = parseCuesFrames(text);
 
       if (!cues) {
         await ctx.reply(
-          "❌ Неверный формат. Используй: `1-5, 6-10, 12-16`\n" +
+          "❌ Неверный формат. Используй ЦЕЛЫЕ числа (кадры): `0-125, 150-275`\n" +
           "Попробуй ещё раз:",
           { parse_mode: "Markdown" }
         );
@@ -518,22 +568,22 @@ export function createBot(): Telegraf {
       }
 
       // Проверяем, что тайминги в пределах видео
-      const maxEnd = Math.max(...cues.map(c => c.end));
-      if (maxEnd > pendingEdit.scene.duration + 1) {
+      const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
+      if (maxEndFrame > pendingEdit.scene.totalFrames + pendingEdit.scene.fps) {
         await ctx.reply(
-          `❌ Тайминг ${maxEnd}s выходит за пределы видео (${pendingEdit.scene.duration}s).\n` +
+          `❌ Кадр ${maxEndFrame} выходит за пределы видео (${pendingEdit.scene.totalFrames} кадров).\n` +
           `Попробуй ещё раз:`
         );
         return;
       }
 
       try {
-        // Формируем новый cueJson
+        // Формируем новый cueJson В КАДРАХ
         const cueJson = JSON.stringify(
           cues.map((c, i) => ({
             roleIndex: i,
-            startSec: c.start,
-            durationSec: c.end - c.start,
+            startFrame: c.startFrame,
+            durationFrames: c.endFrame - c.startFrame,
           }))
         );
 
@@ -548,12 +598,19 @@ export function createBot(): Telegraf {
 
         pendingEdits.delete(userId);
 
+        // Показываем и кадры и секунды
+        const fps = pendingEdit.scene.fps;
+        const cueInfo = cues.map((c, i) => {
+          const startSec = (c.startFrame / fps).toFixed(2);
+          const endSec = (c.endFrame / fps).toFixed(2);
+          return `  Игрок ${i + 1}: кадры ${c.startFrame}-${c.endFrame} (${startSec}s — ${endSec}s)`;
+        }).join("\n");
+
         await ctx.reply(
           `✅ Тайминги обновлены!\n\n` +
           `📝 Сцена: ${pendingEdit.scene.title}\n` +
           `🎭 Реплик: ${cues.length}\n\n` +
-          `Новые тайминги:\n` +
-          cues.map((c, i) => `  Игрок ${i + 1}: ${c.start}s — ${c.end}s`).join("\n"),
+          `Новые тайминги:\n${cueInfo}`,
           { reply_markup: { remove_keyboard: true } }
         );
 

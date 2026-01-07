@@ -330,7 +330,9 @@ export default function SessionPage({ params }: PageProps) {
               src={session.sceneUrl}
               muted={false}
               showTimeRange={false}
-              label="📺 Посмотри всю сцену с оригинальным звуком:"
+              label="📺 Посмотри сцену (переключи режим звука):"
+              cues={session.session.sceneMeta.cues}
+              showAudioModeSwitch={true}
             />
           </div>
 
@@ -366,7 +368,7 @@ export default function SessionPage({ params }: PageProps) {
           <div className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
             <VoiceRecorder
               key={`recorder-${session.myRoleIndex}`}
-              maxDuration={cueDuration + 2}
+              maxDuration={cueDuration}
               onRecordComplete={handleRecordComplete}
               disabled={hasRecorded && retakeUsed}
             />

@@ -150,6 +150,7 @@ export async function renderVideo(input: RenderInput): Promise<string> {
     }
 
     // Step 2: Process each take - delay to start at cue time
+    // Use loudnorm with same target for all takes to equalize volume
     for (let i = 0; i < takes.length; i++) {
       const take = takes[i];
       if (!take) continue;
@@ -159,8 +160,9 @@ export async function renderVideo(input: RenderInput): Promise<string> {
 
       const delayMs = Math.floor(cue.startSec * 1000);
 
-      // Delay and normalize dubbed audio
-      filterComplex += `[${i + 1}:a]adelay=${delayMs}|${delayMs},loudnorm=I=-16:LRA=11:TP=-1.5[dub${i}];`;
+      // Delay, normalize loudness (I=-14 is broadcast standard, louder than -16)
+      // Then apply compression to make quiet parts louder
+      filterComplex += `[${i + 1}:a]loudnorm=I=-14:LRA=7:TP=-1.5,acompressor=threshold=-20dB:ratio=3:attack=5:release=50,adelay=${delayMs}|${delayMs}[dub${i}];`;
       audioMixParts.push(`[dub${i}]`);
     }
 
