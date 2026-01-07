@@ -221,7 +221,6 @@ export function VideoPlayer({
           muted={audioMode === "with-cuts" ? (inCueRange || isMuted) : isMuted}
           playsInline
           preload="auto"
-          crossOrigin="anonymous"
         />
 
         {/* Play overlay */}
