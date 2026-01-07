@@ -297,7 +297,7 @@ export default function SessionPage({ params }: PageProps) {
     const currentRoleNum = (session.myRoleIndex ?? 0) + 1;
 
     return (
-      <div className="flex-1 flex flex-col p-6">
+      <div className="flex-1 flex flex-col p-6 overflow-y-auto">
         <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5">
           {/* Header */}
           <div className="text-center animate-slide-up">
@@ -315,7 +315,17 @@ export default function SessionPage({ params }: PageProps) {
             <div className="font-medium">{session.session.topic}</div>
           </div>
 
-          {/* Preview audio */}
+          {/* Full scene with original audio - FIRST */}
+          <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
+            <VideoPlayer
+              src={session.sceneUrl}
+              muted={false}
+              showTimeRange={false}
+              label="📺 Посмотри всю сцену с оригинальным звуком:"
+            />
+          </div>
+
+          {/* Preview audio from previous player */}
           {session.previewUrl && session.myRoleIndex !== null && session.myRoleIndex > 0 && (
             <div className="card animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <div className="text-sm text-tg-hint mb-3">
@@ -328,12 +338,17 @@ export default function SessionPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Video */}
+          {/* Your fragment to dub */}
           <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
+            <div className="text-sm text-tg-hint mb-2">
+              🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
+            </div>
             <VideoPlayer
               src={session.sceneUrl}
               startTime={myCue?.startSec || 0}
               endTime={myCue ? myCue.startSec + myCue.durationSec : undefined}
+              muted={true}
+              showTimeRange={true}
             />
           </div>
 
