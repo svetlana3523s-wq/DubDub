@@ -64,6 +64,7 @@ export const api = {
   ): Promise<JoinSessionResponse> =>
     request(initData, `/sessions/${sessionId}/join`, {
       method: "POST",
+      body: JSON.stringify({}),
     }),
 
   getSession: (
@@ -103,6 +104,7 @@ export const api = {
   ): Promise<FinishSessionResponse> =>
     request(initData, `/sessions/${sessionId}/finish`, {
       method: "POST",
+      body: JSON.stringify({}),
     }),
 
   getRenderStatus: (
