@@ -4,6 +4,7 @@ import { storage } from "../lib/storage.js";
 import { renderQueue } from "../lib/queue.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { config } from "../config.js";
+import { getProxyUrl } from "./files.js";
 import {
   createSessionSchema,
   type CreateSessionResponse,
@@ -233,24 +234,19 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const currentTurn = session.takes.length;
 
-      // Get preview URL for this player
+      // Get preview URL for this player (using proxy)
       let previewUrl: string | null = null;
       if (participant.roleIndex > 0 && participant.roleIndex <= currentTurn) {
         const prevRoleIndex = participant.roleIndex - 1;
         const prevTake = session.takes.find((t) => t.roleIndex === prevRoleIndex);
         if (prevTake) {
-          try {
-            previewUrl = await storage.getSignedUrl(
-              storage.keys.preview(id, participant.roleIndex)
-            );
-          } catch {
-            // Preview may not exist yet
-          }
+          previewUrl = getProxyUrl("preview", id, String(participant.roleIndex));
         }
       }
 
-      // Get scene URL
-      const sceneUrl = await storage.getSignedUrl(session.scene.s3Key);
+      // Get scene URL (using proxy)
+      const sceneFilename = session.scene.s3Key.split("/").pop() || "";
+      const sceneUrl = getProxyUrl("scene", sceneFilename);
 
       return {
         participant: {
@@ -297,25 +293,20 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const currentTurn = session.takes.length;
 
-      // Get preview URL for current user
+      // Get preview URL for current user (using proxy)
       let previewUrl: string | null = null;
       if (myParticipant && myParticipant.roleIndex > 0) {
-        try {
-          previewUrl = await storage.getSignedUrl(
-            storage.keys.preview(id, myParticipant.roleIndex)
-          );
-        } catch {
-          // Preview may not exist
-        }
+        previewUrl = getProxyUrl("preview", id, String(myParticipant.roleIndex));
       }
 
-      // Get scene URL
-      const sceneUrl = await storage.getSignedUrl(session.scene.s3Key);
+      // Get scene URL (using proxy)
+      const sceneFilename = session.scene.s3Key.split("/").pop() || "";
+      const sceneUrl = getProxyUrl("scene", sceneFilename);
 
-      // Get render video URL if ready
+      // Get render video URL if ready (using proxy)
       let videoUrl: string | null = null;
-      if (session.render?.status === "ready" && session.render.s3Key) {
-        videoUrl = await storage.getSignedUrl(session.render.s3Key);
+      if (session.render?.status === "ready") {
+        videoUrl = getProxyUrl("render", session.id);
       }
 
       return {

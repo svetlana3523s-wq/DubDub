@@ -8,6 +8,7 @@ import { sessionsRoutes } from "./routes/sessions.js";
 import { rendersRoutes } from "./routes/renders.js";
 import { healthRoutes } from "./routes/health.js";
 import { adminRoutes } from "./routes/admin.js";
+import { filesRoutes } from "./routes/files.js";
 import { createBot } from "./bot.js";
 
 const fastify = Fastify({
@@ -16,9 +17,9 @@ const fastify = Fastify({
   },
 });
 
-// CORS
+// CORS - allow all origins for Telegram WebApp
 await fastify.register(cors, {
-  origin: [config.webappUrl],
+  origin: true,
   credentials: true,
 });
 
@@ -43,6 +44,7 @@ await fastify.register(healthRoutes);
 await fastify.register(sessionsRoutes);
 await fastify.register(rendersRoutes);
 await fastify.register(adminRoutes);
+await fastify.register(filesRoutes);
 
 // Start bot
 const bot = createBot();

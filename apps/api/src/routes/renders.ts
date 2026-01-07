@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
-import { storage } from "../lib/storage.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { getProxyUrl } from "./files.js";
 import type { RenderStatusResponse } from "@dubdub/shared";
 
 export const rendersRoutes: FastifyPluginAsync = async (fastify) => {
@@ -20,13 +20,10 @@ export const rendersRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Render not found" });
       }
 
+      // Use proxy URL instead of signed URL
       let videoUrl: string | null = null;
-      if (render.status === "ready" && render.s3Key) {
-        try {
-          videoUrl = await storage.getSignedUrl(render.s3Key, 7200); // 2 hours
-        } catch (err) {
-          console.error("Failed to get signed URL:", err);
-        }
+      if (render.status === "ready") {
+        videoUrl = getProxyUrl("render", sessionId);
       }
 
       return {
