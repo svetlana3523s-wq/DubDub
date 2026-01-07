@@ -150,7 +150,7 @@ export async function renderVideo(input: RenderInput): Promise<string> {
     }
 
     // Step 2: Process each take - delay to start at cue time
-    // Use loudnorm with same target for all takes to equalize volume
+    // Boost volume significantly and normalize to match original audio level
     for (let i = 0; i < takes.length; i++) {
       const take = takes[i];
       if (!take) continue;
@@ -160,15 +160,18 @@ export async function renderVideo(input: RenderInput): Promise<string> {
 
       const delayMs = Math.floor(cue.startSec * 1000);
 
-      // Delay, normalize loudness (I=-14 is broadcast standard, louder than -16)
-      // Then apply compression to make quiet parts louder
-      filterComplex += `[${i + 1}:a]loudnorm=I=-14:LRA=7:TP=-1.5,acompressor=threshold=-20dB:ratio=3:attack=5:release=50,adelay=${delayMs}|${delayMs}[dub${i}];`;
+      // 1. Resample to 48kHz for quality
+      // 2. Boost volume (recorded audio is usually quiet)
+      // 3. Apply limiter to prevent clipping
+      // 4. Delay to sync with cue timing
+      filterComplex += `[${i + 1}:a]aresample=48000,volume=3.0,alimiter=limit=0.95,adelay=${delayMs}|${delayMs}[dub${i}];`;
       audioMixParts.push(`[dub${i}]`);
     }
 
     // Step 3: Mix original (ducked) audio + all dubs together
+    // normalize=0 prevents amix from reducing volume
     if (audioMixParts.length > 0) {
-      filterComplex += `${audioMixParts.join("")}amix=inputs=${audioMixParts.length}:duration=first:dropout_transition=0[aout];`;
+      filterComplex += `${audioMixParts.join("")}amix=inputs=${audioMixParts.length}:duration=first:dropout_transition=0:normalize=0[aout];`;
     }
 
     // Video filter: watermark + CTA
@@ -230,7 +233,9 @@ export async function renderVideo(input: RenderInput): Promise<string> {
       "-c:a",
       "aac",
       "-b:a",
-      "128k",
+      "256k",        // Higher quality audio
+      "-ar",
+      "48000",       // 48kHz sample rate
       "-movflags",
       "+faststart",
       outputPath

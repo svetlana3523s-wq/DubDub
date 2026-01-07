@@ -128,6 +128,8 @@ async function createPreview(
       "-ss", String(startSec),
       "-t", String(clipDuration),
       "-c:a", "libopus",
+      "-b:a", "128k",  // High quality opus
+      "-ar", "48000",  // 48kHz sample rate
       "-f", "webm",
       "pipe:1",
     ]);
@@ -162,6 +164,8 @@ async function trimAudio(
       "-i", "pipe:0",
       "-t", String(maxDurationSec),
       "-c:a", "libopus",
+      "-b:a", "128k",  // High quality opus
+      "-ar", "48000",  // 48kHz sample rate
       "-f", "webm",
       "pipe:1",
     ]);

@@ -97,7 +97,11 @@ export function VoiceRecorder({
       ? "audio/webm;codecs=opus"
       : "audio/webm";
 
-    const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+    // Higher bitrate for better quality
+    const mediaRecorder = new MediaRecorder(streamRef.current, { 
+      mimeType,
+      audioBitsPerSecond: 128000  // 128kbps
+    });
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
