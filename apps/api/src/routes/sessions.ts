@@ -443,17 +443,24 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         console.log("[Take] Audio duration:", durationSec);
       } catch (err) {
         console.error("[Take] Failed to get audio duration:", err);
-        // Use default duration if ffprobe fails
+        durationSec = 5; // Default
+      }
+
+      // If duration is 0 or couldn't be determined, use default
+      if (durationSec <= 0) {
+        console.log("[Take] Duration not detected, using default 5 sec");
         durationSec = 5;
       }
 
-      // Validate duration (relaxed: 1-30 seconds)
-      if (durationSec < 1 || durationSec > 30) {
-        console.log("[Take] Duration out of range:", durationSec);
+      // Validate duration (relaxed: 1-60 seconds)
+      if (durationSec > 60) {
+        console.log("[Take] Duration too long:", durationSec);
         return reply.status(400).send({
-          error: `Audio must be 1-30 seconds. Got: ${durationSec.toFixed(1)}s`,
+          error: `Audio too long. Max: 60 seconds. Got: ${durationSec.toFixed(1)}s`,
         });
       }
+
+      console.log("[Take] Proceeding with duration:", durationSec);
 
       // Upload to S3
       const s3Key = storage.keys.upload(id, participant.roleIndex);
