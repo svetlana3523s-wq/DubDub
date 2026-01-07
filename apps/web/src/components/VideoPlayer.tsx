@@ -46,20 +46,18 @@ export function VideoPlayer({
     );
   }, [cues]);
 
+  // Load video only when src changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !src) return;
 
-    // Reset state when src changes
     setLoadState("loading");
 
     const handleLoadedMetadata = () => {
-      // Video metadata loaded - can show first frame now
       video.currentTime = startTime;
     };
 
     const handleCanPlay = () => {
-      // Video is ready to play
       setLoadState("ready");
     };
 
@@ -68,15 +66,31 @@ export function VideoPlayer({
       setLoadState("error");
     };
 
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("error", handleError);
+
+    video.load();
+
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("error", handleError);
+    };
+  }, [src, startTime]);
+
+  // Playback controls (separate from loading)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
     const handleTimeUpdate = () => {
-      // Check for end time
       if (endTime && video.currentTime >= endTime) {
         video.pause();
         video.currentTime = startTime;
         setIsPlaying(false);
       }
 
-      // Handle "with-cuts" mode - mute during cue ranges
       if (audioMode === "with-cuts" && cues.length > 0) {
         const nowInCue = isInCueRange(video.currentTime);
         setInCueRange(nowInCue);
@@ -88,29 +102,18 @@ export function VideoPlayer({
     const handlePause = () => setIsPlaying(false);
     const handlePlay = () => setIsPlaying(true);
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("canplay", handleCanPlay);
-    video.addEventListener("error", handleError);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
     video.addEventListener("pause", handlePause);
     video.addEventListener("play", handlePlay);
 
-    // Force load if src is set
-    if (src) {
-      video.load();
-    }
-
     return () => {
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("canplay", handleCanPlay);
-      video.removeEventListener("error", handleError);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("play", handlePlay);
     };
-  }, [src, startTime, endTime, audioMode, cues, isMuted, isInCueRange]);
+  }, [startTime, endTime, audioMode, cues, isMuted, isInCueRange]);
 
   // Update muted state when audio mode changes
   useEffect(() => {
@@ -217,7 +220,8 @@ export function VideoPlayer({
           className="w-full"
           muted={audioMode === "with-cuts" ? (inCueRange || isMuted) : isMuted}
           playsInline
-          preload="metadata"
+          preload="auto"
+          crossOrigin="anonymous"
         />
 
         {/* Play overlay */}
