@@ -63,17 +63,16 @@ export default function SessionPage({ params }: PageProps) {
         return;
       }
 
-      const myTakeExists = data.takes.some(
-        (t) => t.roleIndex === data.myRoleIndex
-      );
+      const isSolo = data.session.maxPlayers === 1;
+      const totalRoles = data.session.sceneMeta.cues.length;
+      const allRolesRecorded = data.takes.length >= totalRoles;
 
-      if (myTakeExists) {
-        setHasRecorded(true);
-        if (data.takes.length >= data.session.maxPlayers) {
-          setViewState("finish");
-        } else {
-          setViewState("wait");
-        }
+      // In solo mode, check if all roles recorded (not just maxPlayers)
+      // In multiplayer mode, check if all players recorded
+      const requiredRecordings = isSolo ? totalRoles : data.session.maxPlayers;
+
+      if (data.takes.length >= requiredRecordings) {
+        setViewState("finish");
         return;
       }
 
@@ -82,10 +81,36 @@ export default function SessionPage({ params }: PageProps) {
         return;
       }
 
-      if (data.currentTurn === data.myRoleIndex) {
-        setViewState("record");
+      // In solo mode: always show record if there are more roles to record
+      // In multiplayer: check if it's your turn
+      if (isSolo) {
+        if (data.myRoleIndex !== null && data.takes.length < totalRoles) {
+          setHasRecorded(false);  // Reset for next role
+          setViewState("record");
+        } else {
+          setViewState("finish");
+        }
       } else {
-        setViewState("wait");
+        // Multiplayer logic
+        const myTakeExists = data.takes.some(
+          (t) => t.roleIndex === data.myRoleIndex
+        );
+
+        if (myTakeExists) {
+          setHasRecorded(true);
+          if (data.takes.length >= data.session.maxPlayers) {
+            setViewState("finish");
+          } else {
+            setViewState("wait");
+          }
+          return;
+        }
+
+        if (data.currentTurn === data.myRoleIndex) {
+          setViewState("record");
+        } else {
+          setViewState("wait");
+        }
       }
     },
     [router, sessionId]
@@ -267,15 +292,20 @@ export default function SessionPage({ params }: PageProps) {
       (c) => c.roleIndex === session.myRoleIndex
     );
     const cueDuration = myCue?.durationSec || 5;
+    const isSolo = session.session.maxPlayers === 1;
+    const totalRoles = session.session.sceneMeta.cues.length;
+    const currentRoleNum = (session.myRoleIndex ?? 0) + 1;
 
     return (
       <div className="flex-1 flex flex-col p-6">
         <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5">
           {/* Header */}
           <div className="text-center animate-slide-up">
-            <div className="badge mb-3">Ваш ход</div>
+            <div className="badge mb-3">
+              {isSolo ? `Реплика ${currentRoleNum} из ${totalRoles}` : "Ваш ход"}
+            </div>
             <h1 className="text-xl font-bold">
-              Игрок {(session.myRoleIndex ?? 0) + 1}
+              {isSolo ? `Озвучьте роль ${currentRoleNum}` : `Игрок ${currentRoleNum}`}
             </h1>
           </div>
 

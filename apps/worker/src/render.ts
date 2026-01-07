@@ -130,7 +130,26 @@ export async function renderVideo(input: RenderInput): Promise<string> {
     let filterComplex = "";
     const audioMixParts: string[] = [];
 
-    // Process each take
+    // Step 1: Process original audio - mute only during cue ranges where we have dubs
+    let volumeFilters: string[] = [];
+    for (const take of takes) {
+      const cue = cues.find((c) => c.roleIndex === take.roleIndex);
+      if (!cue) continue;
+      // Mute original audio during this cue's time range
+      volumeFilters.push(`volume=enable='between(t,${cue.startSec},${cue.startSec + cue.durationSec})':volume=0`);
+    }
+
+    if (volumeFilters.length > 0) {
+      // Duck original audio only in cue ranges
+      filterComplex += `[0:a]${volumeFilters.join(",")}[orig_ducked];`;
+      audioMixParts.push("[orig_ducked]");
+    } else {
+      // No takes - just use original audio as-is
+      filterComplex += `[0:a]acopy[orig_ducked];`;
+      audioMixParts.push("[orig_ducked]");
+    }
+
+    // Step 2: Process each take - delay to start at cue time
     for (let i = 0; i < takes.length; i++) {
       const take = takes[i];
       if (!take) continue;
@@ -140,12 +159,12 @@ export async function renderVideo(input: RenderInput): Promise<string> {
 
       const delayMs = Math.floor(cue.startSec * 1000);
 
-      // Delay and normalize audio
-      filterComplex += `[${i + 1}:a]adelay=${delayMs}|${delayMs},loudnorm=I=-16:LRA=11:TP=-1.5[a${i}];`;
-      audioMixParts.push(`[a${i}]`);
+      // Delay and normalize dubbed audio
+      filterComplex += `[${i + 1}:a]adelay=${delayMs}|${delayMs},loudnorm=I=-16:LRA=11:TP=-1.5[dub${i}];`;
+      audioMixParts.push(`[dub${i}]`);
     }
 
-    // Mix all audio
+    // Step 3: Mix original (ducked) audio + all dubs together
     if (audioMixParts.length > 0) {
       filterComplex += `${audioMixParts.join("")}amix=inputs=${audioMixParts.length}:duration=first:dropout_transition=0[aout];`;
     }

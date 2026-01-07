@@ -292,10 +292,20 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       const currentTurn = session.takes.length;
+      const sceneCues = parseCues(session.scene.cueJson);
+      const totalRoles = sceneCues.length;
+      const isSolo = session.maxPlayers === 1;
+
+      // In solo mode, myRoleIndex is the current turn (next role to record)
+      // In multiplayer, it's the participant's assigned role
+      const myRoleIndex = isSolo 
+        ? (currentTurn < totalRoles ? currentTurn : null)  // null if all recorded
+        : (myParticipant?.roleIndex ?? null);
 
       // Get preview URL for current user (using proxy)
+      // In solo mode, no previews. In multiplayer, show preview for your role
       let previewUrl: string | null = null;
-      if (myParticipant && myParticipant.roleIndex > 0) {
+      if (!isSolo && myParticipant && myParticipant.roleIndex > 0) {
         previewUrl = getProxyUrl("preview", id, String(myParticipant.roleIndex));
       }
 
@@ -336,7 +346,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
               videoUrl,
             }
           : null,
-        myRoleIndex: myParticipant?.roleIndex ?? null,
+        myRoleIndex,
         previewUrl,
         sceneUrl,
       };
@@ -356,6 +366,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const session = await prisma.session.findUnique({
         where: { id },
         include: {
+          scene: true,
           participants: true,
           takes: true,
         },
@@ -366,7 +377,19 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Session not found" });
       }
 
-      console.log("[Take] Session:", { status: session.status, participants: session.participants.map(p => ({ tgUserId: p.tgUserId, roleIndex: p.roleIndex })) });
+      // Parse cues to know how many roles exist
+      const sceneCues = parseCues(session.scene.cueJson);
+      const totalRoles = sceneCues.length;
+      const isSolo = session.maxPlayers === 1;
+
+      console.log("[Take] Session:", { 
+        status: session.status, 
+        maxPlayers: session.maxPlayers,
+        isSolo,
+        totalRoles,
+        takes: session.takes.length,
+        participants: session.participants.map(p => ({ tgUserId: p.tgUserId, roleIndex: p.roleIndex })) 
+      });
 
       if (session.status !== "recording") {
         console.log("[Take] Session not in recording phase:", session.status);
@@ -384,21 +407,35 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const currentTurn = session.takes.length;
 
-      if (participant.roleIndex !== currentTurn) {
-        console.log("[Take] Not your turn:", { currentTurn, roleIndex: participant.roleIndex });
-        return reply.status(400).send({
-          error: `Not your turn. Current turn: ${currentTurn}, your role: ${participant.roleIndex}`,
-        });
+      // In solo mode, the single player records all roles
+      // In multiplayer mode, each player records their assigned role
+      if (isSolo) {
+        // Solo: check we haven't recorded all roles yet
+        if (currentTurn >= totalRoles) {
+          console.log("[Take] All roles already recorded in solo mode");
+          return reply.status(400).send({ error: "All roles already recorded" });
+        }
+      } else {
+        // Multiplayer: check it's this player's turn
+        if (participant.roleIndex !== currentTurn) {
+          console.log("[Take] Not your turn:", { currentTurn, roleIndex: participant.roleIndex });
+          return reply.status(400).send({
+            error: `Not your turn. Current turn: ${currentTurn}, your role: ${participant.roleIndex}`,
+          });
+        }
+
+        // Check if already submitted
+        const existingTake = session.takes.find(
+          (t) => t.roleIndex === participant.roleIndex
+        );
+        if (existingTake) {
+          console.log("[Take] Already submitted");
+          return reply.status(400).send({ error: "Already submitted" });
+        }
       }
 
-      // Check if already submitted
-      const existingTake = session.takes.find(
-        (t) => t.roleIndex === participant.roleIndex
-      );
-      if (existingTake) {
-        console.log("[Take] Already submitted");
-        return reply.status(400).send({ error: "Already submitted" });
-      }
+      // Role index for this take
+      const takeRoleIndex = isSolo ? currentTurn : participant.roleIndex;
 
       // Get uploaded file
       const data = await request.file();
@@ -454,22 +491,25 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       console.log("[Take] Proceeding with duration:", durationSec);
 
       // Upload to S3
-      const s3Key = storage.keys.upload(id, participant.roleIndex);
+      const s3Key = storage.keys.upload(id, takeRoleIndex);
       await storage.upload(s3Key, audioBuffer, "audio/webm");
 
       // Create take record
       await prisma.take.create({
         data: {
           sessionId: id,
-          roleIndex: participant.roleIndex,
+          roleIndex: takeRoleIndex,
           s3Key,
           durationSec,
         },
       });
 
-      // Create preview for next player
-      const nextRoleIndex = participant.roleIndex + 1;
-      if (nextRoleIndex < session.maxPlayers) {
+      console.log("[Take] Saved take for role:", takeRoleIndex);
+
+      // Create preview for next role (in multiplayer mode)
+      // In solo mode, no previews needed since same person records all
+      const nextRoleIndex = takeRoleIndex + 1;
+      if (!isSolo && nextRoleIndex < totalRoles) {
         try {
           // Player 2 hears first 50% of player 1
           // Player 3 hears last 50% of player 2
@@ -507,7 +547,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const session = await prisma.session.findUnique({
         where: { id },
-        include: { takes: true },
+        include: { scene: true, takes: true },
       });
 
       if (!session) {
@@ -519,8 +559,18 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(403).send({ error: "Only host can finish" });
       }
 
-      if (session.takes.length < session.maxPlayers) {
-        return reply.status(400).send({ error: "Not all players recorded" });
+      // Check all roles recorded
+      const sceneCues = parseCues(session.scene.cueJson);
+      const totalRoles = sceneCues.length;
+      const isSolo = session.maxPlayers === 1;
+      
+      // In solo mode, need all roles recorded. In multiplayer, need all players.
+      const requiredTakes = isSolo ? totalRoles : session.maxPlayers;
+      
+      if (session.takes.length < requiredTakes) {
+        return reply.status(400).send({ 
+          error: `Not all roles recorded. Got ${session.takes.length}, need ${requiredTakes}` 
+        });
       }
 
       if (session.status === "rendering" || session.status === "ready") {
