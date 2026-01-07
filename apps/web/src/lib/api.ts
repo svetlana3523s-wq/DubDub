@@ -112,5 +112,14 @@ export const api = {
     sessionId: string
   ): Promise<RenderStatusResponse> =>
     request(initData, `/renders/${sessionId}`),
+
+  sendVideoToTelegram: (
+    initData: string,
+    sessionId: string
+  ): Promise<{ sent: boolean }> =>
+    request(initData, `/files/renders/${sessionId}/send-to-telegram`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 };
 

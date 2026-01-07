@@ -1,13 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
 import { storage } from "../lib/storage.js";
+import { prisma } from "../lib/prisma.js";
 import { config } from "../config.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { bot } from "../index.js";
 
 /**
  * File proxy routes - serves files from S3 through the API
- * This avoids CORS issues and keeps MinIO internal
+ * Uses streaming for efficient delivery
  */
 export const filesRoutes: FastifyPluginAsync = async (fastify) => {
-  // Serve scene videos
+  // Serve scene videos (streaming)
   fastify.get<{ Params: { filename: string } }>(
     "/files/scenes/:filename",
     async (request, reply) => {
@@ -15,22 +18,29 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
       const key = `scenes/${filename}`;
 
       try {
-        const buffer = await storage.download(key);
-        return reply
+        const { stream, contentLength } = await storage.getStream(key);
+        
+        reply
           .header("Content-Type", "video/mp4")
           .header("Cache-Control", "public, max-age=86400")
-          .send(buffer);
+          .header("Accept-Ranges", "bytes");
+        
+        if (contentLength) {
+          reply.header("Content-Length", contentLength);
+        }
+        
+        return reply.send(stream);
       } catch (err: any) {
         if (err.name === "NoSuchKey") {
           return reply.status(404).send({ error: "File not found" });
         }
-        console.error("File download error:", err);
+        console.error("File stream error:", err);
         return reply.status(500).send({ error: "Failed to load file" });
       }
     }
   );
 
-  // Serve rendered videos
+  // Serve rendered videos (streaming)
   fastify.get<{ Params: { sessionId: string } }>(
     "/files/renders/:sessionId",
     async (request, reply) => {
@@ -38,22 +48,29 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
       const key = `renders/${sessionId}.mp4`;
 
       try {
-        const buffer = await storage.download(key);
-        return reply
+        const { stream, contentLength } = await storage.getStream(key);
+        
+        reply
           .header("Content-Type", "video/mp4")
           .header("Cache-Control", "public, max-age=86400")
-          .send(buffer);
+          .header("Accept-Ranges", "bytes");
+        
+        if (contentLength) {
+          reply.header("Content-Length", contentLength);
+        }
+        
+        return reply.send(stream);
       } catch (err: any) {
         if (err.name === "NoSuchKey") {
           return reply.status(404).send({ error: "Render not found" });
         }
-        console.error("Render download error:", err);
+        console.error("Render stream error:", err);
         return reply.status(500).send({ error: "Failed to load render" });
       }
     }
   );
 
-  // Serve audio previews
+  // Serve audio previews (streaming)
   fastify.get<{ Params: { sessionId: string; roleIndex: string } }>(
     "/files/previews/:sessionId/:roleIndex",
     async (request, reply) => {
@@ -61,17 +78,63 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
       const key = `previews/${sessionId}/preview_for_${roleIndex}.webm`;
 
       try {
-        const buffer = await storage.download(key);
-        return reply
+        const { stream, contentLength } = await storage.getStream(key);
+        
+        reply
           .header("Content-Type", "audio/webm")
-          .header("Cache-Control", "public, max-age=3600")
-          .send(buffer);
+          .header("Cache-Control", "public, max-age=3600");
+        
+        if (contentLength) {
+          reply.header("Content-Length", contentLength);
+        }
+        
+        return reply.send(stream);
       } catch (err: any) {
         if (err.name === "NoSuchKey") {
           return reply.status(404).send({ error: "Preview not found" });
         }
-        console.error("Preview download error:", err);
+        console.error("Preview stream error:", err);
         return reply.status(500).send({ error: "Failed to load preview" });
+      }
+    }
+  );
+
+  // Send video to user via Telegram bot
+  fastify.post<{ Params: { sessionId: string } }>(
+    "/files/renders/:sessionId/send-to-telegram",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { sessionId } = request.params;
+      const user = request.tgUser;
+
+      try {
+        // Check render exists and is ready
+        const render = await prisma.render.findUnique({
+          where: { sessionId },
+          include: { session: true },
+        });
+
+        if (!render || render.status !== "ready" || !render.s3Key) {
+          return reply.status(404).send({ error: "Render not ready" });
+        }
+
+        // Download video from S3
+        const videoBuffer = await storage.download(render.s3Key);
+
+        // Send video via Telegram
+        await bot.telegram.sendVideo(
+          user.id,
+          { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
+          {
+            caption: `🎬 Ваш дубляж "${render.session.topic}"\n\nСоздано в @${config.botUsername}`,
+            supports_streaming: true,
+          }
+        );
+
+        return { sent: true };
+      } catch (err) {
+        console.error("Send to Telegram error:", err);
+        return reply.status(500).send({ error: "Failed to send video" });
       }
     }
   );

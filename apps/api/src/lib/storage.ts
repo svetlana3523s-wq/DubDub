@@ -3,9 +3,11 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { config } from "../config.js";
+import type { Readable } from "stream";
 
 const s3Client = new S3Client({
   endpoint: config.s3.endpoint,
@@ -50,6 +52,22 @@ export const storage = {
   },
 
   /**
+   * Get object as stream (for efficient proxying)
+   */
+  async getStream(key: string): Promise<{ stream: Readable; contentLength?: number }> {
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      })
+    );
+    return {
+      stream: response.Body as Readable,
+      contentLength: response.ContentLength,
+    };
+  },
+
+  /**
    * Get object as buffer
    */
   async download(key: string): Promise<Buffer> {
@@ -65,6 +83,26 @@ export const storage = {
       chunks.push(chunk as Buffer);
     }
     return Buffer.concat(chunks);
+  },
+
+  /**
+   * Check if object exists and get its size
+   */
+  async head(key: string): Promise<{ exists: boolean; size?: number }> {
+    try {
+      const response = await s3Client.send(
+        new HeadObjectCommand({
+          Bucket: bucket,
+          Key: key,
+        })
+      );
+      return { exists: true, size: response.ContentLength };
+    } catch (err: any) {
+      if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
+        return { exists: false };
+      }
+      throw err;
+    }
   },
 
   /**

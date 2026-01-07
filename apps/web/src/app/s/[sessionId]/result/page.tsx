@@ -16,6 +16,8 @@ export default function ResultPage({ params }: PageProps) {
   const [render, setRender] = useState<RenderStatusResponse | null>(null);
   const [session, setSession] = useState<SessionStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -64,6 +66,27 @@ export default function ResultPage({ params }: PageProps) {
       window.Telegram.WebApp.openTelegramLink(
         `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Смотри наш дубляж! 🎬")}`
       );
+    }
+  };
+
+  const handleSendToTelegram = async () => {
+    if (!initData || sending || sent) return;
+    
+    setSending(true);
+    try {
+      await api.sendVideoToTelegram(initData, sessionId);
+      setSent(true);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      
+      // Close mini app after short delay to show the video in chat
+      setTimeout(() => {
+        window.Telegram?.WebApp?.close();
+      }, 1500);
+    } catch (err) {
+      console.error("Send failed:", err);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -154,14 +177,23 @@ export default function ResultPage({ params }: PageProps) {
 
         {/* Actions */}
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-          {/* Download button - prominent */}
-          <a
-            href={render.videoUrl}
-            download={`dubdub-${sessionId}.mp4`}
-            className="btn-primary w-full flex items-center justify-center gap-2"
+          {/* Send to Telegram - prominent */}
+          <button
+            onClick={handleSendToTelegram}
+            disabled={sending || sent}
+            className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-70"
           >
-            📥 Скачать видео
-          </a>
+            {sent ? (
+              <>✅ Отправлено в чат!</>
+            ) : sending ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Отправляем...
+              </>
+            ) : (
+              <>📥 Сохранить в Telegram</>
+            )}
+          </button>
 
           <div className="grid grid-cols-2 gap-3">
             <button onClick={handleShare} className="btn-tg">

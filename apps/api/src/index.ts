@@ -39,15 +39,15 @@ await fastify.register(rateLimit, {
   redis,
 });
 
+// Create bot BEFORE routes (so routes can use it)
+export const bot = createBot();
+
 // Routes
 await fastify.register(healthRoutes);
 await fastify.register(sessionsRoutes);
 await fastify.register(rendersRoutes);
 await fastify.register(adminRoutes);
 await fastify.register(filesRoutes);
-
-// Start bot
-const bot = createBot();
 
 // Use webhook in production or polling in development
 const isProduction = process.env.NODE_ENV === "production";
