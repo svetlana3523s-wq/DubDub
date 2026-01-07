@@ -14,7 +14,6 @@ import {
   type FinishSessionResponse,
   type SceneMeta,
   type Cue,
-  type CueFrames,
 } from "@dubdub/shared";
 import { spawn } from "child_process";
 import { promisify } from "util";
@@ -376,7 +375,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       const currentTurn = session.takes.length;
-      const sceneCues = parseCues(session.scene.cueJson);
+      const sceneCues = parseCuesFromJson(session.scene.cueJson, session.scene.fps);
       const totalRoles = sceneCues.length;
       const isSolo = session.maxPlayers === 1;
 
@@ -462,7 +461,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Parse cues to know how many roles exist
-      const sceneCues = parseCues(session.scene.cueJson);
+      const sceneCues = parseCuesFromJson(session.scene.cueJson, session.scene.fps);
       const totalRoles = sceneCues.length;
       const isSolo = session.maxPlayers === 1;
 
@@ -573,7 +572,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       if (durationSec > cueDuration) {
         console.log("[Take] Trimming audio from", durationSec, "to", cueDuration);
         try {
-          audioBuffer = await trimAudio(audioBuffer, cueDuration);
+          audioBuffer = await trimAudio(audioBuffer, cueDuration) as Buffer;
           durationSec = cueDuration;
         } catch (err) {
           console.error("[Take] Trim failed:", err);
@@ -653,7 +652,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Check all roles recorded
-      const sceneCues = parseCues(session.scene.cueJson);
+      const sceneCues = parseCuesFromJson(session.scene.cueJson, session.scene.fps);
       const totalRoles = sceneCues.length;
       const isSolo = session.maxPlayers === 1;
       

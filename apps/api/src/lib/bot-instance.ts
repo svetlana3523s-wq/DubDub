@@ -1,5 +1,6 @@
+import { Telegraf } from "telegraf";
 import { createBot } from "../bot.js";
 
 // Single bot instance shared across the app
-export const bot = createBot();
+export const bot: Telegraf = createBot();
 
