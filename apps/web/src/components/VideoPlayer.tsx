@@ -20,6 +20,7 @@ interface VideoPlayerProps {
 }
 
 type AudioMode = "original" | "with-cuts";
+type LoadState = "loading" | "ready" | "error";
 
 export function VideoPlayer({ 
   src, 
@@ -34,7 +35,7 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(muted);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
   const [audioMode, setAudioMode] = useState<AudioMode>("original");
   const [inCueRange, setInCueRange] = useState(false);
 
@@ -49,12 +50,22 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
-    // Set to startTime to show preview frame
-    video.currentTime = startTime;
+    // Reset state when src changes
+    setLoadState("loading");
 
-    const handleLoadedData = () => {
-      setHasLoaded(true);
+    const handleLoadedMetadata = () => {
+      // Video metadata loaded - can show first frame now
       video.currentTime = startTime;
+    };
+
+    const handleCanPlay = () => {
+      // Video is ready to play
+      setLoadState("ready");
+    };
+
+    const handleError = () => {
+      console.error("Video load error:", video.error);
+      setLoadState("error");
     };
 
     const handleTimeUpdate = () => {
@@ -77,20 +88,29 @@ export function VideoPlayer({
     const handlePause = () => setIsPlaying(false);
     const handlePlay = () => setIsPlaying(true);
 
-    video.addEventListener("loadeddata", handleLoadedData);
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("error", handleError);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
     video.addEventListener("pause", handlePause);
     video.addEventListener("play", handlePlay);
 
+    // Force load if src is set
+    if (src) {
+      video.load();
+    }
+
     return () => {
-      video.removeEventListener("loadeddata", handleLoadedData);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("error", handleError);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("play", handlePlay);
     };
-  }, [startTime, endTime, audioMode, cues, isMuted, isInCueRange]);
+  }, [src, startTime, endTime, audioMode, cues, isMuted, isInCueRange]);
 
   // Update muted state when audio mode changes
   useEffect(() => {
@@ -168,9 +188,26 @@ export function VideoPlayer({
 
       <div className="relative group rounded-xl overflow-hidden bg-black/20">
         {/* Loading placeholder */}
-        {!hasLoaded && (
+        {loadState === "loading" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
             <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          </div>
+        )}
+
+        {/* Error state */}
+        {loadState === "error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-10 text-white">
+            <div className="text-3xl mb-2">⚠️</div>
+            <div className="text-sm">Не удалось загрузить видео</div>
+            <button 
+              onClick={() => {
+                setLoadState("loading");
+                videoRef.current?.load();
+              }}
+              className="mt-2 px-3 py-1 bg-white/20 rounded-full text-xs hover:bg-white/30"
+            >
+              Повторить
+            </button>
           </div>
         )}
 
@@ -180,22 +217,24 @@ export function VideoPlayer({
           className="w-full"
           muted={audioMode === "with-cuts" ? (inCueRange || isMuted) : isMuted}
           playsInline
-          preload="auto"
+          preload="metadata"
         />
 
         {/* Play overlay */}
-        <button
-          onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity"
-        >
-          <div
-            className={`w-14 h-14 rounded-full bg-white/90 flex items-center justify-center text-2xl transition-transform ${
-              isPlaying ? "scale-0" : "scale-100"
-            }`}
+        {loadState === "ready" && (
+          <button
+            onClick={togglePlay}
+            className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity"
           >
-            ▶️
-          </div>
-        </button>
+            <div
+              className={`w-14 h-14 rounded-full bg-white/90 flex items-center justify-center text-2xl transition-transform ${
+                isPlaying ? "scale-0" : "scale-100"
+              }`}
+            >
+              ▶️
+            </div>
+          </button>
+        )}
 
         {/* Mute button */}
         <button
