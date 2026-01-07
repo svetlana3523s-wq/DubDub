@@ -539,7 +539,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       for await (const chunk of data.file) {
         chunks.push(chunk);
       }
-      let audioBuffer = Buffer.concat(chunks);
+      const audioBuffer = Buffer.concat(chunks);
 
       console.log("[Take] Audio buffer size:", audioBuffer.length);
 
@@ -569,10 +569,11 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Trim audio if longer than cue duration
+      let finalAudioBuffer: Buffer = audioBuffer;
       if (durationSec > cueDuration) {
         console.log("[Take] Trimming audio from", durationSec, "to", cueDuration);
         try {
-          audioBuffer = await trimAudio(audioBuffer, cueDuration) as Buffer;
+          finalAudioBuffer = await trimAudio(audioBuffer, cueDuration);
           durationSec = cueDuration;
         } catch (err) {
           console.error("[Take] Trim failed:", err);
@@ -584,7 +585,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Upload to S3
       const s3Key = storage.keys.upload(id, takeRoleIndex);
-      await storage.upload(s3Key, audioBuffer, "audio/webm");
+      await storage.upload(s3Key, finalAudioBuffer, "audio/webm");
 
       // Create take record
       await prisma.take.create({
@@ -609,7 +610,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           const endPercent = nextRoleIndex === 1 ? 50 : 100;
 
           const previewBuffer = await createPreview(
-            audioBuffer,
+            finalAudioBuffer,
             startPercent,
             endPercent
           );
