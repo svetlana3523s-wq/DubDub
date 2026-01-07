@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
@@ -9,13 +9,13 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import type { SessionStateResponse, JoinSessionResponse } from "@dubdub/shared";
 
 interface PageProps {
-  params: Promise<{ sessionId: string }>;
+  params: { sessionId: string };
 }
 
 type ViewState = "loading" | "error" | "lobby" | "record" | "wait" | "finish" | "rendering";
 
 export default function SessionPage({ params }: PageProps) {
-  const { sessionId } = use(params);
+  const { sessionId } = params;
   const router = useRouter();
   const { isReady, initData, user } = useTelegram();
 

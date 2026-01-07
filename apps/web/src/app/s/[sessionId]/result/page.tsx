@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
 
 interface PageProps {
-  params: Promise<{ sessionId: string }>;
+  params: { sessionId: string };
 }
 
 export default function ResultPage({ params }: PageProps) {
-  const { sessionId } = use(params);
+  const { sessionId } = params;
   const { isReady, initData } = useTelegram();
   const [render, setRender] = useState<RenderStatusResponse | null>(null);
   const [session, setSession] = useState<SessionStateResponse | null>(null);
