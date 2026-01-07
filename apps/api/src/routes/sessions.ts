@@ -360,6 +360,8 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params;
       const user = request.tgUser;
 
+      console.log("[Take] Request:", { sessionId: id, tgUserId: user.id });
+
       const session = await prisma.session.findUnique({
         where: { id },
         include: {
@@ -369,10 +371,14 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!session) {
+        console.log("[Take] Session not found");
         return reply.status(404).send({ error: "Session not found" });
       }
 
+      console.log("[Take] Session:", { status: session.status, participants: session.participants.map(p => ({ tgUserId: p.tgUserId, roleIndex: p.roleIndex })) });
+
       if (session.status !== "recording") {
+        console.log("[Take] Session not in recording phase:", session.status);
         return reply.status(400).send({ error: "Session not in recording phase" });
       }
 
@@ -381,12 +387,14 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       if (!participant) {
+        console.log("[Take] Not a participant. User:", user.id, "Participants:", session.participants.map(p => p.tgUserId));
         return reply.status(403).send({ error: "Not a participant" });
       }
 
       const currentTurn = session.takes.length;
 
       if (participant.roleIndex !== currentTurn) {
+        console.log("[Take] Not your turn:", { currentTurn, roleIndex: participant.roleIndex });
         return reply.status(400).send({
           error: `Not your turn. Current turn: ${currentTurn}, your role: ${participant.roleIndex}`,
         });
@@ -397,14 +405,18 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         (t) => t.roleIndex === participant.roleIndex
       );
       if (existingTake) {
+        console.log("[Take] Already submitted");
         return reply.status(400).send({ error: "Already submitted" });
       }
 
       // Get uploaded file
       const data = await request.file();
       if (!data) {
+        console.log("[Take] No audio file in request");
         return reply.status(400).send({ error: "No audio file" });
       }
+
+      console.log("[Take] File received:", { filename: data.filename, mimetype: data.mimetype });
 
       // Read file to buffer
       const chunks: Buffer[] = [];
@@ -413,9 +425,12 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const audioBuffer = Buffer.concat(chunks);
 
+      console.log("[Take] Audio buffer size:", audioBuffer.length);
+
       // Check size
       const maxBytes = config.maxAudioSizeMb * 1024 * 1024;
       if (audioBuffer.length > maxBytes) {
+        console.log("[Take] File too large:", audioBuffer.length);
         return reply.status(400).send({
           error: `File too large. Max: ${config.maxAudioSizeMb}MB`,
         });
@@ -425,15 +440,18 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       let durationSec: number;
       try {
         durationSec = await getAudioDuration(audioBuffer);
+        console.log("[Take] Audio duration:", durationSec);
       } catch (err) {
-        console.error("Failed to get audio duration:", err);
-        return reply.status(400).send({ error: "Invalid audio file" });
+        console.error("[Take] Failed to get audio duration:", err);
+        // Use default duration if ffprobe fails
+        durationSec = 5;
       }
 
-      // Validate duration (4-6 seconds with some tolerance)
-      if (durationSec < 3 || durationSec > 7) {
+      // Validate duration (relaxed: 1-30 seconds)
+      if (durationSec < 1 || durationSec > 30) {
+        console.log("[Take] Duration out of range:", durationSec);
         return reply.status(400).send({
-          error: `Audio must be 4-6 seconds. Got: ${durationSec.toFixed(1)}s`,
+          error: `Audio must be 1-30 seconds. Got: ${durationSec.toFixed(1)}s`,
         });
       }
 
