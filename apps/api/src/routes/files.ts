@@ -126,7 +126,7 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
           user.id,
           { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
           {
-            caption: `🎬 Ваш дубляж "${render.session.topic}"\n\nСоздано в @${config.botUsername}`,
+            caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
             supports_streaming: true,
           }
         );
