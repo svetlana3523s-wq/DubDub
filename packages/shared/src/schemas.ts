@@ -9,7 +9,7 @@ export const createSessionSchema = z.object({
   gameMode: gameModeSchema,
 });
 
-export type CreateSessionInput = z.infer<typeof createSessionSchema>;
+// CreateSessionInput type is exported from types.ts
 
 // Cue JSON structure (frames - stored in DB)
 export const cueFramesSchema = z.object({
