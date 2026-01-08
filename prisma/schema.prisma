@@ -10,6 +10,7 @@ datasource db {
 model Scene {
   id          String    @id @default(cuid())
   title       String
+  category    String    @default("memes") // movies | memes | politics
   s3Key       String    // scenes/scene1.mp4
   durationSec Float
   fps         Float     @default(25)  // frames per second
@@ -17,12 +18,15 @@ model Scene {
   cueJson     String    // JSON: [{roleIndex, startFrame, durationFrames}] - stored in frames!
   createdAt   DateTime  @default(now())
   sessions    Session[]
+
+  @@index([category])
 }
 
 model Session {
   id              String        @id @default(cuid())
-  mode            String        @default("absurd")
-  topic           String
+  category        String        @default("memes") // movies | memes | politics
+  gameMode        String        @default("improv") // improv | tasks
+  task            String?       // Only set if gameMode = "tasks"
   status          String        @default("lobby") // lobby | recording | rendering | ready
   sceneId         String
   scene           Scene         @relation(fields: [sceneId], references: [id])
@@ -35,6 +39,7 @@ model Session {
 
   @@index([createdByTgUserId])
   @@index([status])
+  @@index([category])
 }
 
 model Participant {

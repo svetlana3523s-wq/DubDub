@@ -1,5 +1,7 @@
 export type SessionStatus = "lobby" | "recording" | "rendering" | "ready";
 export type RenderStatus = "pending" | "rendering" | "ready" | "failed";
+export type Category = "movies" | "memes" | "politics";
+export type GameMode = "improv" | "tasks";
 
 // Cue for client (in seconds with milliseconds)
 export interface Cue {
@@ -33,8 +35,9 @@ export interface TelegramUser {
 
 export interface SessionResponse {
   id: string;
-  mode: string;
-  topic: string;
+  category: Category;
+  gameMode: GameMode;
+  task: string | null;  // Only set if gameMode = "tasks"
   status: SessionStatus;
   maxPlayers: number;
   createdByTgUserId: string;
@@ -58,6 +61,12 @@ export interface RenderResponse {
   videoUrl: string | null;
 }
 
+export interface CreateSessionInput {
+  maxPlayers: 1 | 2;
+  category: Category;
+  gameMode: GameMode;
+}
+
 export interface CreateSessionResponse {
   sessionId: string;
 }
@@ -65,11 +74,11 @@ export interface CreateSessionResponse {
 export interface JoinSessionResponse {
   participant: ParticipantResponse;
   roleIndex: number;
-  topic: string;
+  task: string | null;
+  gameMode: GameMode;
   sceneMeta: SceneMeta;
   sceneUrl: string;
   currentTurn: number;
-  previewUrl: string | null;
 }
 
 export interface SessionStateResponse {
@@ -79,7 +88,6 @@ export interface SessionStateResponse {
   takes: TakeResponse[];
   render: RenderResponse | null;
   myRoleIndex: number | null;
-  previewUrl: string | null;
   sceneUrl: string;
 }
 
@@ -101,4 +109,3 @@ export interface ApiError {
   error: string;
   code?: string;
 }
-

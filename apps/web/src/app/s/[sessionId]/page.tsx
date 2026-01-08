@@ -14,6 +14,12 @@ interface PageProps {
 
 type ViewState = "loading" | "error" | "lobby" | "record" | "wait" | "finish" | "rendering";
 
+const CATEGORY_LABELS: Record<string, string> = {
+  movies: "🎬 Кино/сериалы",
+  memes: "😂 Мемы",
+  politics: "🏛️ Политика",
+};
+
 export default function SessionPage({ params }: PageProps) {
   const { sessionId } = params;
   const router = useRouter();
@@ -65,7 +71,6 @@ export default function SessionPage({ params }: PageProps) {
 
       const isSolo = data.session.maxPlayers === 1;
       const totalRoles = data.session.sceneMeta.cues.length;
-      const allRolesRecorded = data.takes.length >= totalRoles;
 
       // In solo mode, check if all roles recorded (not just maxPlayers)
       // In multiplayer mode, check if all players recorded
@@ -242,10 +247,20 @@ export default function SessionPage({ params }: PageProps) {
             <p className="text-tg-hint">Ожидаем игроков</p>
           </div>
 
-          {/* Topic */}
+          {/* Category + Task */}
           <div className="card text-center animate-fade-in">
-            <div className="text-sm text-tg-hint mb-2">Тема</div>
-            <div className="text-lg font-medium">{session.session.topic}</div>
+            <div className="text-sm text-tg-hint mb-2">
+              {CATEGORY_LABELS[session.session.category] || session.session.category}
+            </div>
+            {session.session.gameMode === "tasks" && session.session.task && (
+              <>
+                <div className="text-xs text-tg-hint mt-3 mb-1">📝 Задание</div>
+                <div className="text-lg font-medium">{session.session.task}</div>
+              </>
+            )}
+            {session.session.gameMode === "improv" && (
+              <div className="text-lg font-medium">🎭 Импровизация</div>
+            )}
           </div>
 
           {/* Players */}
@@ -317,40 +332,29 @@ export default function SessionPage({ params }: PageProps) {
             </h1>
           </div>
 
-          {/* Topic */}
-          <div className="card text-center animate-fade-in">
-            <div className="text-sm text-tg-hint mb-1">Тема</div>
-            <div className="font-medium">{session.session.topic}</div>
-          </div>
+          {/* Task (only in tasks mode) */}
+          {session.session.gameMode === "tasks" && session.session.task && (
+            <div className="card text-center animate-fade-in">
+              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+              <div className="font-medium">{session.session.task}</div>
+            </div>
+          )}
 
-          {/* Full scene with original audio - FIRST */}
+          {/* Full scene with original audio */}
           <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <VideoPlayer
               key={`full-${session.myRoleIndex}`}
               src={`${session.sceneUrl}?v=full`}
               muted={false}
               showTimeRange={false}
-              label="📺 Посмотри сцену (переключи режим звука):"
+              label="📺 Посмотри сцену:"
               cues={session.session.sceneMeta.cues}
               showAudioModeSwitch={true}
             />
           </div>
 
-          {/* Preview audio from previous player */}
-          {session.previewUrl && session.myRoleIndex !== null && session.myRoleIndex > 0 && (
-            <div className="card animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <div className="text-sm text-tg-hint mb-3">
-                🎧 Часть предыдущей реплики
-                <span className="text-xs ml-2">
-                  ({session.myRoleIndex === 1 ? "0-50%" : "50-100%"})
-                </span>
-              </div>
-              <audio src={session.previewUrl} controls className="w-full h-10" />
-            </div>
-          )}
-
           {/* Your fragment to dub */}
-          <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
@@ -365,7 +369,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Recorder */}
-          <div className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
+          <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
             <VoiceRecorder
               key={`recorder-${session.myRoleIndex}`}
               maxDuration={cueDuration}
@@ -454,4 +458,3 @@ export default function SessionPage({ params }: PageProps) {
 
   return null;
 }
-

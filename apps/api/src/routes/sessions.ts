@@ -14,6 +14,8 @@ import {
   type FinishSessionResponse,
   type SceneMeta,
   type Cue,
+  type Category,
+  type GameMode,
 } from "@dubdub/shared";
 import { spawn } from "child_process";
 import { promisify } from "util";
@@ -21,22 +23,23 @@ import { pipeline as pipelineCallback } from "stream";
 
 const pipeline = promisify(pipelineCallback);
 
-// Topics for random selection
-const TOPICS = [
-  "Первое свидание в зоопарке",
-  "Собеседование на должность космонавта",
-  "Семейный ужин на Марсе",
-  "Переговоры между пиратами и русалками",
-  "Последний день динозавров",
-  "Открытие нового вида картошки",
-  "Встреча выпускников школы магии",
-  "Конференция домашних животных",
-  "Дипломатический скандал из-за борща",
-  "Романтика в очереди за iPhone",
+// Tasks for "tasks" game mode
+const TASKS = [
+  "Озвучь в стиле ужастиков категории Б",
+  "Озвучь КРАЙНЕ эмоционально",
+  "Озвучь с кавказским акцентом",
+  "Озвучь используя самое необычное нецензурное слово которое ты знаешь",
+  "Озвучь в стиле укурыша",
+  "Озвучь в стиле гоблина",
+  "Озвучь издавая звуки животного",
+  "Озвучь страстно",
+  "Озвучь пошло",
+  "Озвучь голосом монстра",
+  "Озвучь в стиле Гитлера",
 ];
 
-function getRandomTopic(): string {
-  return TOPICS[Math.floor(Math.random() * TOPICS.length)] ?? TOPICS[0]!;
+function getRandomTask(): string {
+  return TASKS[Math.floor(Math.random() * TASKS.length)] ?? TASKS[0]!;
 }
 
 /**
@@ -113,45 +116,6 @@ async function getAudioDuration(buffer: Buffer): Promise<number> {
   });
 }
 
-async function createPreview(
-  inputBuffer: Buffer,
-  startPercent: number,
-  endPercent: number
-): Promise<Buffer> {
-  const duration = await getAudioDuration(inputBuffer);
-  const startSec = (duration * startPercent) / 100;
-  const clipDuration = (duration * (endPercent - startPercent)) / 100;
-
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn("ffmpeg", [
-      "-i", "pipe:0",
-      "-ss", String(startSec),
-      "-t", String(clipDuration),
-      "-c:a", "libopus",
-      "-b:a", "128k",  // High quality opus
-      "-ar", "48000",  // 48kHz sample rate
-      "-f", "webm",
-      "pipe:1",
-    ]);
-
-    const chunks: Buffer[] = [];
-
-    ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
-    ffmpeg.stderr.on("data", () => {}); // Ignore stderr
-
-    ffmpeg.on("close", (code) => {
-      if (code === 0) {
-        resolve(Buffer.concat(chunks));
-      } else {
-        reject(new Error(`ffmpeg preview failed with code ${code}`));
-      }
-    });
-
-    ffmpeg.stdin.write(inputBuffer);
-    ffmpeg.stdin.end();
-  });
-}
-
 /**
  * Trim audio to exact duration (cut off anything longer)
  */
@@ -190,17 +154,18 @@ async function trimAudio(
 
 export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
   // Create session
-  fastify.post<{ Body: { maxPlayers: number } }>(
+  fastify.post<{ Body: { maxPlayers: number; category: Category; gameMode: GameMode } }>(
     "/sessions",
     { preHandler: authMiddleware },
     async (request, reply): Promise<CreateSessionResponse> => {
       const body = createSessionSchema.parse(request.body);
       const user = request.tgUser;
 
-      // Get scenes the user has already completed
+      // Get scenes the user has already completed in this category
       const completedSessions = await prisma.session.findMany({
         where: {
           status: "ready",
+          category: body.category,
           participants: {
             some: { tgUserId: user.id },
           },
@@ -209,33 +174,37 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
       const usedSceneIds = completedSessions.map((s) => s.sceneId);
 
-      // Find a scene the user hasn't played yet
+      // Find a scene the user hasn't played yet in this category
       let scene = await prisma.scene.findFirst({
         where: {
+          category: body.category,
           id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
         },
         orderBy: { createdAt: "desc" }, // Prefer newer scenes
       });
 
-      // If all scenes played, pick any (reset cycle)
+      // If all scenes in category played, pick any from this category (reset cycle)
       if (!scene) {
         scene = await prisma.scene.findFirst({
+          where: { category: body.category },
           orderBy: { createdAt: "desc" },
         });
       }
 
       if (!scene) {
-        return reply.status(500).send({ error: "No scenes available" });
+        return reply.status(400).send({ error: `Нет сцен в категории "${body.category}"` });
       }
 
-      console.log(`[Session] User ${user.id} gets scene ${scene.id} (used: ${usedSceneIds.length})`);
+      console.log(`[Session] User ${user.id} gets scene ${scene.id} (category: ${body.category}, used: ${usedSceneIds.length})`);
 
-      const topic = getRandomTopic();
+      // Set task only in "tasks" mode
+      const task = body.gameMode === "tasks" ? getRandomTask() : null;
 
       const session = await prisma.session.create({
         data: {
-          mode: "absurd",
-          topic,
+          category: body.category,
+          gameMode: body.gameMode,
+          task,
           maxPlayers: body.maxPlayers,
           sceneId: scene.id,
           status: "lobby",
@@ -321,16 +290,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const currentTurn = session.takes.length;
 
-      // Get preview URL for this player (using proxy)
-      let previewUrl: string | null = null;
-      if (participant.roleIndex > 0 && participant.roleIndex <= currentTurn) {
-        const prevRoleIndex = participant.roleIndex - 1;
-        const prevTake = session.takes.find((t) => t.roleIndex === prevRoleIndex);
-        if (prevTake) {
-          previewUrl = getProxyUrl("preview", id, String(participant.roleIndex));
-        }
-      }
-
       // Get scene URL (using proxy)
       const sceneFilename = session.scene.s3Key.split("/").pop() || "";
       const sceneUrl = getProxyUrl("scene", sceneFilename);
@@ -343,11 +302,11 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           roleIndex: participant.roleIndex,
         },
         roleIndex: participant.roleIndex,
-        topic: session.topic,
+        task: session.task,
+        gameMode: session.gameMode as GameMode,
         sceneMeta: buildSceneMeta(session.scene),
         sceneUrl,
         currentTurn,
-        previewUrl,
       };
     }
   );
@@ -389,13 +348,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         ? (currentTurn < totalRoles ? currentTurn : null)  // null if all recorded
         : (myParticipant?.roleIndex ?? null);
 
-      // Get preview URL for current user (using proxy)
-      // In solo mode, no previews. In multiplayer, show preview for your role
-      let previewUrl: string | null = null;
-      if (!isSolo && myParticipant && myParticipant.roleIndex > 0) {
-        previewUrl = getProxyUrl("preview", id, String(myParticipant.roleIndex));
-      }
-
       // Get scene URL (using proxy)
       const sceneFilename = session.scene.s3Key.split("/").pop() || "";
       const sceneUrl = getProxyUrl("scene", sceneFilename);
@@ -409,8 +361,9 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         session: {
           id: session.id,
-          mode: session.mode,
-          topic: session.topic,
+          category: session.category as Category,
+          gameMode: session.gameMode as GameMode,
+          task: session.task,
           status: session.status as any,
           maxPlayers: session.maxPlayers,
           createdByTgUserId: session.createdByTgUserId,
@@ -434,7 +387,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
             }
           : null,
         myRoleIndex,
-        previewUrl,
         sceneUrl,
       };
     }
@@ -603,32 +555,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       console.log("[Take] Saved take for role:", takeRoleIndex);
 
-      // Create preview for next role (in multiplayer mode)
-      // In solo mode, no previews needed since same person records all
-      const nextRoleIndex = takeRoleIndex + 1;
-      if (!isSolo && nextRoleIndex < totalRoles) {
-        try {
-          // Player 2 hears first 50% of player 1
-          // Player 3 hears last 50% of player 2
-          const startPercent = nextRoleIndex === 1 ? 0 : 50;
-          const endPercent = nextRoleIndex === 1 ? 50 : 100;
-
-          const previewBuffer = await createPreview(
-            finalAudioBuffer,
-            startPercent,
-            endPercent
-          );
-
-          await storage.upload(
-            storage.keys.preview(id, nextRoleIndex),
-            previewBuffer,
-            "audio/webm"
-          );
-        } catch (err) {
-          console.error("Failed to create preview:", err);
-          // Continue even if preview fails
-        }
-      }
+      // No previews - players don't hear each other for maximum chaos!
 
       return { ok: true };
     }

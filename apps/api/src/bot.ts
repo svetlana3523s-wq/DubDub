@@ -9,6 +9,16 @@ import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
 
+// Категории сцен
+const SCENE_CATEGORIES = ["movies", "memes", "politics"] as const;
+type SceneCategory = typeof SCENE_CATEGORIES[number];
+
+const CATEGORY_LABELS: Record<SceneCategory, string> = {
+  movies: "🎬 Кино/сериалы",
+  memes: "😂 Мемы",
+  politics: "🏛️ Политика",
+};
+
 // Состояние диалога для добавления сцен
 interface PendingScene {
   userId: number;
@@ -16,8 +26,9 @@ interface PendingScene {
   duration: number;
   fps: number;
   totalFrames: number;
-  step: "awaiting_title" | "awaiting_cues";
+  step: "awaiting_title" | "awaiting_category" | "awaiting_cues";
   title?: string;
+  category?: SceneCategory;
 }
 
 // Состояние диалога для редактирования сцен
@@ -190,8 +201,8 @@ export function createBot(): Telegraf {
     }
 
     const list = scenes.map((s, i) => {
-      const cues = JSON.parse(s.cueJson) as Array<{ roleIndex: number; startSec: number; durationSec: number }>;
-      return `${i + 1}. ${s.title}\n   📹 ${s.durationSec}s, ${s.rolesCount} реплик\n   🆔 ${s.id}`;
+      const catLabel = CATEGORY_LABELS[s.category as SceneCategory] || s.category;
+      return `${i + 1}. ${s.title}\n   ${catLabel}\n   📹 ${s.durationSec}s, ${s.rolesCount} реплик\n   🆔 ${s.id}`;
     }).join("\n\n");
 
     await ctx.reply(`📋 Сцены (${scenes.length}):\n\n${list}`);
@@ -436,25 +447,68 @@ export function createBot(): Telegraf {
     // Шаг 1: Получаем название
     if (pending.step === "awaiting_title") {
       pending.title = text.trim();
-      pending.step = "awaiting_cues";
+      pending.step = "awaiting_category";
       pendingScenes.set(userId, pending);
 
       await ctx.reply(
         `👍 Название: "${pending.title}"\n\n` +
-        `Теперь введи тайминги реплик В КАДРАХ:\n` +
-        `\`0-125, 150-275, 300-425\`\n\n` +
-        `Это означает (при ${pending.fps} fps):\n` +
-        `• Игрок 1: кадры 0-125 (${(0/pending.fps).toFixed(2)}-${(125/pending.fps).toFixed(2)} сек)\n` +
-        `• Игрок 2: кадры 150-275\n` +
-        `• И т.д.\n\n` +
-        `📊 Всего кадров: ${pending.totalFrames}\n` +
-        `🎞 FPS: ${pending.fps}`,
-        { parse_mode: "Markdown" }
+        `Выбери категорию:`,
+        {
+          reply_markup: {
+            keyboard: [
+              [{ text: "🎬 Кино/сериалы" }],
+              [{ text: "😂 Мемы" }],
+              [{ text: "🏛️ Политика" }],
+              [{ text: "❌ Отмена" }],
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
       );
       return;
     }
 
-    // Шаг 2: Получаем тайминги В КАДРАХ
+    // Шаг 2: Получаем категорию
+    if (pending.step === "awaiting_category") {
+      let category: SceneCategory;
+      if (text.includes("Кино") || text.includes("сериал")) {
+        category = "movies";
+      } else if (text.includes("Мем")) {
+        category = "memes";
+      } else if (text.includes("Полит")) {
+        category = "politics";
+      } else {
+        await ctx.reply("❌ Выбери категорию из кнопок");
+        return;
+      }
+
+      pending.category = category;
+      pending.step = "awaiting_cues";
+      pendingScenes.set(userId, pending);
+
+      await ctx.reply(
+        `👍 Категория: ${CATEGORY_LABELS[category]}\n\n` +
+        `Теперь введи тайминги реплик В КАДРАХ:\n` +
+        `\`0-125, 150-275\`\n\n` +
+        `Это означает (при ${pending.fps} fps):\n` +
+        `• Игрок 1: кадры 0-125 (${(0/pending.fps).toFixed(2)}-${(125/pending.fps).toFixed(2)} сек)\n` +
+        `• Игрок 2: кадры 150-275\n\n` +
+        `📊 Всего кадров: ${pending.totalFrames}\n` +
+        `🎞 FPS: ${pending.fps}`,
+        { 
+          parse_mode: "Markdown",
+          reply_markup: {
+            keyboard: [[{ text: "❌ Отмена" }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
+      );
+      return;
+    }
+
+    // Шаг 3: Получаем тайминги В КАДРАХ
     if (pending.step === "awaiting_cues") {
       const cues = parseCuesFrames(text);
 
@@ -504,6 +558,7 @@ export function createBot(): Telegraf {
           data: {
             id: sceneId,
             title: pending.title!,
+            category: pending.category || "memes",
             s3Key,
             durationSec: pending.duration,
             fps: pending.fps,

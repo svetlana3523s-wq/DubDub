@@ -142,11 +142,11 @@ export default function ResultPage({ params }: PageProps) {
           <p className="text-tg-hint">Ваш дубляж собран</p>
         </div>
 
-        {/* Topic */}
-        {session && (
+        {/* Task (only in tasks mode) */}
+        {session && session.session.gameMode === "tasks" && session.session.task && (
           <div className="card text-center animate-fade-in">
-            <div className="text-sm text-tg-hint mb-1">Тема</div>
-            <div className="font-medium">{session.session.topic}</div>
+            <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+            <div className="font-medium">{session.session.task}</div>
           </div>
         )}
 
