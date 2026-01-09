@@ -121,9 +121,10 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         // Download video from S3
         const videoBuffer = await storage.download(render.s3Key);
 
-        // Send video via Telegram
+        // Send video via Telegram (user.id is string, need to convert to number)
+        const chatId = parseInt(user.id, 10);
         await bot.telegram.sendVideo(
-          user.id,
+          chatId,
           { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
           {
             caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,

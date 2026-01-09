@@ -134,23 +134,69 @@ export function createBot(): Telegraf {
   // /start command - with optional deep link parameter
   bot.start(async (ctx) => {
     const startPayload = ctx.startPayload;
+    const userId = ctx.from?.id;
 
     const webAppUrl = startPayload
       ? `${config.webappUrl}/s/${startPayload}`
       : config.webappUrl;
 
-    await ctx.reply("🎬 Добро пожаловать в DubDub!\n\nОзвучивай немое видео с друзьями.", {
+    const welcomeText = `🎤 Злобная озвучка - это игра, в которой вы озвучиваете эпизоды из кино, сериалов, мемов и прочих роликов.
+
+🎮 Выберите количество игроков - можно сыграть одному и озвучить все реплики самостоятельно или же пригласить друга и сыграть вдвоем.
+
+🎬 Выберите категорию "Кино и сериалы", "Мемы" или "Политика" - вам случайным образом попадется эпизод из выбранного набора. Для того, чтобы озвучить другой эпизод - закончите озвучку и начните игру заново.
+
+❗️ Далее режим - можно озвучивать свободно или же озвучивать по случайно выпавшему заданию.
+
+▶️ Просмотрите эпизод придумайте свою версию озвучки и запишите ее. Обращайте внимание на длительность вашей роли и подгоняйте свои реплики, чтобы вписаться в тайминги!
+
+✅ Наслаждайтесь результатом, да прибудет с вами креатив и искрометный юмор!
+
+❤️ Каждый игрок может добавить свой эпизод в игру! Нажмите кнопку "Предложить эпизод" и следуйте инструкции.`;
+
+    await ctx.reply(welcomeText, {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: "🎭 Открыть DubDub",
+              text: "🎭 Начать игру",
               web_app: { url: webAppUrl },
+            },
+          ],
+          [
+            {
+              text: "💡 Предложить эпизод",
+              callback_data: "suggest_episode",
             },
           ],
         ],
       },
     });
+
+    // Notify channel about new user (if not a deep link session join)
+    if (!startPayload && userId && config.notifyChannelId) {
+      const userName = ctx.from?.first_name || "Аноним";
+      const userLink = ctx.from?.username ? `@${ctx.from.username}` : `ID: ${userId}`;
+      try {
+        await bot.telegram.sendMessage(
+          config.notifyChannelId,
+          `👤 Новый пользователь!\n\n${userName} (${userLink})`
+        );
+      } catch (err) {
+        console.error("Failed to notify channel:", err);
+      }
+    }
+  });
+
+  // Handle "Suggest episode" button
+  bot.action("suggest_episode", async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(
+      `💡 Предложить эпизод\n\n` +
+      `Для того, чтобы предложить эпизод, скиньте видео или ссылку на желаемый фрагмент ` +
+      `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
+      `👉 https://t.me/skameeckaa`
+    );
   });
 
   // /help command

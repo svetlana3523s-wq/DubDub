@@ -33,6 +33,7 @@ export const config = {
   // Telegram
   botToken: required("BOT_TOKEN"),
   botUsername: required("BOT_USERNAME"),
+  notifyChannelId: process.env.NOTIFY_CHANNEL_ID || "",  // Channel for notifications
 
   // URLs
   webappUrl: required("WEBAPP_URL"),

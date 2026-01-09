@@ -121,3 +121,4 @@ Required: Node 20+, FFmpeg, PostgreSQL, Redis, S3-compatible storage.
 | **Bot initData validation** | Uses HMAC SHA-256. If `BOT_TOKEN` changes, all sessions break. |
 | **Rate limits** | Hardcoded 100 req/min global. No per-user session limits in code (only env var). |
 
+

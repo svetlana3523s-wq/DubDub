@@ -1,11 +1,13 @@
 import { Worker, Job } from "bullmq";
 import * as IORedis from "ioredis";
 import { PrismaClient } from "@prisma/client";
+import { Telegraf } from "telegraf";
 import { renderVideo } from "./render.js";
 import { config } from "./config.js";
 import type { Cue } from "@dubdub/shared";
 
 const prisma = new PrismaClient();
+const bot = new Telegraf(config.botToken);
 
 const Redis = (IORedis as any).default || IORedis;
 const redis = new Redis(config.redisUrl, {
@@ -76,6 +78,29 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
     });
 
     console.log(`[${sessionId}] Render completed successfully`);
+
+    // Send video to notify channel
+    if (config.notifyChannelId) {
+      try {
+        const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
+        const categoryLabel = session.category === "movies" ? "🎬 Кино" : 
+                              session.category === "memes" ? "😂 Мемы" : "🏛️ Политика";
+        const modeLabel = session.gameMode === "tasks" ? `📝 ${session.task}` : "🎭 Импровизация";
+        const players = session.participants.map(p => p.displayName).join(", ");
+        
+        await bot.telegram.sendVideo(
+          config.notifyChannelId,
+          { url: videoUrl },
+          {
+            caption: `🎬 Новый дубляж!\n\n${categoryLabel} • ${modeLabel}\n👥 ${players}`,
+            supports_streaming: true,
+          }
+        );
+        console.log(`[${sessionId}] Sent to notify channel`);
+      } catch (err) {
+        console.error(`[${sessionId}] Failed to send to channel:`, err);
+      }
+    }
   } catch (err) {
     console.error(`[${sessionId}] Render failed:`, err);
 

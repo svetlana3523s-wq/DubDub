@@ -36,7 +36,7 @@ export function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(muted);
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [audioMode, setAudioMode] = useState<AudioMode>("original");
+  const [audioMode, setAudioMode] = useState<AudioMode>("with-cuts");
   const [inCueRange, setInCueRange] = useState(false);
 
   // Check if current time is within any cue range
@@ -167,16 +167,6 @@ export function VideoPlayer({
       {showAudioModeSwitch && cues.length > 0 && (
         <div className="flex gap-2 text-sm">
           <button
-            onClick={() => setAudioMode("original")}
-            className={`px-3 py-1.5 rounded-full transition-colors ${
-              audioMode === "original"
-                ? "bg-accent-primary text-white"
-                : "bg-tg-secondary text-tg-hint"
-            }`}
-          >
-            🔊 Оригинал
-          </button>
-          <button
             onClick={() => setAudioMode("with-cuts")}
             className={`px-3 py-1.5 rounded-full transition-colors ${
               audioMode === "with-cuts"
@@ -185,6 +175,16 @@ export function VideoPlayer({
             }`}
           >
             ✂️ С вырезами
+          </button>
+          <button
+            onClick={() => setAudioMode("original")}
+            className={`px-3 py-1.5 rounded-full transition-colors ${
+              audioMode === "original"
+                ? "bg-accent-primary text-white"
+                : "bg-tg-secondary text-tg-hint"
+            }`}
+          >
+            🔊 Оригинал
           </button>
         </div>
       )}
