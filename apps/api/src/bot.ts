@@ -47,6 +47,7 @@ interface PendingEdit {
 
 const pendingScenes = new Map<number, PendingScene>();
 const pendingEdits = new Map<number, PendingEdit>();
+const pendingJoins = new Map<number, boolean>(); // Track users waiting to join a session
 
 function isAdmin(userId: number): boolean {
   return config.adminTgUserIds.includes(String(userId));
@@ -136,9 +137,13 @@ export function createBot(): Telegraf {
     const startPayload = ctx.startPayload;
     const userId = ctx.from?.id;
 
+    console.log("[Bot] /start command received", { userId, startPayload });
+
     const webAppUrl = startPayload
       ? `${config.webappUrl}/s/${startPayload}`
       : config.webappUrl;
+
+    console.log("[Bot] WebApp URL:", webAppUrl);
 
     const welcomeText = `🎤 Злобная озвучка - это игра, в которой вы озвучиваете эпизоды из кино, сериалов, мемов и прочих роликов.
 
@@ -154,37 +159,83 @@ export function createBot(): Telegraf {
 
 ❤️ Каждый игрок может добавить свой эпизод в игру! Нажмите кнопку "Предложить эпизод" и следуйте инструкции.`;
 
-    await ctx.reply(welcomeText, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "🎭 Начать игру",
-              web_app: { url: webAppUrl },
-            },
+    // Send response immediately
+    try {
+      await ctx.reply(welcomeText, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🎭 Начать игру",
+                web_app: { url: webAppUrl },
+              },
+            ],
+            [
+              {
+                text: "👥 Присоединиться к игре",
+                callback_data: "join_game",
+              },
+            ],
+            [
+              {
+                text: "💡 Предложить эпизод",
+                callback_data: "suggest_episode",
+              },
+            ],
           ],
-          [
-            {
-              text: "💡 Предложить эпизод",
-              callback_data: "suggest_episode",
-            },
-          ],
-        ],
-      },
-    });
+        },
+      });
+    } catch (err) {
+      console.error("[Bot] Error sending /start response:", err);
+      // Don't try to send error message if reply already failed
+      return;
+    }
 
     // Notify channel about new user (if not a deep link session join)
+    // Do this completely asynchronously after response is sent
     if (!startPayload && userId && config.notifyChannelId) {
-      const userName = ctx.from?.first_name || "Аноним";
-      const userLink = ctx.from?.username ? `@${ctx.from.username}` : `ID: ${userId}`;
-      try {
-        await bot.telegram.sendMessage(
+      // Use setTimeout to ensure this runs after response is sent
+      setTimeout(() => {
+        const userName = ctx.from?.first_name || "Аноним";
+        const userLink = ctx.from?.username ? `@${ctx.from.username}` : `ID: ${userId}`;
+        bot.telegram.sendMessage(
           config.notifyChannelId,
           `👤 Новый пользователь!\n\n${userName} (${userLink})`
-        );
-      } catch (err) {
-        console.error("Failed to notify channel:", err);
-      }
+        ).catch((err) => {
+          // Silently ignore - channel notification is not critical
+          console.error("Failed to notify channel:", err.message);
+        });
+      }, 100);
+    }
+  });
+
+  // Handle "Join game" button
+  bot.action("join_game", async (ctx) => {
+    try {
+      await ctx.answerCbQuery();
+      const userId = ctx.from?.id;
+      if (!userId) return;
+      
+      console.log("[Bot] join_game button clicked", { userId });
+
+      pendingJoins.set(userId, true);
+      await ctx.reply(
+        `👥 Присоединиться к игре\n\n` +
+        `Введите код сессии, который вам дал первый игрок.\n\n` +
+        `Код обычно состоит из букв и цифр (например: abc123 или cmk6uk8lg).\n\n` +
+        `Или отправьте /cancel чтобы отменить.`,
+        {
+          reply_markup: {
+            keyboard: [[{ text: "❌ Отмена" }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
+      );
+    } catch (err) {
+      console.error("[Bot] Error in join_game handler:", err);
+      await ctx.answerCbQuery("Произошла ошибка").catch(() => {});
+      await ctx.reply("Произошла ошибка. Попробуйте ещё раз.").catch(() => {});
     }
   });
 
@@ -458,7 +509,7 @@ export function createBot(): Telegraf {
     }
   });
 
-  // Обработка текстовых сообщений (для диалога добавления/редактирования сцены)
+  // Обработка текстовых сообщений (для диалога добавления/редактирования сцены и присоединения)
   bot.on(message("text"), async (ctx) => {
     const userId = ctx.from?.id;
     const text = ctx.message.text;
@@ -467,14 +518,129 @@ export function createBot(): Telegraf {
 
     // Отмена
     if (text === "❌ Отмена" || text.toLowerCase() === "отмена") {
-      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId);
+      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId) || pendingJoins.has(userId);
       pendingScenes.delete(userId);
       pendingEdits.delete(userId);
+      pendingJoins.delete(userId);
       if (hadPending) {
         await ctx.reply("❌ Отменено", {
           reply_markup: { remove_keyboard: true },
         });
       }
+      return;
+    }
+
+    // Обработка присоединения к игре
+    if (pendingJoins.has(userId)) {
+      const sessionCode = text.trim().toLowerCase();
+      
+      console.log("[Bot] Searching for session with code:", sessionCode);
+      
+      // Ищем сессию по ID (полному совпадению)
+      let session = await prisma.session.findUnique({
+        where: { id: sessionCode },
+        include: {
+          participants: true,
+          scene: true,
+        },
+      });
+
+      // Если не нашли по полному ID, ищем по последним символам (case-insensitive)
+      if (!session && sessionCode.length >= 6) {
+        console.log("[Bot] Full ID not found, searching by suffix...");
+        // Get all active sessions and filter in memory (Prisma doesn't support case-insensitive endsWith)
+        const allSessions = await prisma.session.findMany({
+          where: {
+            status: { in: ["lobby", "recording"] },
+          },
+          include: {
+            participants: true,
+            scene: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50, // Limit to recent sessions
+        });
+        
+        // Find session where ID ends with the code (case-insensitive)
+        session = allSessions.find(s => 
+          s.id.toLowerCase().endsWith(sessionCode)
+        ) || null;
+        
+        console.log("[Bot] Found by suffix:", session ? session.id : "none");
+      }
+
+      pendingJoins.delete(userId);
+      
+      console.log("[Bot] Session search result:", session ? { id: session.id, status: session.status, participants: session.participants.length } : "not found");
+
+      if (!session) {
+        await ctx.reply(
+          `❌ Сессия с кодом "${sessionCode}" не найдена.\n\n` +
+          `Проверьте код и попробуйте ещё раз.`,
+          { reply_markup: { remove_keyboard: true } }
+        );
+        return;
+      }
+
+      // Проверяем, не присоединился ли уже
+      const alreadyJoined = session.participants.some(p => p.tgUserId === String(userId));
+      if (alreadyJoined) {
+        await ctx.reply(
+          `✅ Вы уже в этой игре!\n\n` +
+          `Нажмите кнопку ниже, чтобы открыть игру:`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🎮 Открыть игру",
+                    web_app: { url: `${config.webappUrl}/s/${session.id}` },
+                  },
+                ],
+              ],
+            },
+          }
+        );
+        return;
+      }
+
+      // Проверяем, есть ли место
+      if (session.participants.length >= session.maxPlayers) {
+        await ctx.reply(
+          `❌ Игра уже полная (${session.maxPlayers}/${session.maxPlayers} игроков).`,
+          { reply_markup: { remove_keyboard: true } }
+        );
+        return;
+      }
+
+      // Проверяем статус
+      if (session.status !== "lobby") {
+        await ctx.reply(
+          `❌ Игра уже началась. Можно присоединиться только к играм в лобби.`,
+          { reply_markup: { remove_keyboard: true } }
+        );
+        return;
+      }
+
+      // Всё ок, открываем Mini App
+      await ctx.reply(
+        `✅ Найдена игра!\n\n` +
+        `Игроков: ${session.participants.length}/${session.maxPlayers}\n` +
+        `Категория: ${CATEGORY_LABELS[session.category as SceneCategory] || session.category}\n\n` +
+        `Нажмите кнопку, чтобы присоединиться:`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🎮 Присоединиться",
+                  web_app: { url: `${config.webappUrl}/s/${session.id}` },
+                },
+              ],
+            ],
+          },
+        }
+      );
       return;
     }
 

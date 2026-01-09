@@ -43,7 +43,27 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
       throw new Error("Session not found");
     }
 
-    const cues: Cue[] = JSON.parse(session.scene.cueJson);
+    // Parse cues and convert from frames to seconds if needed
+    const rawCues = JSON.parse(session.scene.cueJson);
+    const fps = session.scene.fps;
+    const cues: Cue[] = rawCues.map((cue: any) => {
+      // If cue has startFrame, convert from frames to seconds
+      if ('startFrame' in cue && typeof cue.startFrame === 'number') {
+        return {
+          roleIndex: cue.roleIndex,
+          startSec: cue.startFrame / fps,
+          durationSec: cue.durationFrames / fps,
+        };
+      }
+      // Otherwise assume it's already in seconds
+      return {
+        roleIndex: cue.roleIndex,
+        startSec: cue.startSec,
+        durationSec: cue.durationSec,
+      };
+    });
+
+    console.log(`[${sessionId}] Parsed ${cues.length} cues, FPS: ${fps}`);
 
     // Build takes data with participant info
     const takesData = session.takes.map((take) => {

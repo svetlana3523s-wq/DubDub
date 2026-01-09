@@ -55,8 +55,13 @@ if (isProduction) {
   const webhookPath = `/bot${config.botToken}`;
 
   fastify.post(webhookPath, async (request, reply) => {
-    await bot.handleUpdate(request.body as any);
-    return reply.send({ ok: true });
+    // Reply immediately to Telegram to prevent timeout
+    reply.send({ ok: true });
+    
+    // Process update asynchronously
+    bot.handleUpdate(request.body as any).catch((err) => {
+      console.error("Webhook update processing error:", err);
+    });
   });
 
   // Set webhook after server starts

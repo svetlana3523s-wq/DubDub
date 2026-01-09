@@ -57,7 +57,8 @@ export default function ResultPage({ params }: PageProps) {
 
   const handleShare = () => {
     const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
-    const link = `https://t.me/${botUsername}?startapp=${sessionId}`;
+    // Use ?start= instead of ?startapp= for compatibility
+    const link = `https://t.me/${botUsername}?start=${sessionId}`;
     navigator.clipboard.writeText(link);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
 

@@ -134,9 +134,21 @@ export async function renderVideo(input: RenderInput): Promise<string> {
     let volumeFilters: string[] = [];
     for (const take of takes) {
       const cue = cues.find((c) => c.roleIndex === take.roleIndex);
-      if (!cue) continue;
+      if (!cue || typeof cue.startSec !== 'number' || typeof cue.durationSec !== 'number') {
+        console.warn(`[${sessionId}] Invalid cue for take ${take.roleIndex}:`, cue);
+        continue;
+      }
+      
+      const startTime = Math.max(0, cue.startSec);
+      const endTime = Math.min(sceneDuration, cue.startSec + cue.durationSec);
+      
+      if (startTime >= endTime || isNaN(startTime) || isNaN(endTime)) {
+        console.warn(`[${sessionId}] Invalid time range for take ${take.roleIndex}:`, { startTime, endTime });
+        continue;
+      }
+      
       // Mute original audio during this cue's time range
-      volumeFilters.push(`volume=enable='between(t,${cue.startSec},${cue.startSec + cue.durationSec})':volume=0`);
+      volumeFilters.push(`volume=enable='between(t,${startTime},${endTime})':volume=0`);
     }
 
     if (volumeFilters.length > 0) {
@@ -156,9 +168,16 @@ export async function renderVideo(input: RenderInput): Promise<string> {
       if (!take) continue;
 
       const cue = cues.find((c) => c.roleIndex === take.roleIndex);
-      if (!cue) continue;
+      if (!cue || typeof cue.startSec !== 'number') {
+        console.warn(`[${sessionId}] Invalid cue for take ${take.roleIndex}:`, cue);
+        continue;
+      }
 
       const delayMs = Math.floor(cue.startSec * 1000);
+      if (isNaN(delayMs) || delayMs < 0) {
+        console.warn(`[${sessionId}] Invalid delay for take ${take.roleIndex}:`, delayMs);
+        continue;
+      }
 
       // 1. Resample to 48kHz for quality
       // 2. Boost volume (recorded audio is usually quiet)
@@ -183,21 +202,21 @@ export async function renderVideo(input: RenderInput): Promise<string> {
     // Player overlays during their cues
     for (const take of takes) {
       const cue = cues.find((c) => c.roleIndex === take.roleIndex);
-      if (!cue) continue;
-
-      const playerNum = take.roleIndex + 1;
-      const startTime = cue.startSec;
-      const endTime = cue.startSec + cue.durationSec;
-
-      // What they heard
-      let heardText = "";
-      if (take.roleIndex === 1) {
-        heardText = "  слышал 0-50%";
-      } else if (take.roleIndex === 2) {
-        heardText = "  слышал 50-100%";
+      if (!cue || typeof cue.startSec !== 'number' || typeof cue.durationSec !== 'number') {
+        console.warn(`[${sessionId}] Invalid cue for overlay ${take.roleIndex}:`, cue);
+        continue;
       }
 
-      const overlayText = `Игрок ${playerNum}${heardText}`.replace(/:/g, "\\:");
+      const playerNum = take.roleIndex + 1;
+      const startTime = Math.max(0, cue.startSec);
+      const endTime = Math.min(sceneDuration, cue.startSec + cue.durationSec);
+      
+      if (startTime >= endTime || isNaN(startTime) || isNaN(endTime)) {
+        console.warn(`[${sessionId}] Invalid time range for overlay ${take.roleIndex}:`, { startTime, endTime });
+        continue;
+      }
+
+      const overlayText = `Игрок ${playerNum}`.replace(/:/g, "\\:");
 
       videoFilter += `,drawtext=text='${overlayText}':fontsize=18:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=6:x=15:y=h-50:enable='between(t,${startTime},${endTime})'`;
     }

@@ -20,6 +20,67 @@ const CATEGORY_LABELS: Record<string, string> = {
   politics: "🏛️ Политика",
 };
 
+function SessionCodeCard({ sessionId }: { sessionId: string }) {
+  const sessionCode = sessionId.slice(-8).toUpperCase();
+  const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
+  const instructionText = `Код для присоединения: ${sessionCode}
+
+1. Открой бота @${botUsername}
+2. Нажми "👥 Присоединиться к игре"
+3. Введи код: ${sessionCode}`;
+
+  const handleCopyAll = () => {
+    navigator.clipboard.writeText(instructionText);
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+    // Show brief feedback
+    const btn = document.querySelector('[data-copy-btn]') as HTMLElement;
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = "✅ Скопировано!";
+      setTimeout(() => { if (btn) btn.textContent = original; }, 2000);
+    }
+  };
+
+  const handleSendToFriend = () => {
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=${sessionId}`)}&text=${encodeURIComponent(`Присоединяйся к игре!\nКод: ${sessionCode}`)}`;
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(shareUrl);
+    } else {
+      window.open(shareUrl, '_blank');
+    }
+  };
+
+  return (
+    <div className="card animate-fade-in" style={{ animationDelay: "0.2s" }}>
+      <div className="text-center space-y-4">
+        <div>
+          <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
+          <div className="text-3xl font-bold tracking-wider bg-accent-primary/20 px-6 py-3 rounded-xl border-2 border-accent-primary">
+            {sessionCode}
+          </div>
+        </div>
+        
+        <div className="space-y-3">
+          <button
+            onClick={handleCopyAll}
+            data-copy-btn
+            className="btn-primary w-full"
+          >
+            📋 Скопировать код и инструкцию
+          </button>
+          
+          <button
+            onClick={handleSendToFriend}
+            className="btn-tg w-full"
+          >
+            📤 Отправить другу
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SessionPage({ params }: PageProps) {
   const { sessionId } = params;
   const router = useRouter();
@@ -45,17 +106,24 @@ export default function SessionPage({ params }: PageProps) {
   }, [initData, sessionId]);
 
   const joinSession = useCallback(async () => {
-    if (!initData) return;
+    if (!initData) {
+      console.error("[Join] No initData available", { isReady, initData: !!initData });
+      setError("Telegram WebApp не инициализирован. Обновите страницу.");
+      setViewState("error");
+      return;
+    }
     try {
+      console.log("[Join] Attempting to join session", { sessionId });
       const data = await api.joinSession(initData, sessionId);
+      console.log("[Join] Successfully joined", { participant: data.participant });
       setJoinData(data);
       return data;
     } catch (err) {
-      console.error("Join failed:", err);
+      console.error("[Join] Failed:", err);
       setError(err instanceof Error ? err.message : "Ошибка входа");
       setViewState("error");
     }
-  }, [initData, sessionId]);
+  }, [initData, sessionId, isReady]);
 
   const determineViewState = useCallback(
     (data: SessionStateResponse) => {
@@ -81,6 +149,7 @@ export default function SessionPage({ params }: PageProps) {
         return;
       }
 
+      // Check if session is in lobby
       if (data.session.status === "lobby") {
         setViewState("lobby");
         return;
@@ -124,32 +193,69 @@ export default function SessionPage({ params }: PageProps) {
 
   // Initial load
   useEffect(() => {
-    if (!isReady || !initData) return;
+    console.log("[Init] Component mounted/updated", { isReady, hasInitData: !!initData, sessionId });
+    
+    if (!isReady) {
+      console.log("[Init] Waiting for Telegram to be ready...");
+      return;
+    }
+
+    if (!initData) {
+      console.error("[Init] Telegram ready but no initData!", { isReady, initData });
+      setError("Не удалось получить данные авторизации. Откройте приложение через бота.");
+      setViewState("error");
+      return;
+    }
 
     const init = async () => {
+      console.log("[Init] Starting initialization...");
       const joined = await joinSession();
-      if (!joined) return;
+      if (!joined) {
+        console.error("[Init] Failed to join session");
+        return;
+      }
 
+      // Immediately fetch session after joining
+      console.log("[Init] Fetching session state...");
       const data = await fetchSession();
       if (data) {
+        console.log("[Init] Session state received", {
+          status: data.session.status,
+          participants: data.participants.length,
+          maxPlayers: data.session.maxPlayers,
+          myRoleIndex: data.myRoleIndex
+        });
         determineViewState(data);
+        // If in lobby but full, force a refresh after a moment to catch status update
+        if (data.session.status === "lobby" && data.participants.length >= data.session.maxPlayers) {
+          console.log("[Init] Lobby is full, scheduling refresh...");
+          setTimeout(async () => {
+            const updated = await fetchSession();
+            if (updated) {
+              console.log("[Init] Refreshed after lobby full", { status: updated.session.status });
+              determineViewState(updated);
+            }
+          }, 1000);
+        }
       }
     };
 
     init();
-  }, [isReady, initData, joinSession, fetchSession, determineViewState]);
+  }, [isReady, initData, sessionId, joinSession, fetchSession, determineViewState]);
 
-  // Polling
+  // Polling - refresh session state periodically
   useEffect(() => {
     if (!initData) return;
-    if (!["lobby", "wait", "rendering", "finish"].includes(viewState)) return;
+    // Always poll if in lobby, wait, rendering, or finish states
+    // Also poll in record state if multiplayer (to catch when other player joins)
+    if (!["lobby", "wait", "rendering", "finish", "record"].includes(viewState)) return;
 
     const interval = setInterval(async () => {
       const data = await fetchSession();
       if (data) {
         determineViewState(data);
       }
-    }, 2500);
+    }, 2000); // Poll every 2 seconds
 
     return () => clearInterval(interval);
   }, [viewState, initData, fetchSession, determineViewState]);
@@ -195,13 +301,7 @@ export default function SessionPage({ params }: PageProps) {
     }
   };
 
-  const copyInviteLink = () => {
-    const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
-    const link = `https://t.me/${botUsername}?startapp=${sessionId}`;
-    navigator.clipboard.writeText(link);
-    // Haptic feedback if available
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-  };
+  // Removed copyInviteLink - now using session code instead
 
   // Loading
   if (viewState === "loading" || !isReady) {
@@ -244,7 +344,11 @@ export default function SessionPage({ params }: PageProps) {
             <h1 className="text-2xl font-bold mb-2">
               {session.participants.length} / {session.session.maxPlayers}
             </h1>
-            <p className="text-tg-hint">Ожидаем игроков</p>
+            <p className="text-tg-hint">
+              {session.participants.length >= session.session.maxPlayers
+                ? "Все готовы! Скоро начнём..."
+                : "Ожидаем игроков"}
+            </p>
           </div>
 
           {/* Category + Task */}
@@ -296,14 +400,10 @@ export default function SessionPage({ params }: PageProps) {
             ))}
           </div>
 
-          {/* Invite */}
-          <button
-            onClick={copyInviteLink}
-            className="btn-tg w-full animate-fade-in"
-            style={{ animationDelay: "0.2s" }}
-          >
-            📋 Скопировать приглашение
-          </button>
+          {/* Session Code & Instructions */}
+          {session.session.maxPlayers > 1 && (
+            <SessionCodeCard sessionId={sessionId} />
+          )}
         </div>
       </div>
     );
@@ -395,16 +495,59 @@ export default function SessionPage({ params }: PageProps) {
 
   // Wait
   if (viewState === "wait" && session) {
+    const myCue = session.session.sceneMeta.cues.find(
+      (c) => c.roleIndex === session.myRoleIndex
+    );
+    
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="text-center space-y-6 animate-slide-up">
-          <div className="w-16 h-16 border-4 border-accent-secondary border-t-transparent rounded-full animate-spin mx-auto" />
-          <div>
+      <div className="flex-1 flex flex-col p-6 overflow-y-auto">
+        <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5">
+          {/* Header */}
+          <div className="text-center animate-slide-up">
+            <div className="w-12 h-12 border-4 border-accent-secondary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">Ожидаем других</h2>
             <p className="text-tg-hint">
               Записано: {session.takes.length} / {session.session.maxPlayers}
             </p>
           </div>
+
+          {/* Task (if tasks mode) */}
+          {session.session.gameMode === "tasks" && session.session.task && (
+            <div className="card text-center animate-fade-in">
+              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+              <div className="font-medium">{session.session.task}</div>
+            </div>
+          )}
+
+          {/* Full scene with original audio */}
+          <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            <VideoPlayer
+              key={`wait-full`}
+              src={`${session.sceneUrl}?v=full`}
+              muted={false}
+              showTimeRange={false}
+              label="📺 Посмотри сцену пока ждёшь:"
+              cues={session.session.sceneMeta.cues}
+              showAudioModeSwitch={true}
+            />
+          </div>
+
+          {/* Your fragment to dub */}
+          {myCue && (
+            <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
+              <div className="text-sm text-tg-hint mb-2">
+                🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
+              </div>
+              <VideoPlayer
+                key={`wait-fragment`}
+                src={`${session.sceneUrl}?v=fragment`}
+                startTime={myCue.startSec}
+                endTime={myCue.startSec + myCue.durationSec}
+                muted={true}
+                showTimeRange={true}
+              />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -412,7 +555,13 @@ export default function SessionPage({ params }: PageProps) {
 
   // Finish
   if (viewState === "finish" && session) {
-    const isHost = session.session.createdByTgUserId === user?.id;
+    const isSolo = session.session.maxPlayers === 1;
+    // In solo mode, user can always start render
+    // In multiplayer, any participant who recorded can start (API will check if they're last)
+    const myTakeExists = session.myRoleIndex !== null && session.takes.some(
+      (t) => t.roleIndex === session.myRoleIndex
+    );
+    const canStartRender = isSolo || myTakeExists;
 
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
@@ -421,12 +570,12 @@ export default function SessionPage({ params }: PageProps) {
           <div>
             <h2 className="text-2xl font-bold mb-2">Все записали!</h2>
             <p className="text-tg-hint">
-              {isHost
+              {canStartRender
                 ? "Нажми, чтобы собрать видео"
-                : "Ждём, пока создатель запустит сборку"}
+                : "Ждём, пока последний игрок запустит сборку"}
             </p>
           </div>
-          {isHost && (
+          {canStartRender && (
             <button onClick={handleFinish} className="btn-primary text-lg px-8 py-4">
               ✨ Собрать видео
             </button>

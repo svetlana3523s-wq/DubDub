@@ -280,7 +280,9 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Check if session is now full
         const updatedCount = session.participants.length + 1;
+        console.log(`[Join] User ${user.id} joined session ${id}. Participants: ${updatedCount}/${session.maxPlayers}`);
         if (updatedCount >= session.maxPlayers) {
+          console.log(`[Join] Session ${id} is now full, updating status to "recording"`);
           await prisma.session.update({
             where: { id },
             data: { status: "recording" },
@@ -302,6 +304,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           roleIndex: participant.roleIndex,
         },
         roleIndex: participant.roleIndex,
+        category: session.category,
         task: session.task,
         gameMode: session.gameMode as GameMode,
         sceneMeta: buildSceneMeta(session.scene),
@@ -578,9 +581,16 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Session not found" });
       }
 
-      // Only creator can finish
-      if (session.createdByTgUserId !== user.id) {
-        return reply.status(403).send({ error: "Only host can finish" });
+      // Check if user is a participant
+      const participant = await prisma.participant.findFirst({
+        where: {
+          sessionId: id,
+          tgUserId: user.id,
+        },
+      });
+
+      if (!participant) {
+        return reply.status(403).send({ error: "You are not a participant" });
       }
 
       // Check all roles recorded
@@ -595,6 +605,32 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ 
           error: `Not all roles recorded. Got ${session.takes.length}, need ${requiredTakes}` 
         });
+      }
+
+      // Check if this user has recorded their take
+      const userTake = session.takes.find(t => t.roleIndex === participant.roleIndex);
+      if (!userTake) {
+        return reply.status(400).send({ error: "You must record your take first" });
+      }
+
+      // In multiplayer: check if this is the last player to record (based on take creation time)
+      if (!isSolo && session.takes.length === requiredTakes) {
+        // Get all takes with their creation times
+        const takesWithTimes = await prisma.take.findMany({
+          where: { sessionId: id },
+          select: { roleIndex: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        });
+        
+        // Check if this user's take is the most recent
+        const lastTake = takesWithTimes[0];
+        const userTakeRecord = takesWithTimes.find(t => t.roleIndex === participant.roleIndex);
+        
+        if (!userTakeRecord || !lastTake || lastTake.roleIndex !== participant.roleIndex) {
+          return reply.status(400).send({ 
+            error: "Only the last player to record can start rendering" 
+          });
+        }
       }
 
       if (session.status === "rendering" || session.status === "ready") {

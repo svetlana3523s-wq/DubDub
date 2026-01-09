@@ -74,6 +74,7 @@ export interface CreateSessionResponse {
 export interface JoinSessionResponse {
   participant: ParticipantResponse;
   roleIndex: number;
+  category: string;
   task: string | null;
   gameMode: GameMode;
   sceneMeta: SceneMeta;
