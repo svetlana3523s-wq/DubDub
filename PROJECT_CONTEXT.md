@@ -92,7 +92,26 @@ pnpm dev                      # All services on localhost
 ```bash
 git pull
 pnpm install && pnpm -r build
-pm2 restart all
+pm2 restart dubdub-api dubdub-web dubdub-worker
+```
+
+### Server Access
+
+**SSH Connection:**
+- Server IP: `130.49.146.229`
+- User: `root`
+- Project Path: `/var/www/dubdub`
+- PM2 Services: `dubdub-api`, `dubdub-web`, `dubdub-worker`
+
+**Deployment Command:**
+```bash
+ssh root@130.49.146.229 "cd /var/www/dubdub && git pull && pnpm install && pnpm -r build && pm2 restart dubdub-api dubdub-web dubdub-worker"
+```
+
+**Check Status:**
+```bash
+ssh root@130.49.146.229 "pm2 list | grep dubdub"
+ssh root@130.49.146.229 "pm2 logs dubdub-api --lines 20"
 ```
 
 Required: Node 20+, FFmpeg, PostgreSQL, Redis, S3-compatible storage.
