@@ -29,20 +29,20 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
 2. Нажми "👥 Присоединиться к игре"
 3. Введи код: ${sessionCode}`;
 
-  const handleCopyAll = () => {
-    navigator.clipboard.writeText(instructionText);
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(sessionCode);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
     // Show brief feedback
-    const btn = document.querySelector('[data-copy-btn]') as HTMLElement;
-    if (btn) {
-      const original = btn.textContent;
-      btn.textContent = "✅ Скопировано!";
-      setTimeout(() => { if (btn) btn.textContent = original; }, 2000);
+    const codeEl = document.querySelector('[data-code-btn]') as HTMLElement;
+    if (codeEl) {
+      const original = codeEl.textContent;
+      codeEl.textContent = "✅ Скопировано!";
+      setTimeout(() => { if (codeEl) codeEl.textContent = original; }, 2000);
     }
   };
 
   const handleSendToFriend = () => {
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=${sessionId}`)}&text=${encodeURIComponent(`Присоединяйся к игре!\nКод: ${sessionCode}`)}`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=${sessionId}`)}&text=${encodeURIComponent(instructionText)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(shareUrl);
     } else {
@@ -55,27 +55,21 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
       <div className="text-center space-y-4">
         <div>
           <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
-          <div className="text-3xl font-bold tracking-wider bg-accent-primary/20 px-6 py-3 rounded-xl border-2 border-accent-primary">
+          <button
+            onClick={handleCopyCode}
+            data-code-btn
+            className="text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 underline cursor-pointer transition-colors"
+          >
             {sessionCode}
-          </div>
+          </button>
         </div>
         
-        <div className="space-y-3">
-          <button
-            onClick={handleCopyAll}
-            data-copy-btn
-            className="btn-primary w-full"
-          >
-            📋 Скопировать код и инструкцию
-          </button>
-          
-          <button
-            onClick={handleSendToFriend}
-            className="btn-tg w-full"
-          >
-            📤 Отправить другу
-          </button>
-        </div>
+        <button
+          onClick={handleSendToFriend}
+          className="btn-tg w-full"
+        >
+          📤 Отправить другу
+        </button>
       </div>
     </div>
   );
