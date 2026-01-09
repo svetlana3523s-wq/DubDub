@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
@@ -12,12 +12,14 @@ interface PageProps {
 
 export default function ResultPage({ params }: PageProps) {
   const { sessionId } = params;
+  const router = useRouter();
   const { isReady, initData } = useTelegram();
   const [render, setRender] = useState<RenderStatusResponse | null>(null);
   const [session, setSession] = useState<SessionStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -55,18 +57,22 @@ export default function ResultPage({ params }: PageProps) {
     return () => clearInterval(interval);
   }, [isReady, initData, sessionId]);
 
-  const handleShare = () => {
-    const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
-    // Use ?start= instead of ?startapp= for compatibility
-    const link = `https://t.me/${botUsername}?start=${sessionId}`;
-    navigator.clipboard.writeText(link);
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-
-    // Try to share via Telegram
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(
-        `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Смотри наш дубляж! 🎬")}`
-      );
+  const handleReplay = async (mode: "sameScene" | "newScene") => {
+    if (!initData || replaying) return;
+    
+    setReplaying(mode);
+    try {
+      // Replay session (resets takes and render, updates session)
+      await api.replaySession(initData, sessionId, mode);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      
+      // Navigate back to session page (will show lobby/recording state)
+      router.push(`/s/${sessionId}`);
+      router.refresh(); // Force refresh to get new state
+    } catch (err) {
+      console.error("Replay failed:", err);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+      setReplaying(null);
     }
   };
 
@@ -106,9 +112,6 @@ export default function ResultPage({ params }: PageProps) {
           <div className="text-5xl">😢</div>
           <h2 className="text-xl font-bold">Не удалось создать видео</h2>
           <p className="text-tg-hint">Попробуйте ещё раз</p>
-          <Link href="/" className="btn-primary inline-block">
-            На главную
-          </Link>
         </div>
       </div>
     );
@@ -196,13 +199,36 @@ export default function ResultPage({ params }: PageProps) {
             )}
           </button>
 
+          {/* Replay buttons */}
           <div className="grid grid-cols-2 gap-3">
-            <button onClick={handleShare} className="btn-tg">
-              📤 Поделиться
+            <button
+              onClick={() => handleReplay("sameScene")}
+              disabled={replaying !== null}
+              className="btn-primary disabled:opacity-70"
+            >
+              {replaying === "sameScene" ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
+                  Перезапуск...
+                </>
+              ) : (
+                <>🔄 Еще раз</>
+              )}
             </button>
-            <Link href="/create" className="btn-primary text-center">
-              🎬 Ещё раз
-            </Link>
+            <button
+              onClick={() => handleReplay("newScene")}
+              disabled={replaying !== null}
+              className="btn-primary disabled:opacity-70"
+            >
+              {replaying === "newScene" ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
+                  Перезапуск...
+                </>
+              ) : (
+                <>🎲 Новая сцена</>
+              )}
+            </button>
           </div>
         </div>
       </div>

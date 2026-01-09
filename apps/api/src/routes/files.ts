@@ -129,6 +129,15 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
           {
             caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
             supports_streaming: true,
+            reply_markup: {
+              keyboard: [
+                [{ text: "🎭 Начать игру" }],
+                [{ text: "👥 Присоединиться к игре" }],
+                [{ text: "💡 Предложить эпизод" }],
+              ],
+              resize_keyboard: true,
+              is_persistent: true,
+            },
           }
         );
 

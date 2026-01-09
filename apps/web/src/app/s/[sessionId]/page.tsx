@@ -160,12 +160,13 @@ export default function SessionPage({ params }: PageProps) {
           setViewState("finish");
         }
       } else {
-        // Multiplayer logic
+        // Multiplayer logic (2 players) - parallel recording
         const myTakeExists = data.takes.some(
           (t) => t.roleIndex === data.myRoleIndex
         );
 
         if (myTakeExists) {
+          // Already recorded - wait for others
           setHasRecorded(true);
           if (data.takes.length >= data.session.maxPlayers) {
             setViewState("finish");
@@ -175,7 +176,8 @@ export default function SessionPage({ params }: PageProps) {
           return;
         }
 
-        if (data.currentTurn === data.myRoleIndex) {
+        // Not recorded yet - can record now (parallel recording, no turn check)
+        if (data.myRoleIndex !== null && data.session.status === "recording") {
           setViewState("record");
         } else {
           setViewState("wait");

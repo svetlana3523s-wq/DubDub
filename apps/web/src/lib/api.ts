@@ -121,5 +121,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
+
+  replaySession: (
+    initData: string,
+    sessionId: string,
+    mode: "sameScene" | "newScene"
+  ): Promise<SessionStateResponse> =>
+    request(initData, `/sessions/${sessionId}/replay?mode=${mode}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 };
 

@@ -449,8 +449,8 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const currentTurn = session.takes.length;
 
-      // In solo mode, the single player records all roles
-      // In multiplayer mode, each player records their assigned role
+      // In solo mode, the single player records all roles sequentially
+      // In multiplayer mode (2 players), both players can record simultaneously
       if (isSolo) {
         // Solo: check we haven't recorded all roles yet
         if (currentTurn >= totalRoles) {
@@ -458,20 +458,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(400).send({ error: "All roles already recorded" });
         }
       } else {
-        // Multiplayer: check it's this player's turn
-        if (participant.roleIndex !== currentTurn) {
-          console.log("[Take] Not your turn:", { currentTurn, roleIndex: participant.roleIndex });
-          return reply.status(400).send({
-            error: `Not your turn. Current turn: ${currentTurn}, your role: ${participant.roleIndex}`,
-          });
-        }
-
-        // Check if already submitted
+        // Multiplayer (2 players): check if already submitted (no turn-based restriction)
+        // Both players can record simultaneously, but each can only record once
         const existingTake = session.takes.find(
           (t) => t.roleIndex === participant.roleIndex
         );
         if (existingTake) {
-          console.log("[Take] Already submitted");
+          console.log("[Take] Already submitted for role:", participant.roleIndex);
           return reply.status(400).send({ error: "Already submitted" });
         }
       }
@@ -654,6 +647,201 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       await renderQueue.add("render", { sessionId: id });
 
       return { queued: true };
+    }
+  );
+
+  // Replay session (same scene or new scene)
+  fastify.post<{ 
+    Params: { id: string }; 
+    Querystring: { mode: "sameScene" | "newScene" };
+  }>(
+    "/sessions/:id/replay",
+    { preHandler: authMiddleware },
+    async (request, reply): Promise<SessionStateResponse> => {
+      const { id } = request.params;
+      const { mode } = request.query;
+      const user = request.tgUser;
+
+      if (mode !== "sameScene" && mode !== "newScene") {
+        return reply.status(400).send({ error: "Invalid mode. Use 'sameScene' or 'newScene'" });
+      }
+
+      // Get current session with participants and scene
+      const session = await prisma.session.findUnique({
+        where: { id },
+        include: {
+          scene: true,
+          participants: { orderBy: { roleIndex: "asc" } },
+          takes: true,
+          render: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      // Check if user is a participant
+      const participant = session.participants.find(p => p.tgUserId === user.id);
+      if (!participant) {
+        return reply.status(403).send({ error: "Not a participant" });
+      }
+
+      // Check if session is in ready state (can only replay finished sessions)
+      if (session.status !== "ready") {
+        return reply.status(400).send({ 
+          error: `Session must be finished to replay. Current status: ${session.status}` 
+        });
+      }
+
+      // Use transaction to ensure atomicity
+      const updatedSession = await prisma.$transaction(async (tx) => {
+        // 1. Delete all takes
+        await tx.take.deleteMany({
+          where: { sessionId: id },
+        });
+
+        // 2. Delete render if exists
+        await tx.render.deleteMany({
+          where: { sessionId: id },
+        });
+
+        let newSceneId = session.sceneId;
+        let updatedParticipants = session.participants;
+
+        // 3. Handle scene and role redistribution
+        if (mode === "newScene") {
+          // Find unused scenes in the same category (exclude current scene)
+          const completedSessions = await tx.session.findMany({
+            where: {
+              status: "ready",
+              category: session.category,
+              participants: {
+                some: { tgUserId: user.id },
+              },
+            },
+            select: { sceneId: true },
+          });
+          const usedSceneIds = completedSessions.map((s) => s.sceneId);
+
+          // Find a scene the user hasn't played yet (excluding current scene)
+          let newScene = await tx.scene.findFirst({
+            where: {
+              category: session.category,
+              id: { 
+                notIn: [...usedSceneIds, session.sceneId], 
+              },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          // If all scenes played, pick any from category (excluding current)
+          if (!newScene) {
+            newScene = await tx.scene.findFirst({
+              where: { 
+                category: session.category,
+                id: { not: session.sceneId },
+              },
+              orderBy: { createdAt: "desc" },
+            });
+          }
+
+          if (!newScene) {
+            throw new Error(`No other scenes available in category "${session.category}"`);
+          }
+
+          newSceneId = newScene.id;
+
+          // Shuffle participants and reassign roleIndex (0 and 1)
+          const shuffledParticipants = [...session.participants].sort(() => Math.random() - 0.5);
+          
+          // Update participants with new roleIndex
+          for (let i = 0; i < shuffledParticipants.length; i++) {
+            const p = shuffledParticipants[i];
+            if (i < 2) { // Only first 2 players (maxPlayers should be 2)
+              await tx.participant.update({
+                where: { id: p.id },
+                data: { roleIndex: i },
+              });
+            }
+          }
+
+          // Reload participants after update
+          updatedParticipants = await tx.participant.findMany({
+            where: { sessionId: id },
+            orderBy: { roleIndex: "asc" },
+          });
+        }
+        // For sameScene: keep same sceneId and roleIndex (no changes needed)
+
+        // 4. Update session
+        const updated = await tx.session.update({
+          where: { id },
+          data: {
+            sceneId: newSceneId,
+            status: "recording", // Start recording immediately
+            // Keep: category, gameMode, task, maxPlayers, createdByTgUserId
+          },
+          include: {
+            scene: true,
+            participants: { orderBy: { roleIndex: "asc" } },
+            takes: true,
+            render: true,
+          },
+        });
+
+        return updated;
+      });
+
+      // Get scene URL
+      const sceneFilename = updatedSession.scene.s3Key.split("/").pop() || "";
+      const sceneUrl = getProxyUrl("scene", sceneFilename);
+
+      // Parse cues
+      const sceneCues = parseCuesFromJson(updatedSession.scene.cueJson, updatedSession.scene.fps);
+      const sceneMeta: SceneMeta = buildSceneMeta(updatedSession.scene);
+
+      // Build response
+      const myParticipant = updatedSession.participants.find(
+        (p) => p.tgUserId === user.id
+      );
+
+      const isSolo = updatedSession.maxPlayers === 1;
+      const totalRoles = sceneCues.length;
+      const currentTurn = updatedSession.takes.length;
+
+      return {
+        session: {
+          id: updatedSession.id,
+          category: updatedSession.category as Category,
+          gameMode: updatedSession.gameMode as GameMode,
+          task: updatedSession.task || undefined,
+          status: updatedSession.status,
+          maxPlayers: updatedSession.maxPlayers,
+          createdByTgUserId: updatedSession.createdByTgUserId,
+          sceneMeta,
+          sceneUrl,
+        },
+        participants: updatedSession.participants.map((p) => ({
+          id: p.id,
+          tgUserId: p.tgUserId,
+          displayName: p.displayName,
+          roleIndex: p.roleIndex,
+        })),
+        myRoleIndex: isSolo
+          ? (currentTurn < totalRoles ? currentTurn : null)
+          : (myParticipant?.roleIndex ?? null),
+        currentTurn,
+        takes: updatedSession.takes.map((t) => ({
+          roleIndex: t.roleIndex,
+          durationSec: t.durationSec,
+        })),
+        render: updatedSession.render && updatedSession.render.status === "ready" && updatedSession.render.s3Key ? {
+          status: updatedSession.render.status as any,
+          videoUrl: getProxyUrl("render", updatedSession.render.s3Key.split("/").pop() || ""),
+        } : null,
+        sceneUrl,
+      };
     }
   );
 };

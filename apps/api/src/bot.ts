@@ -638,12 +638,18 @@ export function createBot(): Telegraf {
   bot.command("cancel", async (ctx) => {
     const userId = ctx.from?.id;
     if (userId) {
-      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId);
+      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId) || pendingJoins.has(userId);
       pendingScenes.delete(userId);
       pendingEdits.delete(userId);
+      pendingJoins.delete(userId);
       if (hadPending) {
         await ctx.reply("❌ Операция отменена", {
-          reply_markup: { remove_keyboard: true },
+          reply_markup: mainMenuKeyboard, // Всегда возвращаем главное меню
+        });
+      } else {
+        // Даже если нет активных операций, показываем главное меню
+        await ctx.reply("Главное меню", {
+          reply_markup: mainMenuKeyboard,
         });
       }
     }
@@ -1033,11 +1039,16 @@ export function createBot(): Telegraf {
       pendingScenes.delete(userId);
       pendingEdits.delete(userId);
       pendingJoins.delete(userId);
-      if (hadPending) {
-        await ctx.reply("❌ Отменено", {
-          reply_markup: mainMenuKeyboard, // Вернуть главное меню
-        });
-      }
+      
+      console.log(`[Bot] User ${userId} cancelled operation. Had pending:`, hadPending);
+      
+      // Всегда возвращаем главное меню после отмены
+      await ctx.reply(
+        hadPending ? "❌ Операция отменена" : "Главное меню",
+        {
+          reply_markup: mainMenuKeyboard, // Всегда возвращаем главное меню
+        }
+      );
       return;
     }
 
@@ -1078,9 +1089,12 @@ export function createBot(): Telegraf {
       
       console.log("[Bot] Searching for session with code:", sessionCode);
       
-      // Ищем сессию по ID (полному совпадению)
-      let session = await prisma.session.findUnique({
-        where: { id: sessionCode },
+      // Ищем сессию по ID (полному совпадению) - только активные сессии
+      let session = await prisma.session.findFirst({
+        where: { 
+          id: sessionCode,
+          status: { in: ["lobby", "recording"] }, // Только активные сессии
+        },
         include: {
           participants: true,
           scene: true,
@@ -1093,7 +1107,7 @@ export function createBot(): Telegraf {
         // Get all active sessions and filter in memory (Prisma doesn't support case-insensitive endsWith)
         const allSessions = await prisma.session.findMany({
           where: {
-            status: { in: ["lobby", "recording"] },
+            status: { in: ["lobby", "recording"] }, // Только активные сессии
           },
           include: {
             participants: true,
@@ -1116,11 +1130,28 @@ export function createBot(): Telegraf {
       console.log("[Bot] Session search result:", session ? { id: session.id, status: session.status, participants: session.participants.length } : "not found");
 
       if (!session) {
-        await ctx.reply(
-          `❌ Сессия с кодом "${sessionCode}" не найдена.\n\n` +
-          `Проверьте код и попробуйте ещё раз.`,
-          { reply_markup: { remove_keyboard: true } }
-        );
+        // Проверяем, может сессия существует, но уже завершена
+        const completedSession = await prisma.session.findFirst({
+          where: { 
+            id: sessionCode,
+          },
+          select: { id: true, status: true },
+        });
+
+        if (completedSession) {
+          await ctx.reply(
+            `❌ Эта игра уже завершена.\n\n` +
+            `Статус: ${completedSession.status}\n\n` +
+            `Создай новую игру или присоединись к активной.`,
+            { reply_markup: mainMenuKeyboard }
+          );
+        } else {
+          await ctx.reply(
+            `❌ Сессия с кодом "${sessionCode}" не найдена.\n\n` +
+            `Проверьте код и попробуйте ещё раз.`,
+            { reply_markup: mainMenuKeyboard }
+          );
+        }
         return;
       }
 
@@ -1155,11 +1186,23 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Проверяем статус
-      if (session.status !== "lobby") {
+      // Проверяем статус - для "recording" можно присоединиться, если еще есть место
+      // Но лучше разрешить только для "lobby"
+      if (session.status !== "lobby" && session.status !== "recording") {
+        await ctx.reply(
+          `❌ Игра уже завершена (статус: ${session.status}).\n\n` +
+          `Создай новую игру или присоединись к активной.`,
+          { reply_markup: mainMenuKeyboard }
+        );
+        return;
+      }
+      
+      // Если статус "recording", но еще есть место - можно присоединиться
+      // Но для "recording" лучше не разрешать присоединение (игра уже идет)
+      if (session.status === "recording") {
         await ctx.reply(
           `❌ Игра уже началась. Можно присоединиться только к играм в лобби.`,
-          { reply_markup: { remove_keyboard: true } }
+          { reply_markup: mainMenuKeyboard }
         );
         return;
       }
