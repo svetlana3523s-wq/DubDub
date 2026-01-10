@@ -83,3 +83,53 @@ body::before {
   padding-top: max(env(safe-area-inset-top), 16px);
 }
 
+/* Plyr customizations - larger progress bar for small videos */
+.plyr__progress {
+  height: 16px !important;
+  padding: 8px 0 !important;
+}
+
+.plyr__progress__buffer {
+  height: 8px !important;
+}
+
+.plyr__progress__played {
+  height: 8px !important;
+}
+
+.plyr__progress__container {
+  height: 16px !important;
+  padding: 8px 0 !important;
+  cursor: pointer;
+}
+
+.plyr__progress__container:hover {
+  height: 20px !important;
+  padding: 10px 0 !important;
+}
+
+.plyr__progress__container:hover .plyr__progress__buffer,
+.plyr__progress__container:hover .plyr__progress__played {
+  height: 10px !important;
+}
+
+.plyr__progress__thumb {
+  width: 20px !important;
+  height: 20px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  border: 3px solid white !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+}
+
+.plyr__progress__container:hover .plyr__progress__thumb {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* Make progress bar area more clickable */
+.plyr__controls__item[data-plyr="progress"] {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
