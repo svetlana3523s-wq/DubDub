@@ -19,7 +19,7 @@ interface TelegramContextValue {
   user: TelegramUser | null;
   isReady: boolean;
   initData: string | null;
-  retry: () => void; // Function to retry initialization
+  retry: () => void;
 }
 
 const TelegramContext = createContext<TelegramContextValue>({
@@ -98,84 +98,53 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
   const [initData, setInitData] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  const doInit = () => {
-    let attempts = 0;
-    const maxAttempts = 50; // Try for up to 5 seconds (50 * 100ms)
-    
-    const tryInit = () => {
-      attempts++;
-      
-      // Check if Telegram object exists at all
-      const hasTelegram = typeof window !== 'undefined' && 'Telegram' in window;
-      const tg = hasTelegram ? (window as any).Telegram?.WebApp : null;
-      const hasInitData = tg?.initData && tg.initData.length > 0;
+  const initTelegram = () => {
+    const tg = window.Telegram?.WebApp;
 
-      console.log(`[TG] Attempt ${attempts}/${maxAttempts}: Telegram=${hasTelegram}, WebApp=${!!tg}, initData=${hasInitData}`);
-
-      // If Telegram WebApp not available at all, keep trying
-      if (!tg) {
-        if (attempts < maxAttempts) {
-          setTimeout(tryInit, 100);
-          return;
-        }
-        console.error("[TG] Telegram WebApp not available after all attempts. URL:", window.location.href);
-        setIsReady(true);
-        return;
-      }
-
-      // Initialize
-      try {
-        tg.ready();
-        tg.expand();
-      } catch (e) {
-        console.error("[TG] Error calling ready/expand:", e);
-      }
-
-      // Set theme colors
-      try {
-        tg.setHeaderColor("#0f0f0f");
-        tg.setBackgroundColor("#0f0f0f");
-      } catch {
-        // Ignore if not supported
-      }
-
-      // Get init data - sometimes it takes a moment to be populated
-      const data = tg.initData;
-      if (!data || data.length === 0) {
-        if (attempts < maxAttempts) {
-          setTimeout(tryInit, 100);
-          return;
-        }
-        console.error("[TG] No initData available after all attempts. initDataUnsafe:", JSON.stringify(tg.initDataUnsafe || {}));
-        setIsReady(true);
-        return;
-      }
-
-      console.log("[TG] Successfully got initData, length:", data.length);
-      setInitData(data);
-
-      // Get user
-      const tgUser = tg.initDataUnsafe?.user;
-      if (tgUser) {
-        console.log("[TG] Got user:", tgUser.id, tgUser.first_name);
-        setUser({
-          id: String(tgUser.id),
-          firstName: tgUser.first_name,
-          lastName: tgUser.last_name,
-          username: tgUser.username,
-        });
-      }
-
+    if (!tg) {
+      console.error("Telegram WebApp not available");
       setIsReady(true);
-    };
+      return;
+    }
 
-    // Start initialization after a short delay to let scripts load
-    setTimeout(tryInit, 100);
+    // Initialize
+    tg.ready();
+    tg.expand();
+
+    // Set theme colors
+    try {
+      tg.setHeaderColor("#0f0f0f");
+      tg.setBackgroundColor("#0f0f0f");
+    } catch {
+      // Ignore if not supported
+    }
+
+    // Get init data
+    const data = tg.initData;
+    if (!data) {
+      console.error("No initData available");
+      setIsReady(true);
+      return;
+    }
+
+    setInitData(data);
+
+    // Get user
+    const tgUser = tg.initDataUnsafe?.user;
+    if (tgUser) {
+      setUser({
+        id: String(tgUser.id),
+        firstName: tgUser.first_name,
+        lastName: tgUser.last_name,
+        username: tgUser.username,
+      });
+    }
+
+    setIsReady(true);
   };
 
-  // Retry function - resets state and tries again
+  // Retry function for manual retry
   const retry = () => {
-    console.log("[TG] Manual retry triggered");
     setIsReady(false);
     setInitData(null);
     setUser(null);
@@ -183,7 +152,9 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    doInit();
+    // Small delay to ensure script is loaded
+    const timeout = setTimeout(initTelegram, 50);
+    return () => clearTimeout(timeout);
   }, [retryCount]);
 
   return (
