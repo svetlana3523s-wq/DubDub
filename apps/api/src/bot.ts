@@ -43,10 +43,7 @@ interface PendingEdit {
 // Pending states now stored in Redis via botState service (see lib/bot-state.ts)
 
 function isAdmin(userId: number): boolean {
-  const userIdStr = String(userId);
-  const result = config.adminTgUserIds.includes(userIdStr);
-  console.log(`[Bot] isAdmin check: userId=${userId} (${userIdStr}), adminIds=${JSON.stringify(config.adminTgUserIds)}, result=${result}`);
-  return result;
+  return config.adminTgUserIds.includes(String(userId));
 }
 
 async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: number }> {
@@ -58,8 +55,6 @@ async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: 
           reject(new Error(`File not found or empty: ${filePath}`));
           return;
         }
-
-        console.log(`[Bot] Analyzing video file: ${filePath}, size: ${(stats.size / (1024 * 1024)).toFixed(2)} MB`);
 
         const ffprobe = spawn("ffprobe", [
           "-v", "error",
@@ -109,8 +104,6 @@ async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: 
                 console.warn(`[Bot] Invalid FPS, using default 30. r_frame_rate:`, stream.r_frame_rate);
                 fps = 30;
               }
-
-              console.log(`[Bot] Video info: duration=${duration.toFixed(2)}s, fps=${fps.toFixed(2)}, codec=${stream.codec_name || "unknown"}`);
 
               resolve({ duration, fps });
             } catch (e) {
@@ -164,7 +157,6 @@ async function downloadTelegramFile(
  * Поддерживает файлы любого размера
  */
 async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; path: string }> {
-  console.log(`[Bot] Downloading file from URL: ${fileUrl}`);
   
   // Проверяем, что это валидный URL
   try {
@@ -201,7 +193,6 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
   const contentType = response.headers.get('content-type') || '';
   const contentLength = response.headers.get('content-length');
   
-  console.log(`[Bot] Response headers: content-type=${contentType}, content-length=${contentLength}`);
   
   // Если это HTML - значит скачалась страница, а не файл
   if (contentType.includes('text/html')) {
@@ -234,7 +225,6 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
   const tmpPath = path.join(tmpDir, `${randomUUID()}.mp4`);
   await writeFile(tmpPath, buffer);
   
-  console.log(`[Bot] File downloaded: ${(buffer.length / (1024 * 1024)).toFixed(2)} MB`);
   
   return { buffer, path: tmpPath };
 }
@@ -262,10 +252,7 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const cues: Array<{ startFrame: number; endFrame: number }> = [];
 
-  console.log("[Bot] Parsing cues from text:", text.substring(0, 200));
-
   for (const line of lines) {
-    console.log("[Bot] Processing line:", line);
     
     // Формат 1: "Игрок N — startFrame - endFrame" или "Игрок N — startFrame - endFrame"
     // Поддерживаем разные типы дефисов: — (em-dash), – (en-dash), - (hyphen)
@@ -273,7 +260,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
     if (match) {
       const startFrame = parseInt(match[1]!, 10);
       const endFrame = parseInt(match[2]!, 10);
-      console.log("[Bot] Matched format 1:", { startFrame, endFrame });
       if (!isNaN(startFrame) && !isNaN(endFrame) && startFrame < endFrame) {
         cues.push({ startFrame, endFrame });
       }
@@ -285,7 +271,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
     if (match) {
       const startFrame = parseInt(match[1]!, 10);
       const endFrame = parseInt(match[2]!, 10);
-      console.log("[Bot] Matched format 2:", { startFrame, endFrame });
       if (!isNaN(startFrame) && !isNaN(endFrame) && startFrame < endFrame) {
         cues.push({ startFrame, endFrame });
       }
@@ -299,7 +284,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       if (match2) {
         const startFrame = parseInt(match2[1]!, 10);
         const endFrame = parseInt(match2[2]!, 10);
-        console.log("[Bot] Matched format 3:", { startFrame, endFrame });
         if (!isNaN(startFrame) && !isNaN(endFrame) && startFrame < endFrame) {
           cues.push({ startFrame, endFrame });
         }
@@ -311,14 +295,11 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
     if (spaceMatch) {
       const startFrame = parseInt(spaceMatch[1]!, 10);
       const endFrame = parseInt(spaceMatch[2]!, 10);
-      console.log("[Bot] Matched format 4:", { startFrame, endFrame });
       if (!isNaN(startFrame) && !isNaN(endFrame) && startFrame < endFrame) {
         cues.push({ startFrame, endFrame });
       }
     }
   }
-
-  console.log("[Bot] Parsed cues:", cues);
 
   // Сортировать по startFrame
   cues.sort((a, b) => a.startFrame - b.startFrame);
@@ -343,14 +324,10 @@ export function createBot(): Telegraf {
     ] as Array<Array<{ text: string }>>;
 
     // Add admin panel button for admins
-    if (userId) {
-      const adminCheck = isAdmin(userId);
-      console.log(`[Bot] getMainMenuKeyboard: userId=${userId}, isAdmin=${adminCheck}, adminIds=${JSON.stringify(config.adminTgUserIds)}`);
-      if (adminCheck) {
-        baseKeyboard.push([
-          { text: "👑 Админ-панель" },
-        ]);
-      }
+    if (userId && isAdmin(userId)) {
+      baseKeyboard.push([
+        { text: "👑 Админ-панель" },
+      ]);
     }
 
     return {

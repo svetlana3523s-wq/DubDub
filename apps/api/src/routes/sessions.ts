@@ -410,7 +410,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params;
       const user = request.tgUser;
 
-      console.log("[Take] Request:", { sessionId: id, tgUserId: user.id });
 
       const session = await prisma.session.findUnique({
         where: { id },
@@ -422,7 +421,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!session) {
-        console.log("[Take] Session not found");
         return reply.status(404).send({ error: "Session not found" });
       }
 
@@ -431,17 +429,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const totalRoles = sceneCues.length;
       const isSolo = session.maxPlayers === 1;
 
-      console.log("[Take] Session:", { 
-        status: session.status, 
-        maxPlayers: session.maxPlayers,
-        isSolo,
-        totalRoles,
-        takes: session.takes.length,
-        participants: session.participants.map(p => ({ tgUserId: p.tgUserId, roleIndex: p.roleIndex })) 
-      });
-
       if (session.status !== "recording") {
-        console.log("[Take] Session not in recording phase:", session.status);
         return reply.status(400).send({ error: "Session not in recording phase" });
       }
 
@@ -450,7 +438,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       if (!participant) {
-        console.log("[Take] Not a participant. User:", user.id, "Participants:", session.participants.map(p => p.tgUserId));
         return reply.status(403).send({ error: "Not a participant" });
       }
 
@@ -461,7 +448,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       if (isSolo) {
         // Solo: check we haven't recorded all roles yet
         if (currentTurn >= totalRoles) {
-          console.log("[Take] All roles already recorded in solo mode");
           return reply.status(400).send({ error: "All roles already recorded" });
         }
       } else {
@@ -471,7 +457,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           (t) => t.roleIndex === participant.roleIndex
         );
         if (existingTake) {
-          console.log("[Take] Already submitted for role:", participant.roleIndex);
           return reply.status(400).send({ error: "Already submitted" });
         }
       }
@@ -482,16 +467,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       // Get cue duration for this role
       const cue = sceneCues.find((c: Cue) => c.roleIndex === takeRoleIndex);
       const cueDuration = cue?.durationSec || 5;
-      console.log("[Take] Cue duration for role", takeRoleIndex, ":", cueDuration);
 
       // Get uploaded file
       const data = await request.file();
       if (!data) {
-        console.log("[Take] No audio file in request");
         return reply.status(400).send({ error: "No audio file" });
       }
 
-      console.log("[Take] File received:", { filename: data.filename, mimetype: data.mimetype });
 
       // Read file to buffer
       const chunks: Buffer[] = [];
@@ -500,12 +482,10 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const audioBuffer = Buffer.concat(chunks);
 
-      console.log("[Take] Audio buffer size:", audioBuffer.length);
 
       // Check size
       const maxBytes = config.maxAudioSizeMb * 1024 * 1024;
       if (audioBuffer.length > maxBytes) {
-        console.log("[Take] File too large:", audioBuffer.length);
         return reply.status(400).send({
           error: `File too large. Max: ${config.maxAudioSizeMb}MB`,
         });
@@ -515,7 +495,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       let durationSec: number;
       try {
         durationSec = await getAudioDuration(audioBuffer);
-        console.log("[Take] Audio duration:", durationSec);
       } catch (err) {
         console.error("[Take] Failed to get audio duration:", err);
         durationSec = 5; // Default
@@ -523,14 +502,12 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // If duration is 0 or couldn't be determined, use cue duration
       if (durationSec <= 0) {
-        console.log("[Take] Duration not detected, using cue duration:", cueDuration);
         durationSec = cueDuration;
       }
 
       // Trim audio if longer than cue duration
       let finalAudioBuffer: Buffer = audioBuffer;
       if (durationSec > cueDuration) {
-        console.log("[Take] Trimming audio from", durationSec, "to", cueDuration);
         try {
           finalAudioBuffer = await trimAudio(audioBuffer, cueDuration);
           durationSec = cueDuration;
@@ -540,7 +517,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      console.log("[Take] Final duration:", durationSec);
 
       // Upload to S3 and create take record in transaction to prevent race conditions
       const s3Key = storage.keys.upload(id, takeRoleIndex);

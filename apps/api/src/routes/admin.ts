@@ -44,8 +44,6 @@ async function createCutsVideo(
     // Chain all volume filters together
     const audioFilter = volumeFilters.join(",");
 
-    console.log(`[Admin] Creating cuts video with filter: ${audioFilter}`);
-
     const ffmpeg = spawn("ffmpeg", [
       "-i", inputPath,
       "-af", audioFilter,
@@ -61,7 +59,6 @@ async function createCutsVideo(
 
     ffmpeg.on("close", (code) => {
       if (code === 0) {
-        console.log(`[Admin] Cuts video created successfully: ${outputPath}`);
         resolve();
       } else {
         console.error(`[Admin] FFmpeg failed with code ${code}:`, stderr);
@@ -85,8 +82,6 @@ async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: 
           reject(new Error(`File not found or empty: ${filePath}`));
           return;
         }
-
-        console.log(`[Admin] Analyzing video file: ${filePath}, size: ${(stats.size / (1024 * 1024)).toFixed(2)} MB`);
 
         const ffprobe = spawn("ffprobe", [
           "-v", "error",
@@ -136,8 +131,6 @@ async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: 
                 console.warn(`[Admin] Invalid FPS, using default 30. r_frame_rate:`, stream.r_frame_rate);
                 fps = 30;
               }
-
-              console.log(`[Admin] Video info: duration=${duration.toFixed(2)}s, fps=${fps.toFixed(2)}, codec=${stream.codec_name || "unknown"}`);
 
               resolve({ duration, fps });
             } catch (e) {
@@ -475,72 +468,32 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     "/admin/scenes",
     { preHandler: [authMiddleware, adminMiddleware] },
     async (request, reply) => {
-      console.log("[Admin] POST /admin/scenes received");
       let title = "";
       let category = "memes";
       let cuesJson = "";
 
       try {
-        // Parse all multipart parts at once
-        // IMPORTANT: File streams MUST be consumed immediately when encountered,
-        // otherwise the multipart parser hangs waiting for the stream to be read
-        console.log("[Admin] Parsing multipart form data...");
+        // Parse multipart - file streams MUST be consumed immediately
         const parts = request.parts();
-        let partCount = 0;
         let videoBuffer: Buffer | null = null;
-        let videoFilename = "";
         
         for await (const part of parts) {
-          partCount++;
-          console.log(`[Admin] Processing part #${partCount}:`, { type: part.type, fieldname: part.fieldname });
-          
           if (part.type === "file") {
-            videoFilename = part.filename || "video.mp4";
-            console.log("[Admin] Video file part received:", {
-              filename: videoFilename,
-              encoding: part.encoding,
-              mimetype: part.mimetype,
-            });
-            
-            // MUST read file stream immediately before continuing to next part
-            console.log("[Admin] Reading file stream...");
             const chunks: Buffer[] = [];
-            let totalBytes = 0;
-            let chunkCount = 0;
-            let lastLogTime = Date.now();
-            
             for await (const chunk of part.file) {
-              chunkCount++;
               chunks.push(chunk);
-              totalBytes += chunk.length;
-              
-              // Log progress every 5 seconds
-              const now = Date.now();
-              if (now - lastLogTime > 5000) {
-                console.log(`[Admin] Reading: ${chunkCount} chunks, ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-                lastLogTime = now;
-              }
             }
-            
             videoBuffer = Buffer.concat(chunks);
-            console.log(`[Admin] File read complete: ${(videoBuffer.length / (1024 * 1024)).toFixed(2)} MB`);
-            
           } else if (part.type === "field") {
             if (part.fieldname === "title") {
               title = String(part.value || "").trim();
-              console.log("[Admin] Title:", title);
             } else if (part.fieldname === "category") {
               category = String(part.value || "memes").trim();
-              console.log("[Admin] Category:", category);
             } else if (part.fieldname === "cues") {
               cuesJson = String(part.value || "").trim();
-              console.log("[Admin] Cues JSON length:", cuesJson.length);
             }
           }
         }
-
-        console.log("[Admin] All parts parsed. Total parts:", partCount);
-        console.log("[Admin] Form data: video=" + (videoBuffer ? `${(videoBuffer.length / (1024 * 1024)).toFixed(2)}MB` : "null") + ", title=" + title + ", category=" + category);
 
       if (!videoBuffer || videoBuffer.length === 0) {
         return reply.status(400).send({ error: "No video file provided" });
@@ -590,17 +543,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Create cuts version with audio muted at cue ranges
         tmpCutsPath = path.join(tmpDir, `${randomUUID()}_cuts.mp4`);
-        console.log(`[Admin] Creating cuts version of video...`);
         await createCutsVideo(tmpPath, tmpCutsPath, cues, duration);
 
-        // Read cuts video
+        // Read cuts video and upload both versions to S3
         const cutsBuffer = await import("fs/promises").then(fs => fs.readFile(tmpCutsPath!));
-        console.log(`[Admin] Cuts video size: ${(cutsBuffer.length / (1024 * 1024)).toFixed(2)} MB`);
-
-        // Upload both versions to S3
-        console.log(`[Admin] Uploading original video to S3...`);
         await storage.upload(s3Key, videoBuffer, "video/mp4");
-        console.log(`[Admin] Uploading cuts video to S3...`);
         await storage.upload(s3KeyCuts, cutsBuffer, "video/mp4");
 
         // Save to database
@@ -619,7 +566,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        console.log(`[Admin] Scene created: ${sceneId}, title: ${title}, category: ${category}, roles: ${cues.length}`);
+        console.log(`[Admin] Scene created: ${sceneId}`);
 
         return reply.send({ success: true, sceneId });
       } catch (err: any) {

@@ -63,7 +63,8 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
           <button
             onClick={handleCopyCode}
             data-code-btn
-            className="text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 underline cursor-pointer transition-colors"
+            className="font-mono text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 underline cursor-pointer transition-colors"
+            title="Нажми, чтобы скопировать"
           >
             {sessionCode}
           </button>
