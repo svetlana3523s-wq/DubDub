@@ -17,6 +17,8 @@ const fastify = Fastify({
     level: "info",
   },
   bodyLimit: 500 * 1024 * 1024, // 500 MB for video uploads
+  requestTimeout: 600000, // 10 minutes for large file uploads
+  connectionTimeout: 600000, // 10 minutes
 });
 
 // CORS - allow all origins for Telegram WebApp

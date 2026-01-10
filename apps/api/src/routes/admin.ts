@@ -468,8 +468,19 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         // Read video file to buffer
         console.log("[Admin] Reading video file to buffer...");
         const chunks: Buffer[] = [];
+        let totalBytes = 0;
+        let lastLogTime = Date.now();
+        
         for await (const chunk of videoFile.file) {
           chunks.push(chunk);
+          totalBytes += chunk.length;
+          
+          // Log progress every 5 seconds
+          const now = Date.now();
+          if (now - lastLogTime > 5000) {
+            console.log(`[Admin] Reading progress: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+            lastLogTime = now;
+          }
         }
         const videoBuffer = Buffer.concat(chunks);
         console.log("[Admin] Video buffer size:", (videoBuffer.length / (1024 * 1024)).toFixed(2), "MB");
