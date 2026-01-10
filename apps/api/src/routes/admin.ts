@@ -757,7 +757,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         // Continue with database deletion even if S3 deletion fails
       }
 
-      // Delete from database (cascade will delete related sessions)
+      // Delete related sessions first (they reference scene via foreign key)
+      const deletedSessions = await prisma.session.deleteMany({
+        where: { sceneId: id },
+      });
+      console.log(`[Admin] Deleted ${deletedSessions.count} sessions for scene ${id}`);
+
+      // Delete scene from database
       await prisma.scene.delete({
         where: { id },
       });
