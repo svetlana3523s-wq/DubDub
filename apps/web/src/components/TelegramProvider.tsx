@@ -96,11 +96,21 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
   const [initData, setInitData] = useState<string | null>(null);
 
   useEffect(() => {
-    const initTelegram = () => {
+    let attempts = 0;
+    const maxAttempts = 10; // Try for up to 1 second (10 * 100ms)
+    
+    const tryInit = () => {
       const tg = window.Telegram?.WebApp;
+      attempts++;
 
+      // If Telegram WebApp not available at all
       if (!tg) {
-        console.error("Telegram WebApp not available");
+        console.log(`[TG] Attempt ${attempts}: Telegram WebApp not available`);
+        if (attempts < maxAttempts) {
+          setTimeout(tryInit, 100);
+          return;
+        }
+        console.error("[TG] Telegram WebApp not available after all attempts");
         setIsReady(true);
         return;
       }
@@ -117,14 +127,20 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
         // Ignore if not supported
       }
 
-      // Get init data
+      // Get init data - sometimes it takes a moment to be populated
       const data = tg.initData;
       if (!data) {
-        console.error("No initData available");
+        console.log(`[TG] Attempt ${attempts}: No initData yet, retrying...`);
+        if (attempts < maxAttempts) {
+          setTimeout(tryInit, 100);
+          return;
+        }
+        console.error("[TG] No initData available after all attempts");
         setIsReady(true);
         return;
       }
 
+      console.log("[TG] Successfully got initData");
       setInitData(data);
 
       // Get user
@@ -141,8 +157,8 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
       setIsReady(true);
     };
 
-    // Small delay to ensure script is loaded
-    const timeout = setTimeout(initTelegram, 50);
+    // Start initialization
+    const timeout = setTimeout(tryInit, 50);
     return () => clearTimeout(timeout);
   }, []);
 
@@ -152,4 +168,3 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     </TelegramContext.Provider>
   );
 }
-

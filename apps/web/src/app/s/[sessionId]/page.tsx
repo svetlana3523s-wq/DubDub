@@ -322,18 +322,29 @@ export default function SessionPage({ params }: PageProps) {
 
   // Error
   if (viewState === "error") {
+    const isAuthError = error?.includes("авторизации");
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
           <div className="text-5xl">😕</div>
           <h2 className="text-xl font-bold">Ошибка</h2>
           <p className="text-tg-hint">{error}</p>
-          <button
-            onClick={() => router.push("/")}
-            className="btn-secondary"
-          >
-            На главную
-          </button>
+          <div className="flex flex-col gap-2">
+            {isAuthError && (
+              <button
+                onClick={() => window.location.reload()}
+                className="btn-primary"
+              >
+                🔄 Попробовать снова
+              </button>
+            )}
+            <button
+              onClick={() => router.push("/")}
+              className="btn-secondary"
+            >
+              На главную
+            </button>
+          </div>
         </div>
       </div>
     );
