@@ -445,11 +445,11 @@ export default function SessionPage({ params }: PageProps) {
           <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <PlyrVideoPlayer
               key={`full-${session.myRoleIndex}`}
-              src={`${session.sceneUrl}?v=full`}
+              src={session.sceneUrl}
+              srcCuts={session.sceneUrlCuts}
               muted={false}
               showTimeRange={false}
               label="📺 Посмотри сцену:"
-              cues={session.session.sceneMeta.cues}
               showAudioModeSwitch={true}
             />
           </div>
@@ -461,7 +461,7 @@ export default function SessionPage({ params }: PageProps) {
             </div>
             <PlyrVideoPlayer
               key={`fragment-${session.myRoleIndex}`}
-              src={`${session.sceneUrl}?v=fragment`}
+              src={session.sceneUrl}
               startTime={myCue?.startSec || 0}
               endTime={myCue ? myCue.startSec + myCue.durationSec : undefined}
               muted={true}
@@ -524,11 +524,11 @@ export default function SessionPage({ params }: PageProps) {
           <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <PlyrVideoPlayer
               key={`wait-full`}
-              src={`${session.sceneUrl}?v=full`}
+              src={session.sceneUrl}
+              srcCuts={session.sceneUrlCuts}
               muted={false}
               showTimeRange={false}
               label="📺 Посмотри сцену пока ждёшь:"
-              cues={session.session.sceneMeta.cues}
               showAudioModeSwitch={true}
             />
           </div>
@@ -541,7 +541,7 @@ export default function SessionPage({ params }: PageProps) {
               </div>
               <PlyrVideoPlayer
                 key={`wait-fragment`}
-                src={`${session.sceneUrl}?v=fragment`}
+                src={session.sceneUrl}
                 startTime={myCue.startSec}
                 endTime={myCue.startSec + myCue.durationSec}
                 muted={true}

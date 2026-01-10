@@ -11,7 +11,8 @@ model Scene {
   id          String    @id @default(cuid())
   title       String
   category    String    @default("memes") // movies | memes | politics
-  s3Key       String    // scenes/scene1.mp4
+  s3Key       String    // scenes/scene1.mp4 - original video
+  s3KeyCuts   String?   // scenes/scene1_cuts.mp4 - video with audio cut at cue ranges
   durationSec Float
   fps         Float     @default(25)  // frames per second
   rolesCount  Int

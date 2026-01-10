@@ -287,6 +287,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const sceneFilename = session.scene.s3Key.split("/").pop() || "";
       const sceneUrl = getProxyUrl("scene", sceneFilename);
 
+      // Get cuts video URL if available
+      let sceneUrlCuts: string | undefined;
+      if (session.scene.s3KeyCuts) {
+        const cutsFilename = session.scene.s3KeyCuts.split("/").pop() || "";
+        sceneUrlCuts = getProxyUrl("scene", cutsFilename);
+      }
+
       return {
         participant: {
           id: participant.id,
@@ -300,6 +307,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         gameMode: session.gameMode as GameMode,
         sceneMeta: buildSceneMeta(session.scene),
         sceneUrl,
+        sceneUrlCuts,
         currentTurn,
       };
     }
@@ -346,6 +354,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const sceneFilename = session.scene.s3Key.split("/").pop() || "";
       const sceneUrl = getProxyUrl("scene", sceneFilename);
 
+      // Get cuts video URL if available
+      let sceneUrlCuts: string | undefined;
+      if (session.scene.s3KeyCuts) {
+        const cutsFilename = session.scene.s3KeyCuts.split("/").pop() || "";
+        sceneUrlCuts = getProxyUrl("scene", cutsFilename);
+      }
+
       // Get render video URL if ready (using proxy)
       let videoUrl: string | null = null;
       if (session.render?.status === "ready") {
@@ -382,6 +397,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           : null,
         myRoleIndex,
         sceneUrl,
+        sceneUrlCuts,
       };
     }
   );
@@ -832,6 +848,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const sceneFilename = updatedSession.scene.s3Key.split("/").pop() || "";
       const sceneUrl = getProxyUrl("scene", sceneFilename);
 
+      // Get cuts video URL if available
+      let sceneUrlCuts: string | undefined;
+      if (updatedSession.scene.s3KeyCuts) {
+        const cutsFilename = updatedSession.scene.s3KeyCuts.split("/").pop() || "";
+        sceneUrlCuts = getProxyUrl("scene", cutsFilename);
+      }
+
       // Parse cues
       const sceneCues = parseCuesFromJson(updatedSession.scene.cueJson, updatedSession.scene.fps);
       const sceneMeta: SceneMeta = buildSceneMeta(updatedSession.scene);
@@ -875,6 +898,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           videoUrl: getProxyUrl("render", updatedSession.render.s3Key.split("/").pop() || ""),
         } : null,
         sceneUrl,
+        sceneUrlCuts,
       };
     }
   );

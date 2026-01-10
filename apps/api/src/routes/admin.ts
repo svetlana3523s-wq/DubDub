@@ -14,6 +14,68 @@ import os from "os";
 import { parseCuesFromJson, cuesToFrames, validateCues, type Cue } from "@dubdub/shared";
 import type { SceneListItem, SceneDetail, ScenesListResponse } from "@dubdub/shared";
 
+// Helper function to create video with audio cut at specified ranges using FFmpeg
+async function createCutsVideo(
+  inputPath: string,
+  outputPath: string,
+  cues: Cue[],
+  duration: number
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (cues.length === 0) {
+      // No cues - just copy the file
+      import("fs").then((fs) => {
+        fs.copyFile(inputPath, outputPath, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      return;
+    }
+
+    // Build volume filter to mute audio during cue ranges
+    // Format: volume=enable='between(t,start,end)':volume=0
+    const volumeFilters = cues.map((cue) => {
+      const start = cue.startSec.toFixed(3);
+      const end = (cue.startSec + cue.durationSec).toFixed(3);
+      return `volume=enable='between(t,${start},${end})':volume=0`;
+    });
+
+    // Chain all volume filters together
+    const audioFilter = volumeFilters.join(",");
+
+    console.log(`[Admin] Creating cuts video with filter: ${audioFilter}`);
+
+    const ffmpeg = spawn("ffmpeg", [
+      "-i", inputPath,
+      "-af", audioFilter,
+      "-c:v", "copy", // Copy video stream without re-encoding
+      "-y", // Overwrite output
+      outputPath,
+    ]);
+
+    let stderr = "";
+    ffmpeg.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        console.log(`[Admin] Cuts video created successfully: ${outputPath}`);
+        resolve();
+      } else {
+        console.error(`[Admin] FFmpeg failed with code ${code}:`, stderr);
+        reject(new Error(`FFmpeg failed: ${stderr.slice(-500)}`));
+      }
+    });
+
+    ffmpeg.on("error", (err) => {
+      console.error(`[Admin] FFmpeg spawn error:`, err);
+      reject(new Error(`Failed to run FFmpeg: ${err.message}`));
+    });
+  });
+}
+
 // Helper function to get video info using ffprobe
 async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: number }> {
   return new Promise((resolve, reject) => {
@@ -508,6 +570,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const tmpPath = path.join(tmpDir, `${randomUUID()}.mp4`);
       await writeFile(tmpPath, videoBuffer);
 
+      let tmpCutsPath: string | null = null;
       try {
         // Get video info
         const { duration, fps } = await getVideoInfo(tmpPath);
@@ -523,9 +586,22 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         // Generate scene ID
         const sceneId = `scene_${Date.now()}_${randomUUID().slice(0, 8)}`;
         const s3Key = storage.keys.scene(`${sceneId}.mp4`);
+        const s3KeyCuts = storage.keys.scene(`${sceneId}_cuts.mp4`);
 
-        // Upload to S3
+        // Create cuts version with audio muted at cue ranges
+        tmpCutsPath = path.join(tmpDir, `${randomUUID()}_cuts.mp4`);
+        console.log(`[Admin] Creating cuts version of video...`);
+        await createCutsVideo(tmpPath, tmpCutsPath, cues, duration);
+
+        // Read cuts video
+        const cutsBuffer = await import("fs/promises").then(fs => fs.readFile(tmpCutsPath!));
+        console.log(`[Admin] Cuts video size: ${(cutsBuffer.length / (1024 * 1024)).toFixed(2)} MB`);
+
+        // Upload both versions to S3
+        console.log(`[Admin] Uploading original video to S3...`);
         await storage.upload(s3Key, videoBuffer, "video/mp4");
+        console.log(`[Admin] Uploading cuts video to S3...`);
+        await storage.upload(s3KeyCuts, cutsBuffer, "video/mp4");
 
         // Save to database
         const cueJson = JSON.stringify(cueFrames);
@@ -535,6 +611,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             title,
             category,
             s3Key,
+            s3KeyCuts,
             durationSec: duration,
             fps,
             rolesCount: cues.length,
@@ -547,6 +624,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({ success: true, sceneId });
       } catch (err: any) {
         await unlink(tmpPath).catch(() => {});
+        if (tmpCutsPath) await unlink(tmpCutsPath).catch(() => {});
         console.error("[Admin] Failed to create scene:", err);
         return reply.status(500).send({ error: err.message || "Failed to create scene" });
       }

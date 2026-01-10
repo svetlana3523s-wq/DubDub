@@ -78,7 +78,8 @@ export interface JoinSessionResponse {
   task: string | null;
   gameMode: GameMode;
   sceneMeta: SceneMeta;
-  sceneUrl: string;
+  sceneUrl: string;          // Original video URL
+  sceneUrlCuts?: string;     // Video with audio cut at cue ranges
   currentTurn: number;
 }
 
@@ -89,7 +90,8 @@ export interface SessionStateResponse {
   takes: TakeResponse[];
   render: RenderResponse | null;
   myRoleIndex: number | null;
-  sceneUrl: string;
+  sceneUrl: string;          // Original video URL
+  sceneUrlCuts?: string;     // Video with audio cut at cue ranges
 }
 
 export interface UploadTakeResponse {
