@@ -41,10 +41,13 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Serve rendered videos (streaming)
+  // URL format: /files/renders/:sessionId.mp4 (sessionId param includes .mp4)
   fastify.get<{ Params: { sessionId: string } }>(
     "/files/renders/:sessionId",
     async (request, reply) => {
-      const { sessionId } = request.params;
+      // Strip .mp4 extension if present (URL is /files/renders/abc123.mp4)
+      const rawSessionId = request.params.sessionId;
+      const sessionId = rawSessionId.endsWith('.mp4') ? rawSessionId.slice(0, -4) : rawSessionId;
       const key = `renders/${sessionId}.mp4`;
 
       try {
