@@ -43,7 +43,10 @@ interface PendingEdit {
 // Pending states now stored in Redis via botState service (see lib/bot-state.ts)
 
 function isAdmin(userId: number): boolean {
-  return config.adminTgUserIds.includes(String(userId));
+  const userIdStr = String(userId);
+  const result = config.adminTgUserIds.includes(userIdStr);
+  console.log(`[Bot] isAdmin check: userId=${userId} (${userIdStr}), adminIds=${JSON.stringify(config.adminTgUserIds)}, result=${result}`);
+  return result;
 }
 
 async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: number }> {
