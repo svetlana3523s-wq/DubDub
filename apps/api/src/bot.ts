@@ -1225,7 +1225,7 @@ export function createBot(): Telegraf {
         await ctx.reply(
           `❌ Игра уже завершена (статус: ${session.status}).\n\n` +
           `Создай новую игру или присоединись к активной.`,
-          { reply_markup: mainMenuKeyboard }
+            { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
         );
         return;
       }
@@ -1235,7 +1235,7 @@ export function createBot(): Telegraf {
       if (session.status === "recording") {
         await ctx.reply(
           `❌ Игра уже началась. Можно присоединиться только к играм в лобби.`,
-          { reply_markup: mainMenuKeyboard }
+            { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
         );
         return;
       }
