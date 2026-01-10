@@ -340,10 +340,14 @@ export function createBot(): Telegraf {
     ] as Array<Array<{ text: string }>>;
 
     // Add admin panel button for admins
-    if (userId && isAdmin(userId)) {
-      baseKeyboard.push([
-        { text: "👑 Админ-панель" },
-      ]);
+    if (userId) {
+      const adminCheck = isAdmin(userId);
+      console.log(`[Bot] getMainMenuKeyboard: userId=${userId}, isAdmin=${adminCheck}, adminIds=${JSON.stringify(config.adminTgUserIds)}`);
+      if (adminCheck) {
+        baseKeyboard.push([
+          { text: "👑 Админ-панель" },
+        ]);
+      }
     }
 
     return {
