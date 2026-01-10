@@ -70,6 +70,15 @@ export const api = {
       body: JSON.stringify({}),
     }),
 
+  joinByCode: (
+    initData: string,
+    code: string
+  ): Promise<{ sessionId: string }> =>
+    request(initData, `/sessions/join-by-code`, {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
   getSession: (
     initData: string,
     sessionId: string

@@ -24,12 +24,15 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   const sessionCode = sessionId.slice(-8).toUpperCase();
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
   
-  // Message for sharing - code in backticks makes it copyable in Telegram
+  // Message for sharing - spaces around code make it easy to copy
+  // Format code with brackets so it stands out visually
   const shareText = `🎬 Присоединяйся к озвучке!
 
-Код: \`${sessionCode}\`
+📋 Код: [ ${sessionCode} ]
 
-Нажми 👥 Присоединиться в боте @${botUsername} и введи код`;
+1️⃣ Открой бота @${botUsername}
+2️⃣ Нажми "👥 Присоединиться к игре"
+3️⃣ Введи код`;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(sessionCode);
@@ -44,10 +47,10 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   };
 
   const handleSendToFriend = () => {
-    // Telegram share requires url parameter, but we make text the focus
-    // The url will show as a small preview at the bottom
-    const botLink = `https://t.me/${botUsername}`;
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=${encodeURIComponent(shareText)}`;
+    // Use startapp parameter to directly open Mini App with session context
+    // This way when friend clicks the link, they go straight to join flow
+    const deepLink = `https://t.me/${botUsername}?startapp=join_${sessionCode}`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(shareText)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(shareUrl);
     } else {

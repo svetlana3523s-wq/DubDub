@@ -127,6 +127,42 @@ async function trimAudio(
 }
 
 export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
+  // Join by code - find session by last 8 characters of session ID
+  fastify.post<{ Body: { code: string } }>(
+    "/sessions/join-by-code",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { code } = request.body;
+      
+      if (!code || code.length < 6) {
+        return reply.status(400).send({ error: "Неверный код" });
+      }
+
+      const normalizedCode = code.toUpperCase().trim();
+      
+      // Find session where ID ends with this code (case-insensitive)
+      const sessions = await prisma.session.findMany({
+        where: {
+          status: { in: ["lobby", "recording"] }, // Only joinable sessions
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100, // Limit search
+      });
+
+      // Find matching session by last 8 chars
+      const matchingSession = sessions.find(s => 
+        s.id.slice(-8).toUpperCase() === normalizedCode ||
+        s.id.slice(-normalizedCode.length).toUpperCase() === normalizedCode
+      );
+
+      if (!matchingSession) {
+        return reply.status(404).send({ error: "Сессия не найдена или уже закрыта" });
+      }
+
+      return { sessionId: matchingSession.id };
+    }
+  );
+
   // Create session
   fastify.post<{ Body: { maxPlayers: number; category: Category; gameMode: GameMode } }>(
     "/sessions",

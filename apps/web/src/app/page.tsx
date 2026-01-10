@@ -1,15 +1,88 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
+import { getStartParam } from "@/lib/telegram";
+import { api } from "@/lib/api";
 
 export default function HomePage() {
-  const { isReady, user } = useTelegram();
+  const { isReady, initData, user } = useTelegram();
+  const router = useRouter();
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  // Handle deep link join_CODE
+  useEffect(() => {
+    if (!isReady || !initData) return;
+
+    const startParam = getStartParam();
+    if (!startParam) return;
+
+    // Handle join_CODE format
+    if (startParam.startsWith("join_")) {
+      const code = startParam.slice(5).toUpperCase(); // Remove "join_" prefix
+      if (code) {
+        handleJoinByCode(code);
+      }
+    } else {
+      // Handle direct session ID (for viewing results)
+      router.push(`/s/${startParam}`);
+    }
+  }, [isReady, initData]);
+
+  const handleJoinByCode = async (code: string) => {
+    if (!initData || joining) return;
+    
+    setJoining(true);
+    setJoinError(null);
+    
+    try {
+      // Find session by code (last 8 chars of session ID)
+      const response = await api.joinByCode(initData, code);
+      if (response.sessionId) {
+        router.push(`/s/${response.sessionId}`);
+      }
+    } catch (err: any) {
+      console.error("Join by code failed:", err);
+      setJoinError(err.message || "Не удалось присоединиться");
+      setJoining(false);
+    }
+  };
 
   if (!isReady) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="w-10 h-10 border-3 border-accent-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Show joining state
+  if (joining) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-3 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-tg-hint">Присоединяемся к игре...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show join error
+  if (joinError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="text-4xl">😕</div>
+          <h2 className="text-xl font-bold">Не удалось присоединиться</h2>
+          <p className="text-tg-hint">{joinError}</p>
+          <Link href="/create" className="btn-primary inline-block">
+            🎬 Создать свою игру
+          </Link>
+        </div>
       </div>
     );
   }
@@ -68,4 +141,3 @@ export default function HomePage() {
     </div>
   );
 }
-
