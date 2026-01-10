@@ -16,6 +16,7 @@ const fastify = Fastify({
   logger: {
     level: "info",
   },
+  bodyLimit: 500 * 1024 * 1024, // 500 MB for video uploads
 });
 
 // CORS - allow all origins for Telegram WebApp
