@@ -116,16 +116,27 @@ export default function AdminUploadPage() {
     setError(null);
 
     try {
+      console.log("[Upload] Starting upload...", {
+        videoFile: { name: videoFile.name, size: videoFile.size, type: videoFile.type },
+        title,
+        category,
+        cuesCount: cues.length,
+      });
+
       const formData = new FormData();
       formData.append("video", videoFile);
       formData.append("title", title.trim());
       formData.append("category", category);
       formData.append("cues", JSON.stringify(cues));
 
+      console.log("[Upload] FormData created, calling api.uploadScene...");
+
       const result = await api.uploadScene(initData, formData);
+      
+      console.log("[Upload] Upload successful:", result);
       router.push(`/admin/scenes/${result.sceneId}/edit`);
     } catch (err: any) {
-      console.error("Upload failed:", err);
+      console.error("[Upload] Upload failed:", err);
       setError(err.message || "Ошибка загрузки");
     } finally {
       setLoading(false);
