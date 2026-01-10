@@ -85,7 +85,7 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
 export default function SessionPage({ params }: PageProps) {
   const { sessionId } = params;
   const router = useRouter();
-  const { isReady, initData, user } = useTelegram();
+  const { isReady, initData, user, retry } = useTelegram();
 
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +320,7 @@ export default function SessionPage({ params }: PageProps) {
 
   // Error
   if (viewState === "error") {
-    const isAuthError = error?.includes("авторизации");
+    const isAuthError = error?.includes("авторизации") || error?.includes("initData");
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
@@ -329,12 +329,21 @@ export default function SessionPage({ params }: PageProps) {
           <p className="text-tg-hint">{error}</p>
           <div className="flex flex-col gap-2">
             {isAuthError && (
-              <button
-                onClick={() => window.location.reload()}
-                className="btn-primary"
-              >
-                🔄 Попробовать снова
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    retry();
+                    setViewState("loading");
+                    setError(null);
+                  }}
+                  className="btn-primary"
+                >
+                  🔄 Попробовать снова
+                </button>
+                <p className="text-xs text-tg-hint mt-2">
+                  Если не помогает, закройте приложение и откройте заново через бота
+                </p>
+              </>
             )}
             <button
               onClick={() => router.push("/")}

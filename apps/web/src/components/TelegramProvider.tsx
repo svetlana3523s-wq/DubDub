@@ -19,12 +19,14 @@ interface TelegramContextValue {
   user: TelegramUser | null;
   isReady: boolean;
   initData: string | null;
+  retry: () => void; // Function to retry initialization
 }
 
 const TelegramContext = createContext<TelegramContextValue>({
   user: null,
   isReady: false,
   initData: null,
+  retry: () => {},
 });
 
 export function useTelegram() {
@@ -94,18 +96,20 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [initData, setInitData] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
+  const doInit = () => {
     let attempts = 0;
-    const maxAttempts = 10; // Try for up to 1 second (10 * 100ms)
+    const maxAttempts = 30; // Try for up to 3 seconds (30 * 100ms)
     
     const tryInit = () => {
       const tg = window.Telegram?.WebApp;
       attempts++;
 
+      console.log(`[TG] Attempt ${attempts}/${maxAttempts}, WebApp available: ${!!tg}, initData: ${tg?.initData ? 'yes' : 'no'}`);
+
       // If Telegram WebApp not available at all
       if (!tg) {
-        console.log(`[TG] Attempt ${attempts}: Telegram WebApp not available`);
         if (attempts < maxAttempts) {
           setTimeout(tryInit, 100);
           return;
@@ -130,7 +134,6 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
       // Get init data - sometimes it takes a moment to be populated
       const data = tg.initData;
       if (!data) {
-        console.log(`[TG] Attempt ${attempts}: No initData yet, retrying...`);
         if (attempts < maxAttempts) {
           setTimeout(tryInit, 100);
           return;
@@ -140,12 +143,13 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log("[TG] Successfully got initData");
+      console.log("[TG] Successfully got initData, length:", data.length);
       setInitData(data);
 
       // Get user
       const tgUser = tg.initDataUnsafe?.user;
       if (tgUser) {
+        console.log("[TG] Got user:", tgUser.id, tgUser.first_name);
         setUser({
           id: String(tgUser.id),
           firstName: tgUser.first_name,
@@ -158,12 +162,24 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     };
 
     // Start initialization
-    const timeout = setTimeout(tryInit, 50);
-    return () => clearTimeout(timeout);
-  }, []);
+    setTimeout(tryInit, 50);
+  };
+
+  // Retry function - resets state and tries again
+  const retry = () => {
+    console.log("[TG] Manual retry triggered");
+    setIsReady(false);
+    setInitData(null);
+    setUser(null);
+    setRetryCount(c => c + 1);
+  };
+
+  useEffect(() => {
+    doInit();
+  }, [retryCount]);
 
   return (
-    <TelegramContext.Provider value={{ user, isReady, initData }}>
+    <TelegramContext.Provider value={{ user, isReady, initData, retry }}>
       {children}
     </TelegramContext.Provider>
   );
