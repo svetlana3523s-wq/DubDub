@@ -110,3 +110,36 @@ export interface ApiError {
   error: string;
   code?: string;
 }
+
+// Admin Scene Management Types
+export interface SceneListItem {
+  id: string;
+  title: string;
+  category: Category;
+  durationSec: number;
+  fps: number;
+  rolesCount: number;
+  createdAt: string;
+  videoUrl: string;
+}
+
+export interface SceneDetail {
+  id: string;
+  title: string;
+  category: Category;
+  s3Key: string;
+  durationSec: number;
+  fps: number;
+  rolesCount: number;
+  cueJson: string;
+  createdAt: string;
+  videoUrl: string;
+  cues: Cue[]; // Converted to seconds for client
+}
+
+export interface ScenesListResponse {
+  scenes: SceneListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}

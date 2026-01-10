@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
-import { VideoPlayer } from "@/components/VideoPlayer";
+import { PlyrVideoPlayer } from "@/components/PlyrVideoPlayer";
 import type { SessionStateResponse, JoinSessionResponse } from "@dubdub/shared";
 
 interface PageProps {
@@ -438,7 +438,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Full scene with original audio */}
           <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
-            <VideoPlayer
+            <PlyrVideoPlayer
               key={`full-${session.myRoleIndex}`}
               src={`${session.sceneUrl}?v=full`}
               muted={false}
@@ -454,7 +454,7 @@ export default function SessionPage({ params }: PageProps) {
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
-            <VideoPlayer
+            <PlyrVideoPlayer
               key={`fragment-${session.myRoleIndex}`}
               src={`${session.sceneUrl}?v=fragment`}
               startTime={myCue?.startSec || 0}
@@ -517,7 +517,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Full scene with original audio */}
           <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-            <VideoPlayer
+            <PlyrVideoPlayer
               key={`wait-full`}
               src={`${session.sceneUrl}?v=full`}
               muted={false}
@@ -534,7 +534,7 @@ export default function SessionPage({ params }: PageProps) {
               <div className="text-sm text-tg-hint mb-2">
                 🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
               </div>
-              <VideoPlayer
+              <PlyrVideoPlayer
                 key={`wait-fragment`}
                 src={`${session.sceneUrl}?v=fragment`}
                 startTime={myCue.startSec}

@@ -6,6 +6,9 @@ import type {
   UploadTakeResponse,
   FinishSessionResponse,
   RenderStatusResponse,
+  SceneListItem,
+  SceneDetail,
+  ScenesListResponse,
 } from "@dubdub/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -130,6 +133,74 @@ export const api = {
     request(initData, `/sessions/${sessionId}/replay?mode=${mode}`, {
       method: "POST",
       body: JSON.stringify({}),
+    }),
+
+  // Admin endpoints
+  checkAdmin: (initData: string): Promise<{ isAdmin: boolean }> =>
+    request(initData, "/admin/check"),
+
+  getScenes: (
+    initData: string,
+    params?: { page?: number; limit?: number; category?: string; search?: string }
+  ): Promise<ScenesListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append("page", String(params.page));
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.category) query.append("category", params.category);
+    if (params?.search) query.append("search", params.search);
+    const queryStr = query.toString();
+    return request(initData, `/admin/scenes${queryStr ? `?${queryStr}` : ""}`);
+  },
+
+  getScene: (initData: string, sceneId: string): Promise<SceneDetail> =>
+    request(initData, `/admin/scenes/${sceneId}`),
+
+  uploadScene: async (
+    initData: string,
+    formData: FormData
+  ): Promise<{ success: true; sceneId: string }> => {
+    const res = await fetch(`${API_URL}/admin/scenes`, {
+      method: "POST",
+      headers: {
+        "X-TG-INIT-DATA": initData,
+      },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new ApiError(data.error || `HTTP ${res.status}`, data.code, res.status);
+    }
+
+    return data;
+  },
+
+  updateScene: async (
+    initData: string,
+    sceneId: string,
+    formData: FormData
+  ): Promise<SceneDetail> => {
+    const res = await fetch(`${API_URL}/admin/scenes/${sceneId}`, {
+      method: "PUT",
+      headers: {
+        "X-TG-INIT-DATA": initData,
+      },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new ApiError(data.error || `HTTP ${res.status}`, data.code, res.status);
+    }
+
+    return data;
+  },
+
+  deleteScene: (initData: string, sceneId: string): Promise<{ success: true }> =>
+    request(initData, `/admin/scenes/${sceneId}`, {
+      method: "DELETE",
     }),
 };
 

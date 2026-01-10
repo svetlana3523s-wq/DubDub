@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
+import { PlyrVideoPlayer } from "@/components/PlyrVideoPlayer";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
 
 interface PageProps {
@@ -166,12 +167,10 @@ export default function ResultPage({ params }: PageProps) {
 
         {/* Video */}
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <video
-            src={render.videoUrl}
-            controls
-            autoPlay
-            playsInline
-            className="w-full rounded-2xl shadow-2xl"
+          <PlyrVideoPlayer
+            src={render.videoUrl || ""}
+            muted={false}
+            showTimeRange={false}
           />
         </div>
 
