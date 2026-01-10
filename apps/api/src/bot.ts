@@ -430,7 +430,7 @@ export function createBot(): Telegraf {
 2. Нажми "👥 Присоединиться к игре"
 3. Введи код: xxxxxxxxx`;
 
-    pendingJoins.set(userId, true);
+    await botState.setPendingJoin(userId);
     await ctx.reply(instructionText, {
       reply_markup: {
         keyboard: [
@@ -486,7 +486,7 @@ export function createBot(): Telegraf {
 2. Нажми "👥 Присоединиться к игре"
 3. Введи код: xxxxxxxxx`;
 
-    pendingJoins.set(userId, true);
+    await botState.setPendingJoin(userId);
     await ctx.reply(instructionText, {
       reply_markup: {
         keyboard: [[{ text: "❌ Отмена" }]],
