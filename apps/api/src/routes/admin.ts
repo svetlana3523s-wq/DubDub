@@ -511,15 +511,19 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
         console.log(`[Admin] Scene created: ${sceneId}, title: ${title}, category: ${category}, roles: ${cues.length}`);
 
-        return { success: true, sceneId };
+        return reply.send({ success: true, sceneId });
       } catch (err: any) {
+        await unlink(tmpPath).catch(() => {});
         console.error("[Admin] Failed to create scene:", err);
         return reply.status(500).send({ error: err.message || "Failed to create scene" });
-      } finally {
-        // Clean up temp file
-        await unlink(tmpPath).catch(() => {});
       }
+    } catch (err) {
+      console.error("[Admin] Request processing error:", err);
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : "Failed to process request",
+      });
     }
+  }
   );
 
   // PUT /admin/scenes/:id - редактирование сцены
