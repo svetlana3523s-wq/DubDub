@@ -109,16 +109,30 @@ export default function AdminSceneEditPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!initData || !confirm("Удалить эту сцену? Это действие нельзя отменить.")) {
+  const handleDelete = async (force: boolean = false) => {
+    if (!initData) return;
+    
+    const confirmMsg = force 
+      ? "⚠️ Принудительное удаление! Все связанные сессии тоже будут удалены. Продолжить?"
+      : "Удалить эту сцену? Это действие нельзя отменить.";
+    
+    if (!confirm(confirmMsg)) {
       return;
     }
 
     try {
-      await api.deleteScene(initData, sceneId);
+      await api.deleteScene(initData, sceneId, force);
       router.push("/admin/scenes");
     } catch (err: any) {
-      alert(err.message || "Ошибка удаления");
+      const msg = err.message || "Ошибка удаления";
+      // If error mentions active sessions, offer force delete
+      if (msg.includes("active session") && !force) {
+        if (confirm(`${msg}\n\nУдалить принудительно?`)) {
+          handleDelete(true);
+        }
+      } else {
+        alert(msg);
+      }
     }
   };
 

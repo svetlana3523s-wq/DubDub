@@ -233,8 +233,8 @@ export const api = {
     return data;
   },
 
-  deleteScene: (initData: string, sceneId: string): Promise<{ success: true }> =>
-    request(initData, `/admin/scenes/${sceneId}`, {
+  deleteScene: (initData: string, sceneId: string, force: boolean = false): Promise<{ success: true }> =>
+    request(initData, `/admin/scenes/${sceneId}${force ? "?force=true" : ""}`, {
       method: "DELETE",
     }),
 };

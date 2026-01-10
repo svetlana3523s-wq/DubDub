@@ -716,11 +716,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // DELETE /admin/scenes/:id - удаление сцены
-  fastify.delete<{ Params: { id: string } }>(
+  fastify.delete<{ Params: { id: string }; Querystring: { force?: string } }>(
     "/admin/scenes/:id",
     { preHandler: [authMiddleware, adminMiddleware] },
     async (request, reply) => {
       const { id } = request.params;
+      const force = request.query.force === "true";
 
       const scene = await prisma.scene.findUnique({
         where: { id },
@@ -730,18 +731,21 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Scene not found" });
       }
 
-      // Check for active sessions
-      const activeSessions = await prisma.session.count({
+      // Check for truly active sessions (created in the last hour with active status)
+      // Old sessions in lobby/recording are likely abandoned
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentActiveSessions = await prisma.session.count({
         where: {
           sceneId: id,
           status: { in: ["lobby", "recording"] },
+          createdAt: { gte: oneHourAgo },
         },
       });
 
-      if (activeSessions > 0) {
+      if (recentActiveSessions > 0 && !force) {
         return reply.status(400).send({
-          error: `Cannot delete scene: ${activeSessions} active session(s) using this scene`,
-          activeSessions,
+          error: `Cannot delete scene: ${recentActiveSessions} active session(s) using this scene. Use force=true to delete anyway.`,
+          activeSessions: recentActiveSessions,
         });
       }
 
@@ -753,12 +757,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         // Continue with database deletion even if S3 deletion fails
       }
 
-      // Delete from database
+      // Delete from database (cascade will delete related sessions)
       await prisma.scene.delete({
         where: { id },
       });
 
-      console.log(`[Admin] Scene deleted: ${id}`);
+      console.log(`[Admin] Scene deleted: ${id}${force ? " (forced)" : ""}`);
 
       return { success: true };
     }
