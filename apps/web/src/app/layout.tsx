@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { TelegramProvider } from "@/components/TelegramProvider";
 
 export const metadata: Metadata = {
@@ -23,7 +24,11 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <head>
-        <script src="https://telegram.org/js/telegram-web-app.js" />
+        {/* Telegram WebApp SDK must load before React hydration */}
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
       </head>
       <body className="antialiased">
         <TelegramProvider>
