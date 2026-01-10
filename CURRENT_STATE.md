@@ -1,20 +1,18 @@
 # Current State
 
 ## Last updates
-- Fixed multipart parsing in admin scene upload - switched from `request.file()` + `request.parts()` to single `request.parts()` loop
-- Plyr video player integrated - seeking, pause, custom controls (no volume/settings/pip)
-- Admin Web UI for scene management - `/admin/scenes`, `/admin/upload`, `/admin/scenes/[id]/edit`
-- CueEditor component - frame-based navigation, frame inputs, 1-frame step slider
-- Bot state migrated to Redis (`bot-state.ts`) - persistent across restarts
-- Nginx/Fastify timeouts increased to 10 min for large uploads
+- **iOS workaround for inline web_app buttons** — inline кнопки с `web_app` открывают WebView без Telegram SDK; используем ссылки `?startapp=s_sessionId` вместо inline buttons (НЕ ТРОГАТЬ!)
+- `getVideoInfo` вынесен в `lib/video-utils.ts` — убрано дублирование в bot.ts и admin.ts
+- `onDelete: Cascade` добавлен для Session→Scene — теперь при удалении сцены удаляются связанные сессии
+- Health check для worker — HTTP сервер на порту 3002 (`/health`)
+- Server-side audio processing — при загрузке видео FFmpeg создаёт версию с вырезанным аудио (`s3KeyCuts`)
 
 ## Known issues
-- URL upload fails for Yandex.Disk/Google Drive sharing links (returns HTML instead of video)
-- Large files (>50MB) cannot be uploaded directly through Telegram bot (use direct URL or Admin UI)
-- Plyr CSS overrides use `!important` - may conflict with future styling
-- `getVideoInfo` duplicate code in `bot.ts` and `admin.ts` - should be unified
+- Медленная загрузка видео — возможно связано с FFmpeg обработкой при upload
+- URL upload fails for Yandex.Disk/Google Drive sharing links (returns HTML)
+- Plyr CSS использует `!important` — может конфликтовать
 
 ## Next focus
-- Test admin scene upload with various file sizes
-- Improve error messages for upload failures
-- Deduplicate `getVideoInfo` helper (move to shared lib)
+- Выявить и исправить конкретные баги (спросить пользователя)
+- Не трогать логику присоединения через `?startapp=` — она работает!
+- Рефакторинг после стабилизации

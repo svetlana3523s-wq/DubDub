@@ -2,6 +2,7 @@ import { Worker, Job } from "bullmq";
 import * as IORedis from "ioredis";
 import { PrismaClient } from "@prisma/client";
 import { Telegraf } from "telegraf";
+import { createServer } from "http";
 import { renderVideo } from "./render.js";
 import { config } from "./config.js";
 import type { Cue } from "@dubdub/shared";
@@ -144,6 +145,7 @@ const shutdown = async () => {
   await worker.close();
   await redis.quit();
   await prisma.$disconnect();
+  // Health server will be closed when process exits
   process.exit(0);
 };
 
@@ -151,4 +153,24 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 console.log("Worker started, listening for render jobs...");
+
+// Health check HTTP server
+const healthPort = parseInt(process.env.WORKER_HEALTH_PORT || "3002");
+const healthServer = createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ 
+      status: "ok", 
+      service: "dubdub-worker",
+      uptime: process.uptime()
+    }));
+  } else {
+    res.writeHead(404);
+    res.end("Not found");
+  }
+});
+
+healthServer.listen(healthPort, () => {
+  console.log(`Health check server listening on port ${healthPort}`);
+});
 

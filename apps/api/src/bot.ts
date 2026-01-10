@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { prisma } from "./lib/prisma.js";
 import { storage } from "./lib/storage.js";
 import { botState } from "./lib/bot-state.js";
+import { getVideoInfo } from "./lib/video-utils.js";
 import { spawn } from "child_process";
 import { writeFile, unlink, mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
@@ -46,84 +47,7 @@ function isAdmin(userId: number): boolean {
   return config.adminTgUserIds.includes(String(userId));
 }
 
-async function getVideoInfo(filePath: string): Promise<{ duration: number; fps: number }> {
-  return new Promise((resolve, reject) => {
-    // Проверяем, что файл существует
-    import("fs").then((fs) => {
-      fs.stat(filePath, (statErr, stats) => {
-        if (statErr || !stats || stats.size === 0) {
-          reject(new Error(`File not found or empty: ${filePath}`));
-          return;
-        }
-
-        const ffprobe = spawn("ffprobe", [
-          "-v", "error",
-          "-select_streams", "v:0",
-          "-show_entries", "stream=r_frame_rate,width,height,codec_name:format=duration,format_name",
-          "-of", "json",
-          filePath,
-        ]);
-
-        let stdout = "";
-        let stderr = "";
-
-        ffprobe.stderr.on("data", (data) => {
-          stderr += data.toString();
-        });
-
-        ffprobe.stdout.on("data", (data) => {
-          stdout += data.toString();
-        });
-
-        ffprobe.on("close", (code) => {
-          if (code === 0) {
-            try {
-              const json = JSON.parse(stdout);
-              const stream = json.streams?.[0];
-              const format = json.format;
-
-              if (!stream || !format) {
-                console.error(`[Bot] Invalid ffprobe output:`, json);
-                reject(new Error("Invalid ffprobe output: missing stream or format. File may not be a valid video."));
-                return;
-              }
-
-              const duration = parseFloat(format.duration || stream.duration || "0");
-              if (isNaN(duration) || duration <= 0) {
-                console.error(`[Bot] Invalid duration:`, format.duration, stream.duration);
-                reject(new Error(`Invalid video duration: ${format.duration || stream.duration || "unknown"}`));
-                return;
-              }
-
-              const frameRate = stream.r_frame_rate?.split("/");
-              let fps = frameRate && frameRate.length === 2
-                ? parseFloat(frameRate[0]) / parseFloat(frameRate[1])
-                : 30;
-
-              if (isNaN(fps) || fps <= 0) {
-                console.warn(`[Bot] Invalid FPS, using default 30. r_frame_rate:`, stream.r_frame_rate);
-                fps = 30;
-              }
-
-              resolve({ duration, fps });
-            } catch (e) {
-              console.error(`[Bot] Failed to parse ffprobe output:`, e, "Output:", stdout);
-              reject(new Error(`Failed to parse ffprobe output: ${e instanceof Error ? e.message : String(e)}`));
-            }
-          } else {
-            console.error(`[Bot] ffprobe failed with code ${code}. stderr:`, stderr, "stdout:", stdout);
-            reject(new Error(`ffprobe failed (code ${code}): ${stderr || "unknown error"}`));
-          }
-        });
-
-        ffprobe.on("error", (err) => {
-          console.error(`[Bot] ffprobe spawn error:`, err);
-          reject(new Error(`Failed to run ffprobe: ${err.message}. Make sure ffprobe is installed.`));
-        });
-      });
-    });
-  });
-}
+// getVideoInfo imported from ./lib/video-utils.js
 
 async function downloadTelegramFile(
   bot: Telegraf,
