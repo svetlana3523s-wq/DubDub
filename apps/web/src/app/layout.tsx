@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { TelegramProvider } from "@/components/TelegramProvider";
 
 export const metadata: Metadata = {
@@ -23,18 +24,10 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <head>
-        {/* Telegram WebApp SDK - MUST be blocking/synchronous script */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                var script = document.createElement('script');
-                script.src = 'https://telegram.org/js/telegram-web-app.js';
-                script.async = false;
-                document.head.appendChild(script);
-              })();
-            `,
-          }}
+        {/* Telegram WebApp SDK - loads before page content */}
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
         />
       </head>
       <body className="antialiased">

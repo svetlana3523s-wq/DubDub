@@ -331,10 +331,12 @@ export default function SessionPage({ params }: PageProps) {
           <p className="text-tg-hint">{error}</p>
           
           {/* Diagnostic info */}
-          <div className="text-xs text-tg-hint bg-tg-secondary p-2 rounded">
+          <div className="text-xs text-tg-hint bg-tg-secondary p-2 rounded text-left">
             <p>TG WebApp: {tgAvailable ? '✅' : '❌'}</p>
             <p>initData: {initData ? '✅' : '❌'}</p>
             <p>Session: {sessionId.slice(-8)}</p>
+            <p>window.Telegram: {typeof window !== 'undefined' && 'Telegram' in window ? '✅' : '❌'}</p>
+            <p>URL: {typeof window !== 'undefined' ? window.location.pathname : '?'}</p>
           </div>
           
           <div className="flex flex-col gap-2">
