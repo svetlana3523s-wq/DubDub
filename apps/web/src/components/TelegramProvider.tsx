@@ -100,28 +100,36 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
 
   const doInit = () => {
     let attempts = 0;
-    const maxAttempts = 30; // Try for up to 3 seconds (30 * 100ms)
+    const maxAttempts = 50; // Try for up to 5 seconds (50 * 100ms)
     
     const tryInit = () => {
-      const tg = window.Telegram?.WebApp;
       attempts++;
+      
+      // Check if Telegram object exists at all
+      const hasTelegram = typeof window !== 'undefined' && 'Telegram' in window;
+      const tg = hasTelegram ? (window as any).Telegram?.WebApp : null;
+      const hasInitData = tg?.initData && tg.initData.length > 0;
 
-      console.log(`[TG] Attempt ${attempts}/${maxAttempts}, WebApp available: ${!!tg}, initData: ${tg?.initData ? 'yes' : 'no'}`);
+      console.log(`[TG] Attempt ${attempts}/${maxAttempts}: Telegram=${hasTelegram}, WebApp=${!!tg}, initData=${hasInitData}`);
 
-      // If Telegram WebApp not available at all
+      // If Telegram WebApp not available at all, keep trying
       if (!tg) {
         if (attempts < maxAttempts) {
           setTimeout(tryInit, 100);
           return;
         }
-        console.error("[TG] Telegram WebApp not available after all attempts");
+        console.error("[TG] Telegram WebApp not available after all attempts. URL:", window.location.href);
         setIsReady(true);
         return;
       }
 
       // Initialize
-      tg.ready();
-      tg.expand();
+      try {
+        tg.ready();
+        tg.expand();
+      } catch (e) {
+        console.error("[TG] Error calling ready/expand:", e);
+      }
 
       // Set theme colors
       try {
@@ -133,12 +141,12 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
 
       // Get init data - sometimes it takes a moment to be populated
       const data = tg.initData;
-      if (!data) {
+      if (!data || data.length === 0) {
         if (attempts < maxAttempts) {
           setTimeout(tryInit, 100);
           return;
         }
-        console.error("[TG] No initData available after all attempts");
+        console.error("[TG] No initData available after all attempts. initDataUnsafe:", JSON.stringify(tg.initDataUnsafe || {}));
         setIsReady(true);
         return;
       }
@@ -161,8 +169,8 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
       setIsReady(true);
     };
 
-    // Start initialization
-    setTimeout(tryInit, 50);
+    // Start initialization after a short delay to let scripts load
+    setTimeout(tryInit, 100);
   };
 
   // Retry function - resets state and tries again
