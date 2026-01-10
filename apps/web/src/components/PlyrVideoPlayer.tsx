@@ -51,17 +51,8 @@ export function PlyrVideoPlayer({
       controls: [
         "play-large",
         "restart",
-        "rewind",
         "play",
-        "fast-forward",
         "progress",
-        "current-time",
-        "duration",
-        "mute",
-        "volume",
-        "settings",
-        "pip",
-        "fullscreen",
       ],
       keyboard: { focused: true, global: false },
       tooltips: { controls: true, seek: true },
@@ -69,17 +60,16 @@ export function PlyrVideoPlayer({
       clickToPlay: true,
       hideControls: true,
       resetOnEnd: false,
-      settings: ["speed"],
-      speed: {
-        selected: 1,
-        options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-      },
+      volume: 1.0, // Always maximum volume
+      muted: false,
     });
 
     playerRef.current = player;
 
     const handleReady = () => {
       setLoadState("ready");
+      // Set volume to maximum
+      player.volume = 1.0;
       if (startTime > 0) {
         player.currentTime = startTime;
       }
@@ -106,6 +96,11 @@ export function PlyrVideoPlayer({
     player.on("play", handlePlay);
     player.on("pause", handlePause);
     player.on("ended", handleEnded);
+    
+    // Ensure volume is always maximum
+    player.on("loadedmetadata", () => {
+      player.volume = 1.0;
+    });
 
     return () => {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
