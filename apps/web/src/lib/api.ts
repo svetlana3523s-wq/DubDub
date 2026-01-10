@@ -159,21 +159,39 @@ export const api = {
     initData: string,
     formData: FormData
   ): Promise<{ success: true; sceneId: string }> => {
-    const res = await fetch(`${API_URL}/admin/scenes`, {
-      method: "POST",
-      headers: {
-        "X-TG-INIT-DATA": initData,
-      },
-      body: formData,
-    });
+    try {
+      const res = await fetch(`${API_URL}/admin/scenes`, {
+        method: "POST",
+        headers: {
+          "X-TG-INIT-DATA": initData,
+          // Don't set Content-Type - browser will set multipart/form-data with boundary
+        },
+        body: formData,
+      });
 
-    const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `HTTP ${res.status}` };
+        }
+        throw new ApiError(errorData.error || `HTTP ${res.status}`, errorData.code, res.status);
+      }
 
-    if (!res.ok) {
-      throw new ApiError(data.error || `HTTP ${res.status}`, data.code, res.status);
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      if (err instanceof ApiError) {
+        throw err;
+      }
+      console.error("Upload scene error:", err);
+      throw new ApiError(
+        err instanceof Error ? err.message : "Failed to upload scene",
+        "NETWORK_ERROR"
+      );
     }
-
-    return data;
   },
 
   updateScene: async (

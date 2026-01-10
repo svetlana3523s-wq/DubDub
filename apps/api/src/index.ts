@@ -27,8 +27,9 @@ await fastify.register(cors, {
 // Multipart for file uploads
 await fastify.register(multipart, {
   limits: {
-    fileSize: config.maxAudioSizeMb * 1024 * 1024,
+    fileSize: 500 * 1024 * 1024, // 500 MB for video uploads
     files: 1,
+    fields: 10, // Max number of form fields
   },
 });
 
