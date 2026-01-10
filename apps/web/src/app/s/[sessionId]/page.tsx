@@ -24,32 +24,28 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   const sessionCode = sessionId.slice(-8).toUpperCase();
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
   
-  // Message for sharing - spaces around code make it easy to copy
-  // Format code with brackets so it stands out visually
-  const shareText = `🎬 Присоединяйся к озвучке!
+  // Deep link using ?start= (goes through bot first, more reliable)
+  // The bot will find the session and show a button to open the Mini App
+  const deepLink = `https://t.me/${botUsername}?start=join_${sessionCode}`;
+  
+  // Simple share text - the link itself contains the join info
+  // Note: Telegram share API doesn't support Markdown, so code can't be monospace in the message
+  const shareText = `🎬 Присоединяйся к озвучке!\n\nНажми на ссылку выше 👆`;
 
-📋 Код: [ ${sessionCode} ]
-
-1️⃣ Открой бота @${botUsername}
-2️⃣ Нажми "👥 Присоединиться к игре"
-3️⃣ Введи код`;
-
+  const [copied, setCopied] = useState(false);
+  
   const handleCopyCode = () => {
     navigator.clipboard.writeText(sessionCode);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-    // Show brief feedback
-    const codeEl = document.querySelector('[data-code-btn]') as HTMLElement;
-    if (codeEl) {
-      const original = codeEl.textContent;
-      codeEl.textContent = "✅ Скопировано!";
-      setTimeout(() => { if (codeEl) codeEl.textContent = original; }, 2000);
-    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleSendToFriend = () => {
-    // Use startapp parameter to directly open Mini App with session context
-    // This way when friend clicks the link, they go straight to join flow
-    const deepLink = `https://t.me/${botUsername}?startapp=join_${sessionCode}`;
+    // Use ?start= parameter - goes through bot's /start handler first
+    // This is more reliable than ?startapp= because:
+    // 1. Works for new users who need to start the bot first
+    // 2. Bot finds the session and provides a proper "Join" button
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(deepLink)}&text=${encodeURIComponent(shareText)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(shareUrl);
@@ -65,12 +61,14 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
           <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
           <button
             onClick={handleCopyCode}
-            data-code-btn
-            className="font-mono text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 underline cursor-pointer transition-colors"
+            className="font-mono text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 cursor-pointer transition-colors"
             title="Нажми, чтобы скопировать"
           >
-            {sessionCode}
+            {copied ? "✅ Скопировано!" : sessionCode}
           </button>
+          <div className="text-xs text-tg-hint mt-1">
+            👆 нажми, чтобы скопировать
+          </div>
         </div>
         
         <button

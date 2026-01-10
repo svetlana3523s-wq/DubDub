@@ -346,12 +346,6 @@ export function createBot(): Telegraf {
 
     console.log("[Bot] /start command received", { userId, startPayload });
 
-    const webAppUrl = startPayload
-      ? `${config.webappUrl}/s/${startPayload}`
-      : config.webappUrl;
-
-    console.log("[Bot] WebApp URL:", webAppUrl);
-
     const welcomeText = `🎤 Злобная озвучка - это игра, в которой вы озвучиваете эпизоды из кино, сериалов, мемов и прочих роликов.
 
 🎮 Выберите количество игроков - можно сыграть одному и озвучить все реплики самостоятельно или же пригласить друга и сыграть вдвоем.
@@ -370,17 +364,59 @@ export function createBot(): Telegraf {
 
     // Send response immediately with persistent keyboard
     try {
-      if (startPayload) {
-        // Deep link - open web app directly
+      // Check if this is a join deep link (format: join_CODE)
+      if (startPayload && startPayload.startsWith("join_")) {
+        const sessionCode = startPayload.slice(5).toUpperCase(); // Remove "join_" prefix
+        console.log("[Bot] Join deep link detected, code:", sessionCode);
+        
+        // Find the session by code
+        const allSessions = await prisma.session.findMany({
+          where: {
+            status: { in: ["lobby", "recording"] },
+          },
+          include: { participants: true },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        });
+        
+        const session = allSessions.find(s => 
+          s.id.slice(-8).toUpperCase() === sessionCode ||
+          s.id.toUpperCase().endsWith(sessionCode.toUpperCase())
+        );
+        
+        if (session) {
+          const webAppUrl = `${config.webappUrl}/s/${session.id}`;
+          console.log("[Bot] Found session, opening:", session.id);
+          
+          await ctx.reply(
+            `🎬 Вас пригласили в игру!\n\n` +
+            `Игроков: ${session.participants.length}/${session.maxPlayers}\n\n` +
+            `Нажмите кнопку, чтобы присоединиться:`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🎮 Присоединиться", web_app: { url: webAppUrl } }],
+                ],
+              },
+            }
+          );
+        } else {
+          // Session not found - show error
+          await ctx.reply(
+            `❌ Игра с кодом ${sessionCode} не найдена или уже закрыта.\n\n` +
+            `Попросите друга прислать новый код.`,
+            { reply_markup: getMainMenuKeyboard(userId) }
+          );
+        }
+      } else if (startPayload) {
+        // Other deep link - treat as session ID (for result viewing)
+        const webAppUrl = `${config.webappUrl}/s/${startPayload}`;
+        console.log("[Bot] Session deep link, opening:", webAppUrl);
+        
         await ctx.reply(welcomeText, {
           reply_markup: {
             inline_keyboard: [
-              [
-                {
-                  text: "🎮 Открыть игру",
-                  web_app: { url: webAppUrl },
-                },
-              ],
+              [{ text: "🎮 Открыть игру", web_app: { url: webAppUrl } }],
             ],
           },
         });

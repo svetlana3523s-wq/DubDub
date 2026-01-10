@@ -13,21 +13,27 @@ export default function HomePage() {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  // Handle deep link join_CODE
+  // Handle deep link join_CODE or startapp parameter
   useEffect(() => {
-    if (!isReady || !initData) return;
+    if (!isReady) return;
 
     const startParam = getStartParam();
     if (!startParam) return;
 
-    // Handle join_CODE format
+    // Handle join_CODE format (from ?startapp=join_CODE)
     if (startParam.startsWith("join_")) {
       const code = startParam.slice(5).toUpperCase(); // Remove "join_" prefix
       if (code) {
+        // Need initData to join - if not available, wait for it
+        if (!initData) {
+          console.log("[Home] join_ detected but no initData yet, waiting...");
+          return; // Effect will re-run when initData becomes available
+        }
         handleJoinByCode(code);
       }
     } else {
       // Handle direct session ID (for viewing results)
+      // This works even without initData initially - the session page will handle auth
       router.push(`/s/${startParam}`);
     }
   }, [isReady, initData]);
