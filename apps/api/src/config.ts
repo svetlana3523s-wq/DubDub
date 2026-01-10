@@ -45,7 +45,7 @@ export const config = {
 
   // Admin
   adminSecretKey: optional("ADMIN_SECRET_KEY", "change-me-in-production"),
-  adminTgUserIds: optional("ADMIN_TG_USER_IDS", "").split(",").filter(Boolean),
+  adminTgUserIds: optional("ADMIN_TG_USER_IDS", "").split(",").map(id => id.trim()).filter(Boolean),
 } as const;
 
 export type Config = typeof config;

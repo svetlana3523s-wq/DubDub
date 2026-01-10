@@ -16,7 +16,7 @@ export async function adminMiddleware(
     });
   }
 
-  const userId = tgUser.id;
+  const userId = String(tgUser.id);
   const isAdmin = config.adminTgUserIds.includes(userId);
 
   if (!isAdmin) {

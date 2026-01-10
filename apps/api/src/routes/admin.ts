@@ -309,7 +309,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authMiddleware] },
     async (request, reply) => {
       const tgUser = (request as any).tgUser;
-      const userId = tgUser?.id || "";
+      const userId = tgUser?.id ? String(tgUser.id) : "";
       const isAdmin = config.adminTgUserIds.includes(userId);
 
       return { isAdmin };
