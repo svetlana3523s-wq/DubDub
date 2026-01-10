@@ -34,6 +34,9 @@ export function PlyrVideoPlayer({
   const [inCueRange, setInCueRange] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  
+  // Track if we've done the initial "fake restart" workaround
+  const hasInitializedRef = useRef(false);
 
   // Refs for accessing current values in timeupdate handler (avoid stale closures)
   const cuesRef = useRef(cues);
@@ -116,7 +119,27 @@ export function PlyrVideoPlayer({
 
     const handlePlay = () => {
       setIsPlaying(true);
-      // WORKAROUND: Apply correct mute immediately when play starts
+      
+      // WORKAROUND: On first play, do a "fake restart" - seek to start and back
+      // This simulates what happens when user manually restarts, which fixes mute intervals
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        const currentPos = player.currentTime || 0;
+        
+        // Quick restart sequence: pause -> seek to 0 -> seek back -> play
+        player.pause();
+        player.currentTime = 0;
+        
+        setTimeout(() => {
+          if (playerRef.current) {
+            playerRef.current.currentTime = currentPos;
+            applyMuteState();
+            playerRef.current.play();
+          }
+        }, 50);
+        return;
+      }
+      
       applyMuteState();
     };
     const handlePause = () => setIsPlaying(false);
@@ -177,6 +200,8 @@ export function PlyrVideoPlayer({
         player.destroy();
         playerRef.current = null;
       }
+      // Reset initialization flag for next mount
+      hasInitializedRef.current = false;
     };
   }, [src, startTime]);
 
