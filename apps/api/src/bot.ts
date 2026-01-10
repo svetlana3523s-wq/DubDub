@@ -3,21 +3,15 @@ import { message } from "telegraf/filters";
 import { config } from "./config.js";
 import { prisma } from "./lib/prisma.js";
 import { storage } from "./lib/storage.js";
+import { botState } from "./lib/bot-state.js";
 import { spawn } from "child_process";
 import { writeFile, unlink, mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
 
-// Категории сцен
-const SCENE_CATEGORIES = ["movies", "memes", "politics"] as const;
-type SceneCategory = typeof SCENE_CATEGORIES[number];
-
-const CATEGORY_LABELS: Record<SceneCategory, string> = {
-  movies: "🎬 Кино/сериалы",
-  memes: "😂 Мемы",
-  politics: "🏛️ Политика",
-};
+// Categories imported from config
+import { SCENE_CATEGORIES, CATEGORY_LABELS, type SceneCategory } from "./config/categories.js";
 
 // Состояние диалога для добавления сцен
 interface PendingScene {
@@ -46,9 +40,7 @@ interface PendingEdit {
   };
 }
 
-const pendingScenes = new Map<number, PendingScene>();
-const pendingEdits = new Map<number, PendingEdit>();
-const pendingJoins = new Map<number, boolean>(); // Track users waiting to join a session
+// Pending states now stored in Redis via botState service (see lib/bot-state.ts)
 
 function isAdmin(userId: number): boolean {
   return config.adminTgUserIds.includes(String(userId));
@@ -466,7 +458,7 @@ export function createBot(): Telegraf {
 2. Нажми "👥 Присоединиться к игре"
 3. Введи код: xxxxxxxxx`;
 
-      pendingJoins.set(userId, true);
+      await botState.setPendingJoin(userId);
       await ctx.reply(instructionText, {
         reply_markup: {
           keyboard: [
@@ -638,10 +630,15 @@ export function createBot(): Telegraf {
   bot.command("cancel", async (ctx) => {
     const userId = ctx.from?.id;
     if (userId) {
-      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId) || pendingJoins.has(userId);
-      pendingScenes.delete(userId);
-      pendingEdits.delete(userId);
-      pendingJoins.delete(userId);
+      const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
+        botState.getPendingScene(userId),
+        botState.getPendingEdit(userId),
+        botState.getPendingJoin(userId),
+      ]);
+      const hadPending = hasPendingScene !== null || hasPendingEdit !== null || hasPendingJoin;
+      
+      await botState.clearAll(userId);
+      
       if (hadPending) {
         await ctx.reply("❌ Операция отменена", {
           reply_markup: mainMenuKeyboard, // Всегда возвращаем главное меню
@@ -682,7 +679,7 @@ export function createBot(): Telegraf {
         return `${i + 1}. *${s.title}*\n   Тайминги: \`${cueStr}\`\n   ID: \`${s.id}\``;
       }).join("\n\n");
 
-      pendingEdits.set(userId, {
+      await botState.setPendingEdit(userId, {
         userId,
         sceneId: "",
         step: "awaiting_sceneId",
@@ -731,7 +728,7 @@ export function createBot(): Telegraf {
       return `${startFrame}-${endFrame}`;
     }).join(", ");
 
-    pendingEdits.set(userId, {
+    await botState.setPendingEdit(userId, {
       userId,
       sceneId: scene.id,
       step: "awaiting_new_cues",
@@ -847,7 +844,7 @@ export function createBot(): Telegraf {
         tmpPath = null;
 
         // Сохраняем состояние (используем fileUrl вместо fileId)
-        pendingScenes.set(userId, {
+        await botState.setPendingScene(userId, {
           userId,
           fileUrl, // Сохраняем URL для последующего скачивания
           duration: Math.round(duration * 10) / 10,
@@ -980,7 +977,7 @@ export function createBot(): Telegraf {
         await unlink(tmpPath).catch(() => {});
 
         // Сохраняем состояние
-        pendingScenes.set(userId, {
+        await botState.setPendingScene(userId, {
           userId,
           fileId: video.file_id,
           duration: Math.round(duration * 10) / 10,
@@ -1035,10 +1032,14 @@ export function createBot(): Telegraf {
 
     // Отмена
     if (text === "❌ Отмена" || text.toLowerCase() === "отмена") {
-      const hadPending = pendingScenes.has(userId) || pendingEdits.has(userId) || pendingJoins.has(userId);
-      pendingScenes.delete(userId);
-      pendingEdits.delete(userId);
-      pendingJoins.delete(userId);
+      const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
+        botState.getPendingScene(userId),
+        botState.getPendingEdit(userId),
+        botState.getPendingJoin(userId),
+      ]);
+      const hadPending = hasPendingScene !== null || hasPendingEdit !== null || hasPendingJoin;
+      
+      await botState.clearAll(userId);
       
       console.log(`[Bot] User ${userId} cancelled operation. Had pending:`, hadPending);
       
@@ -1053,7 +1054,13 @@ export function createBot(): Telegraf {
     }
 
     // Если это админ и текст похож на URL, и нет активного диалога - предлагаем загрузить видео по URL
-    if (userId && isAdmin(userId) && isValidUrl(text) && !pendingScenes.has(userId) && !pendingEdits.has(userId) && !pendingJoins.has(userId)) {
+    const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
+      botState.getPendingScene(userId),
+      botState.getPendingEdit(userId),
+      botState.getPendingJoin(userId),
+    ]);
+    
+    if (userId && isAdmin(userId) && isValidUrl(text) && !hasPendingScene && !hasPendingEdit && !hasPendingJoin) {
       await ctx.reply(
         `🔗 Найдена ссылка на файл!\n\n` +
         `Хочешь загрузить видео по этой ссылке?\n\n` +
@@ -1071,7 +1078,7 @@ export function createBot(): Telegraf {
     }
 
     // Проверяем, есть ли активный диалог редактирования
-    const pendingEdit = pendingEdits.get(userId);
+    const pendingEdit = hasPendingEdit || await botState.getPendingEdit(userId);
     if (pendingEdit) {
       await handleEditDialog(ctx, userId, text, pendingEdit);
       return;
@@ -1079,11 +1086,11 @@ export function createBot(): Telegraf {
 
     // Проверяем, есть ли активный диалог добавления сцены ПЕРЕД проверкой присоединения
     // Это важно, чтобы тайминги обрабатывались правильно
-    let pending = pendingScenes.get(userId);
+    let pending = hasPendingScene || await botState.getPendingScene(userId);
     if (pending) {
       // Есть активный диалог добавления сцены, обрабатываем его (продолжим ниже)
       console.log(`[Bot] User ${userId} has pending scene, step: ${pending.step}`);
-    } else if (pendingJoins.has(userId)) {
+    } else if (hasPendingJoin || await botState.getPendingJoin(userId)) {
       // Только если нет активного диалога добавления сцены, обрабатываем присоединение
       const sessionCode = text.trim().toLowerCase();
       
@@ -1125,7 +1132,7 @@ export function createBot(): Telegraf {
         console.log("[Bot] Found by suffix:", session ? session.id : "none");
       }
 
-      pendingJoins.delete(userId);
+      await botState.deletePendingJoin(userId);
       
       console.log("[Bot] Session search result:", session ? { id: session.id, status: session.status, participants: session.participants.length } : "not found");
 
@@ -1232,7 +1239,7 @@ export function createBot(): Telegraf {
     // Обработка диалога добавления сцены (если pending уже определен выше)
     // Переопределяем pending на случай, если он был определен выше, но мог быть изменен
     if (!pending) {
-      pending = pendingScenes.get(userId);
+      pending = await botState.getPendingScene(userId);
     }
     
     if (!pending) {
@@ -1246,7 +1253,7 @@ export function createBot(): Telegraf {
     if (pending.step === "awaiting_title") {
       pending.title = text.trim();
       pending.step = "awaiting_category";
-      pendingScenes.set(userId, pending);
+      await botState.setPendingScene(userId, pending);
 
       await ctx.reply(
         `👍 Название: "${pending.title}"\n\n` +
@@ -1287,7 +1294,7 @@ export function createBot(): Telegraf {
 
       pending.category = category;
       pending.step = "awaiting_cues";
-      pendingScenes.set(userId, pending);
+      await botState.setPendingScene(userId, pending);
       
       console.log(`[Bot] Category selected, pending saved:`, { step: pending.step, category: pending.category, userId });
 
@@ -1312,7 +1319,7 @@ export function createBot(): Telegraf {
       );
       
       // Проверяем, что состояние сохранилось
-      const savedPending = pendingScenes.get(userId);
+      const savedPending = await botState.getPendingScene(userId);
       console.log(`[Bot] Pending after save:`, savedPending ? { step: savedPending.step, category: savedPending.category } : "null");
       
       return;
@@ -1409,7 +1416,7 @@ export function createBot(): Telegraf {
         });
 
         // Очищаем состояние
-        pendingScenes.delete(userId);
+        await botState.deletePendingScene(userId);
 
         // Показываем и кадры и секунды
         const fps = pending.fps;
@@ -1432,7 +1439,7 @@ export function createBot(): Telegraf {
 
       } catch (err) {
         console.error("Scene upload error:", err);
-        pendingScenes.delete(userId);
+        await botState.deletePendingScene(userId);
         await ctx.reply(
           "❌ Ошибка загрузки. Попробуй ещё раз.",
           { reply_markup: { remove_keyboard: true } }
@@ -1492,7 +1499,7 @@ export function createBot(): Telegraf {
           },
         });
 
-        pendingEdits.delete(userId);
+        await botState.deletePendingEdit(userId);
 
         // Показываем и кадры и секунды
         const fps = pendingEdit.scene.fps;
@@ -1512,7 +1519,7 @@ export function createBot(): Telegraf {
 
       } catch (err) {
         console.error("Cue update error:", err);
-        pendingEdits.delete(userId);
+        await botState.deletePendingEdit(userId);
         await ctx.reply(
           "❌ Ошибка обновления. Попробуй ещё раз.",
           { reply_markup: { remove_keyboard: true } }

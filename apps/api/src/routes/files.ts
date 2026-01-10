@@ -99,13 +99,16 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Send video to user via Telegram bot
+  // Send video to user via Telegram bot (using URL for faster delivery, like channel)
   fastify.post<{ Params: { sessionId: string } }>(
     "/files/renders/:sessionId/send-to-telegram",
     { preHandler: authMiddleware },
     async (request, reply) => {
       const { sessionId } = request.params;
       const user = request.tgUser;
+
+      // Respond immediately to prevent timeout on client
+      reply.code(200).send({ sent: true });
 
       try {
         // Check render exists and is ready
@@ -115,36 +118,82 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!render || render.status !== "ready" || !render.s3Key) {
-          return reply.status(404).send({ error: "Render not ready" });
+          console.error(`[SendVideo] Render not ready for session ${sessionId}`);
+          // Send error message to user
+          try {
+            const chatId = parseInt(user.id, 10);
+            await bot.telegram.sendMessage(
+              chatId,
+              "❌ Видео ещё не готово. Попробуйте позже."
+            );
+          } catch (msgErr) {
+            console.error("[SendVideo] Failed to send error message:", msgErr);
+          }
+          return;
         }
 
-        // Download video from S3
-        const videoBuffer = await storage.download(render.s3Key);
-
-        // Send video via Telegram (user.id is string, need to convert to number)
+        console.log(`[SendVideo] Sending video via URL to ${user.id}`);
+        
+        // Use URL instead of Buffer for faster delivery (same as channel notification)
+        const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
         const chatId = parseInt(user.id, 10);
-        await bot.telegram.sendVideo(
-          chatId,
-          { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
-          {
-            caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-            supports_streaming: true,
-            reply_markup: {
-              keyboard: [
-                [{ text: "🎭 Начать игру" }],
-                [{ text: "👥 Присоединиться к игре" }],
-                [{ text: "💡 Предложить эпизод" }],
-              ],
-              resize_keyboard: true,
-              is_persistent: true,
-            },
-          }
-        );
+        
+        try {
+          await bot.telegram.sendVideo(
+            chatId,
+            { url: videoUrl },
+            {
+              caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
+              supports_streaming: true,
+              reply_markup: {
+                keyboard: [
+                  [{ text: "🎭 Начать игру" }],
+                  [{ text: "👥 Присоединиться к игре" }],
+                  [{ text: "💡 Предложить эпизод" }],
+                ],
+                resize_keyboard: true,
+                is_persistent: true,
+              },
+            }
+          );
 
-        return { sent: true };
-      } catch (err) {
-        console.error("Send to Telegram error:", err);
-        return reply.status(500).send({ error: "Failed to send video" });
+          console.log(`[SendVideo] Successfully sent video to ${chatId} via URL`);
+        } catch (sendErr: any) {
+          console.error(`[SendVideo] Failed to send via URL:`, sendErr.message || sendErr);
+          // Fallback: try with Buffer if URL method fails
+          console.log(`[SendVideo] Falling back to Buffer method...`);
+          const videoBuffer = await storage.download(render.s3Key);
+          await bot.telegram.sendVideo(
+            chatId,
+            { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
+            {
+              caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
+              supports_streaming: true,
+              reply_markup: {
+                keyboard: [
+                  [{ text: "🎭 Начать игру" }],
+                  [{ text: "👥 Присоединиться к игре" }],
+                  [{ text: "💡 Предложить эпизод" }],
+                ],
+                resize_keyboard: true,
+                is_persistent: true,
+              },
+            }
+          );
+          console.log(`[SendVideo] Successfully sent video to ${chatId} via Buffer fallback`);
+        }
+      } catch (err: any) {
+        console.error("[SendVideo] Unexpected error:", err);
+        // Try to notify user about error
+        try {
+          const chatId = parseInt(user.id, 10);
+          await bot.telegram.sendMessage(
+            chatId,
+            "❌ Произошла ошибка при отправке видео. Попробуйте позже."
+          );
+        } catch (msgErr) {
+          console.error("[SendVideo] Failed to send error message:", msgErr);
+        }
       }
     }
   );

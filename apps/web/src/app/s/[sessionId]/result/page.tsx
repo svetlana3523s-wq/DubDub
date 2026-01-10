@@ -20,6 +20,7 @@ export default function ResultPage({ params }: PageProps) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
+  const [showNewSceneConfirm, setShowNewSceneConfirm] = useState<"sameScene" | "newScene" | null>(null);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -57,14 +58,24 @@ export default function ResultPage({ params }: PageProps) {
     return () => clearInterval(interval);
   }, [isReady, initData, sessionId]);
 
-  const handleReplay = async (mode: "sameScene" | "newScene") => {
+  const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
     if (!initData || replaying) return;
+    
+    // Show confirmation only if video was NOT sent
+    if (!sent && !skipConfirm) {
+      setShowNewSceneConfirm(mode);
+      return;
+    }
     
     setReplaying(mode);
     try {
       // Replay session (resets takes and render, updates session)
       await api.replaySession(initData, sessionId, mode);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      
+      // Reset sent state for new game
+      setSent(false);
+      setShowNewSceneConfirm(null);
       
       // Navigate back to session page (will show lobby/recording state)
       router.push(`/s/${sessionId}`);
@@ -73,6 +84,7 @@ export default function ResultPage({ params }: PageProps) {
       console.error("Replay failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       setReplaying(null);
+      setShowNewSceneConfirm(null);
     }
   };
 
@@ -84,11 +96,7 @@ export default function ResultPage({ params }: PageProps) {
       await api.sendVideoToTelegram(initData, sessionId);
       setSent(true);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-      
-      // Close mini app after short delay to show the video in chat
-      setTimeout(() => {
-        window.Telegram?.WebApp?.close();
-      }, 1500);
+      // Don't close mini app - let user continue playing
     } catch (err) {
       console.error("Send failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -96,6 +104,8 @@ export default function ResultPage({ params }: PageProps) {
       setSending(false);
     }
   };
+
+  // Auto-send is disabled - user must click button to send
 
   if (loading || !isReady) {
     return (
@@ -230,7 +240,39 @@ export default function ResultPage({ params }: PageProps) {
               )}
             </button>
           </div>
+
         </div>
+
+        {/* Replay Confirmation Dialog */}
+        {showNewSceneConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
+            <div className="card max-w-sm w-full space-y-4 animate-slide-up">
+              <div className="text-center">
+                <div className="text-4xl mb-3">⚠️</div>
+                <h3 className="text-lg font-bold mb-2">
+                  {showNewSceneConfirm === "newScene" ? "Новая сцена" : "Еще раз"}
+                </h3>
+                <p className="text-sm text-tg-hint">
+                  Текущее видео не сохранится. Вы уверены, что хотите начать новую игру?
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowNewSceneConfirm(null)}
+                  className="btn-secondary"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={() => handleReplay(showNewSceneConfirm, true)}
+                  className="btn-primary"
+                >
+                  ОК
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

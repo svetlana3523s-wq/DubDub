@@ -16,55 +16,17 @@ import {
   type Cue,
   type Category,
   type GameMode,
+  type SessionStatus,
+  parseCuesFromJson,
 } from "@dubdub/shared";
 import { spawn } from "child_process";
 import { promisify } from "util";
 import { pipeline as pipelineCallback } from "stream";
+import { getRandomTask } from "../config/tasks.js";
 
 const pipeline = promisify(pipelineCallback);
 
-// Tasks for "tasks" game mode
-const TASKS = [
-  "Озвучь в стиле ужастиков категории Б",
-  "Озвучь КРАЙНЕ эмоционально",
-  "Озвучь с кавказским акцентом",
-  "Озвучь используя самое необычное нецензурное слово которое ты знаешь",
-  "Озвучь в стиле укурыша",
-  "Озвучь в стиле гоблина",
-  "Озвучь издавая звуки животного",
-  "Озвучь страстно",
-  "Озвучь пошло",
-  "Озвучь голосом монстра",
-  "Озвучь в стиле Гитлера",
-];
-
-function getRandomTask(): string {
-  return TASKS[Math.floor(Math.random() * TASKS.length)] ?? TASKS[0]!;
-}
-
-/**
- * Parse cueJson - supports both old format (seconds) and new format (frames)
- */
-function parseCuesFromJson(cueJson: string, fps: number): Cue[] {
-  const raw = JSON.parse(cueJson) as any[];
-  
-  return raw.map((cue) => {
-    // New format: frames
-    if ('startFrame' in cue) {
-      return {
-        roleIndex: cue.roleIndex,
-        startSec: cue.startFrame / fps,
-        durationSec: cue.durationFrames / fps,
-      };
-    }
-    // Old format: seconds (backwards compatibility)
-    return {
-      roleIndex: cue.roleIndex,
-      startSec: cue.startSec,
-      durationSec: cue.durationSec,
-    };
-  });
-}
+// parseCuesFromJson now imported from @dubdub/shared
 
 function buildSceneMeta(scene: {
   id: string;
@@ -124,9 +86,13 @@ async function trimAudio(
   maxDurationSec: number
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    // Use sample-accurate atrim filter instead of -t for precision
+    // atrim=start=0:duration=X - exact duration trimming
+    // asetpts=PTS-STARTPTS - reset timestamps after trim for correct sync
     const ffmpeg = spawn("ffmpeg", [
       "-i", "pipe:0",
-      "-t", String(maxDurationSec),
+      "-ss", "0",  // Explicit start at 0
+      "-af", `atrim=start=0:duration=${maxDurationSec},asetpts=PTS-STARTPTS`,
       "-c:a", "libopus",
       "-b:a", "128k",  // High quality opus
       "-ar", "48000",  // 48kHz sample rate
@@ -135,16 +101,24 @@ async function trimAudio(
     ]);
 
     const chunks: Buffer[] = [];
+    let stderrOutput = "";
 
     ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
-    ffmpeg.stderr.on("data", () => {}); // Ignore stderr
+    ffmpeg.stderr.on("data", (data) => {
+      stderrOutput += data.toString();
+    });
 
     ffmpeg.on("close", (code) => {
       if (code === 0) {
         resolve(Buffer.concat(chunks));
       } else {
-        reject(new Error(`ffmpeg trim failed with code ${code}`));
+        console.error(`[TrimAudio] FFmpeg stderr:`, stderrOutput);
+        reject(new Error(`ffmpeg trim failed with code ${code}: ${stderrOutput.substring(0, 200)}`));
       }
+    });
+
+    ffmpeg.on("error", (err) => {
+      reject(new Error(`ffmpeg spawn error: ${err.message}`));
     });
 
     ffmpeg.stdin.write(inputBuffer);
@@ -473,7 +447,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const takeRoleIndex = isSolo ? currentTurn : participant.roleIndex;
 
       // Get cue duration for this role
-      const cue = sceneCues.find(c => c.roleIndex === takeRoleIndex);
+      const cue = sceneCues.find((c: Cue) => c.roleIndex === takeRoleIndex);
       const cueDuration = cue?.durationSec || 5;
       console.log("[Take] Cue duration for role", takeRoleIndex, ":", cueDuration);
 
@@ -535,18 +509,33 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       console.log("[Take] Final duration:", durationSec);
 
-      // Upload to S3
+      // Upload to S3 and create take record in transaction to prevent race conditions
       const s3Key = storage.keys.upload(id, takeRoleIndex);
-      await storage.upload(s3Key, finalAudioBuffer, "audio/webm");
-
-      // Create take record
-      await prisma.take.create({
-        data: {
-          sessionId: id,
-          roleIndex: takeRoleIndex,
-          s3Key,
-          durationSec,
-        },
+      
+      await prisma.$transaction(async (tx) => {
+        // Upload to S3 first
+        await storage.upload(s3Key, finalAudioBuffer, "audio/webm");
+        
+        // Then create or update take record (upsert prevents duplicates)
+        await tx.take.upsert({
+          where: {
+            sessionId_roleIndex: {
+              sessionId: id,
+              roleIndex: takeRoleIndex,
+            },
+          },
+          create: {
+            sessionId: id,
+            roleIndex: takeRoleIndex,
+            s3Key,
+            durationSec,
+          },
+          update: {
+            s3Key,
+            durationSec,
+            createdAt: new Date(), // Update timestamp on retake
+          },
+        });
       });
 
       console.log("[Take] Saved take for role:", takeRoleIndex);
@@ -758,6 +747,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           // Update participants with new roleIndex
           for (let i = 0; i < shuffledParticipants.length; i++) {
             const p = shuffledParticipants[i];
+            if (!p) continue;
             if (i < 2) { // Only first 2 players (maxPlayers should be 2)
               await tx.participant.update({
                 where: { id: p.id },
@@ -815,16 +805,15 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           id: updatedSession.id,
           category: updatedSession.category as Category,
           gameMode: updatedSession.gameMode as GameMode,
-          task: updatedSession.task || undefined,
-          status: updatedSession.status,
+          task: updatedSession.task ?? null,
+          status: updatedSession.status as SessionStatus,
           maxPlayers: updatedSession.maxPlayers,
           createdByTgUserId: updatedSession.createdByTgUserId,
           sceneMeta,
-          sceneUrl,
         },
         participants: updatedSession.participants.map((p) => ({
           id: p.id,
-          tgUserId: p.tgUserId,
+          tgUserId: p.tgUserId ?? null,
           displayName: p.displayName,
           roleIndex: p.roleIndex,
         })),

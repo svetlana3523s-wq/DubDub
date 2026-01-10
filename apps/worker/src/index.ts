@@ -5,6 +5,7 @@ import { Telegraf } from "telegraf";
 import { renderVideo } from "./render.js";
 import { config } from "./config.js";
 import type { Cue } from "@dubdub/shared";
+import { parseCuesFromJson } from "@dubdub/shared";
 
 const prisma = new PrismaClient();
 const bot = new Telegraf(config.botToken);
@@ -44,24 +45,8 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
     }
 
     // Parse cues and convert from frames to seconds if needed
-    const rawCues = JSON.parse(session.scene.cueJson);
     const fps = session.scene.fps;
-    const cues: Cue[] = rawCues.map((cue: any) => {
-      // If cue has startFrame, convert from frames to seconds
-      if ('startFrame' in cue && typeof cue.startFrame === 'number') {
-        return {
-          roleIndex: cue.roleIndex,
-          startSec: cue.startFrame / fps,
-          durationSec: cue.durationFrames / fps,
-        };
-      }
-      // Otherwise assume it's already in seconds
-      return {
-        roleIndex: cue.roleIndex,
-        startSec: cue.startSec,
-        durationSec: cue.durationSec,
-      };
-    });
+    const cues: Cue[] = parseCuesFromJson(session.scene.cueJson, fps);
 
     console.log(`[${sessionId}] Parsed ${cues.length} cues, FPS: ${fps}`);
 

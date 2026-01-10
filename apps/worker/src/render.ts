@@ -179,11 +179,19 @@ export async function renderVideo(input: RenderInput): Promise<string> {
         continue;
       }
 
+      // Validate cue duration for accurate trimming
+      if (!cue.durationSec || typeof cue.durationSec !== 'number' || cue.durationSec <= 0) {
+        console.warn(`[${sessionId}] Invalid cue duration for take ${take.roleIndex}:`, cue.durationSec);
+        continue;
+      }
+
       // 1. Resample to 48kHz for quality
-      // 2. Boost volume (recorded audio is usually quiet)
-      // 3. Apply limiter to prevent clipping
-      // 4. Delay to sync with cue timing
-      filterComplex += `[${i + 1}:a]aresample=48000,volume=3.0,alimiter=limit=0.95,adelay=${delayMs}|${delayMs}[dub${i}];`;
+      // 2. Trim to exact cue duration (sample-accurate)
+      // 3. Reset PTS after trim for correct sync
+      // 4. Boost volume (recorded audio is usually quiet)
+      // 5. Apply limiter to prevent clipping
+      // 6. Delay to sync with cue timing
+      filterComplex += `[${i + 1}:a]aresample=48000,atrim=start=0:duration=${cue.durationSec},asetpts=PTS-STARTPTS,volume=3.0,alimiter=limit=0.95,adelay=${delayMs}|${delayMs}[dub${i}];`;
       audioMixParts.push(`[dub${i}]`);
     }
 
