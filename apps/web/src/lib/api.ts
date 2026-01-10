@@ -159,7 +159,14 @@ export const api = {
     initData: string,
     formData: FormData
   ): Promise<{ success: true; sceneId: string }> => {
+    console.log("[API] Upload scene: API_URL =", API_URL);
+    console.log("[API] Upload scene: initData length =", initData?.length);
+    console.log("[API] Upload scene: FormData entries:", Array.from(formData.entries()).map(([k, v]) => [k, v instanceof File ? `${v.name} (${(v.size / 1024 / 1024).toFixed(2)}MB)` : String(v).substring(0, 100)]));
+    
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
+      
       const res = await fetch(`${API_URL}/admin/scenes`, {
         method: "POST",
         headers: {
@@ -167,7 +174,12 @@ export const api = {
           // Don't set Content-Type - browser will set multipart/form-data with boundary
         },
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+
+      console.log("[API] Upload scene response status:", res.status);
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "");
@@ -177,16 +189,21 @@ export const api = {
         } catch {
           errorData = { error: errorText || `HTTP ${res.status}` };
         }
+        console.error("[API] Upload scene error:", errorData);
         throw new ApiError(errorData.error || `HTTP ${res.status}`, errorData.code, res.status);
       }
 
       const data = await res.json();
+      console.log("[API] Upload scene success:", data);
       return data;
     } catch (err) {
       if (err instanceof ApiError) {
         throw err;
       }
-      console.error("Upload scene error:", err);
+      console.error("[API] Upload scene network error:", err);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new ApiError("Request timeout. File may be too large.", "TIMEOUT");
+      }
       throw new ApiError(
         err instanceof Error ? err.message : "Failed to upload scene",
         "NETWORK_ERROR"
