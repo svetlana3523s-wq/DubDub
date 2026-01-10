@@ -191,21 +191,48 @@ export function CueEditor({ videoUrl, videoDuration, fps, cues, onChange }: CueE
 
           {/* Time Slider */}
           <div className="space-y-1">
-            <input
-              type="range"
-              min={0}
-              max={videoDuration}
-              step={0.1}
-              value={currentTime}
-              onChange={(e) => handleSeek(parseFloat(e.target.value))}
-              className="w-full h-2 bg-tg-secondary rounded-lg appearance-none cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, #3390ec 0%, #3390ec ${(currentTime / videoDuration) * 100}%, #e5e5e5 ${(currentTime / videoDuration) * 100}%, #e5e5e5 100%)`,
-              }}
-            />
+            <div className="flex items-center gap-2">
+              {/* Frame backward button */}
+              <button
+                onClick={() => {
+                  const frameDuration = 1 / fps;
+                  handleSeek(Math.max(0, currentTime - frameDuration));
+                }}
+                className="px-3 py-1.5 rounded-lg bg-tg-secondary hover:bg-tg-border transition-colors text-sm font-medium"
+                title="Кадр назад"
+              >
+                ⏪
+              </button>
+              
+              {/* Time slider */}
+              <input
+                type="range"
+                min={0}
+                max={videoDuration}
+                step={0.005}
+                value={currentTime}
+                onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                className="flex-1 h-2 bg-tg-secondary rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #3390ec 0%, #3390ec ${(currentTime / videoDuration) * 100}%, #e5e5e5 ${(currentTime / videoDuration) * 100}%, #e5e5e5 100%)`,
+                }}
+              />
+              
+              {/* Frame forward button */}
+              <button
+                onClick={() => {
+                  const frameDuration = 1 / fps;
+                  handleSeek(Math.min(videoDuration, currentTime + frameDuration));
+                }}
+                className="px-3 py-1.5 rounded-lg bg-tg-secondary hover:bg-tg-border transition-colors text-sm font-medium"
+                title="Кадр вперед"
+              >
+                ⏩
+              </button>
+            </div>
             <div className="flex justify-between text-xs text-tg-hint">
-              <span>{currentTime.toFixed(2)}s</span>
-              <span>{videoDuration.toFixed(2)}s</span>
+              <span>{currentTime.toFixed(3)}s</span>
+              <span>{videoDuration.toFixed(3)}s</span>
             </div>
           </div>
 
