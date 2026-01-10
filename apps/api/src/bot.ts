@@ -580,7 +580,7 @@ export function createBot(): Telegraf {
             web_app: { url: config.webappUrl },
           },
         ],
-      ] as Array<Array<{ text: string; web_app?: { url: string }; url?: string }>>,
+      ],
     };
 
     // Add admin panel button for admins
