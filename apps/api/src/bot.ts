@@ -685,6 +685,29 @@ export function createBot(): Telegraf {
     }
   });
 
+  // Handle "Admin panel" button
+  bot.hears("👑 Админ-панель", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId || !isAdmin(userId)) {
+      return ctx.reply("⛔ Нет доступа", {
+        reply_markup: getMainMenuKeyboard(userId),
+      });
+    }
+
+    await ctx.reply("Открываю админ-панель...", {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "👑 Админ-панель",
+              web_app: { url: `${config.webappUrl}/admin/scenes` },
+            },
+          ],
+        ],
+      },
+    });
+  });
+
   // /edit_cues - редактирование таймингов сцены (только админ)
   bot.command("edit_cues", async (ctx) => {
     const userId = ctx.from?.id;
