@@ -18,6 +18,21 @@ export function CueEditor({ videoUrl, videoDuration, fps, cues, onChange }: CueE
   const [editingCueIndex, setEditingCueIndex] = useState<number | null>(null);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null);
+  
+  // Frame-based inputs for selection
+  const [startFrame, setStartFrame] = useState<string>("");
+  const [endFrame, setEndFrame] = useState<string>("");
+
+  // Helper functions for frame/seconds conversion
+  const secondsToFrames = (seconds: number): number => {
+    return Math.round(seconds * fps);
+  };
+
+  const framesToSeconds = (frames: number): number => {
+    return frames / fps;
+  };
+
+  const totalFrames = secondsToFrames(videoDuration);
 
   // Update current time from video
   useEffect(() => {
@@ -89,17 +104,58 @@ export function CueEditor({ videoUrl, videoDuration, fps, cues, onChange }: CueE
 
   const setStartTime = () => {
     setSelectionStart(currentTime);
+    setStartFrame(String(secondsToFrames(currentTime)));
     if (selectionEnd !== null && currentTime > selectionEnd) {
       setSelectionEnd(null);
+      setEndFrame("");
     }
   };
 
   const setEndTime = () => {
     if (selectionStart === null) {
       setSelectionStart(0);
+      setStartFrame("0");
     }
     setSelectionEnd(currentTime);
+    setEndFrame(String(secondsToFrames(currentTime)));
   };
+
+  // Update selection from frame inputs
+  const handleStartFrameChange = (value: string) => {
+    setStartFrame(value);
+    const frame = parseInt(value);
+    if (!isNaN(frame) && frame >= 0) {
+      const seconds = framesToSeconds(frame);
+      if (seconds <= videoDuration) {
+        setSelectionStart(seconds);
+        handleSeek(seconds);
+      }
+    }
+  };
+
+  const handleEndFrameChange = (value: string) => {
+    setEndFrame(value);
+    const frame = parseInt(value);
+    if (!isNaN(frame) && frame >= 0) {
+      const seconds = framesToSeconds(frame);
+      if (seconds <= videoDuration) {
+        setSelectionEnd(seconds);
+      }
+    }
+  };
+
+  // Update frame inputs when selection changes from buttons
+  useEffect(() => {
+    if (selectionStart !== null) {
+      setStartFrame(String(secondsToFrames(selectionStart)));
+    }
+  }, [selectionStart, fps]);
+
+  useEffect(() => {
+    if (selectionEnd !== null) {
+      setEndFrame(String(secondsToFrames(selectionEnd)));
+    }
+  }, [selectionEnd, fps]);
 
   const addCueFromSelection = () => {
     const start = selectionStart ?? 0;
@@ -190,7 +246,7 @@ export function CueEditor({ videoUrl, videoDuration, fps, cues, onChange }: CueE
           </div>
 
           {/* Time Slider */}
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               {/* Frame backward button */}
               <button
@@ -209,7 +265,7 @@ export function CueEditor({ videoUrl, videoDuration, fps, cues, onChange }: CueE
                 type="range"
                 min={0}
                 max={videoDuration}
-                step={0.005}
+                step={1 / fps}
                 value={currentTime}
                 onChange={(e) => handleSeek(parseFloat(e.target.value))}
                 className="flex-1 h-2 bg-tg-secondary rounded-lg appearance-none cursor-pointer"
@@ -231,31 +287,75 @@ export function CueEditor({ videoUrl, videoDuration, fps, cues, onChange }: CueE
               </button>
             </div>
             <div className="flex justify-between text-xs text-tg-hint">
-              <span>{currentTime.toFixed(3)}s</span>
-              <span>{videoDuration.toFixed(3)}s</span>
+              <span>Кадр {secondsToFrames(currentTime)} / {totalFrames}</span>
+              <span>{currentTime.toFixed(3)}s / {videoDuration.toFixed(3)}s</span>
+            </div>
+          </div>
+
+          {/* Frame Inputs */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-tg-hint mb-1 block">Начало (кадр)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={totalFrames}
+                  value={startFrame}
+                  onChange={(e) => handleStartFrameChange(e.target.value)}
+                  placeholder="0"
+                  className="flex-1 px-2 py-1.5 rounded bg-tg-secondary text-sm border border-tg-border focus:ring-2 focus:ring-accent-primary focus:border-transparent"
+                />
+                <button
+                  onClick={setStartTime}
+                  className="px-3 py-1.5 rounded-lg bg-tg-secondary hover:bg-tg-border transition-colors text-sm"
+                  title="Установить из текущей позиции"
+                >
+                  📍
+                </button>
+              </div>
+              {selectionStart !== null && (
+                <div className="text-xs text-tg-hint mt-1">
+                  {selectionStart.toFixed(3)}s
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-tg-hint mb-1 block">Конец (кадр)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={totalFrames}
+                  value={endFrame}
+                  onChange={(e) => handleEndFrameChange(e.target.value)}
+                  placeholder="0"
+                  className="flex-1 px-2 py-1.5 rounded bg-tg-secondary text-sm border border-tg-border focus:ring-2 focus:ring-accent-primary focus:border-transparent"
+                />
+                <button
+                  onClick={setEndTime}
+                  className="px-3 py-1.5 rounded-lg bg-tg-secondary hover:bg-tg-border transition-colors text-sm"
+                  title="Установить из текущей позиции"
+                >
+                  📍
+                </button>
+              </div>
+              {selectionEnd !== null && (
+                <div className="text-xs text-tg-hint mt-1">
+                  {selectionEnd.toFixed(3)}s
+                </div>
+              )}
             </div>
           </div>
 
           {/* Selection Controls */}
           <div className="flex gap-2">
             <button
-              onClick={setStartTime}
-              className="flex-1 btn-tg text-sm"
-            >
-              ⏱ Начало: {selectionStart !== null ? selectionStart.toFixed(2) + "s" : "—"}
-            </button>
-            <button
-              onClick={setEndTime}
-              className="flex-1 btn-tg text-sm"
-            >
-              ⏱ Конец: {selectionEnd !== null ? selectionEnd.toFixed(2) + "s" : "—"}
-            </button>
-            <button
               onClick={addCueFromSelection}
               disabled={selectionStart === null || selectionEnd === null}
-              className="flex-1 btn-tg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 btn-tg-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ➕ Добавить
+              ➕ Добавить реплику
             </button>
           </div>
         </div>
