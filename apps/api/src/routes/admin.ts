@@ -425,18 +425,23 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const parts = request.parts();
         for await (const part of parts) {
           console.log("[Admin] Processing part:", { type: part.type, fieldname: part.fieldname });
-        if (part.type === "file") {
-          videoFile = part;
-        } else if (part.type === "field") {
-          if (part.fieldname === "title") {
-            title = String(part.value || "").trim();
-          } else if (part.fieldname === "category") {
-            category = String(part.value || "memes").trim();
-          } else if (part.fieldname === "cues") {
-            cuesJson = String(part.value || "").trim();
+          if (part.type === "file") {
+            videoFile = part;
+          } else if (part.type === "field") {
+            if (part.fieldname === "title") {
+              title = String(part.value || "").trim();
+              console.log("[Admin] Title:", title);
+            } else if (part.fieldname === "category") {
+              category = String(part.value || "memes").trim();
+              console.log("[Admin] Category:", category);
+            } else if (part.fieldname === "cues") {
+              cuesJson = String(part.value || "").trim();
+              console.log("[Admin] Cues JSON length:", cuesJson.length);
+            }
           }
         }
-      }
+
+        console.log("[Admin] Form data parsed. Video file:", !!videoFile, "Title:", title, "Category:", category);
 
       if (!videoFile) {
         return reply.status(400).send({ error: "No video file provided" });
