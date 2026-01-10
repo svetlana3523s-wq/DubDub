@@ -413,14 +413,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     "/admin/scenes",
     { preHandler: [authMiddleware, adminMiddleware] },
     async (request, reply) => {
+      console.log("[Admin] POST /admin/scenes received");
       let videoFile: any = null;
       let title = "";
       let category = "memes";
       let cuesJson = "";
 
-      // Parse multipart form data
-      const parts = request.parts();
-      for await (const part of parts) {
+      try {
+        // Parse multipart form data
+        console.log("[Admin] Parsing multipart form data...");
+        const parts = request.parts();
+        for await (const part of parts) {
+          console.log("[Admin] Processing part:", { type: part.type, fieldname: part.fieldname });
         if (part.type === "file") {
           videoFile = part;
         } else if (part.type === "field") {
@@ -456,12 +460,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: "Invalid cues JSON format" });
       }
 
-      // Read video file to buffer
-      const chunks: Buffer[] = [];
-      for await (const chunk of videoFile.file) {
-        chunks.push(chunk);
-      }
-      const videoBuffer = Buffer.concat(chunks);
+        // Read video file to buffer
+        console.log("[Admin] Reading video file to buffer...");
+        const chunks: Buffer[] = [];
+        for await (const chunk of videoFile.file) {
+          chunks.push(chunk);
+        }
+        const videoBuffer = Buffer.concat(chunks);
+        console.log("[Admin] Video buffer size:", (videoBuffer.length / (1024 * 1024)).toFixed(2), "MB");
 
       // Save to temp file for ffprobe
       const tmpDir = path.join(os.tmpdir(), "dubdub-uploads");
