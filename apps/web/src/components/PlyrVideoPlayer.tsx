@@ -155,18 +155,25 @@ export function PlyrVideoPlayer({
     };
   }, [src, startTime]);
 
-  // Update muted state when audio mode changes
+  // WORKAROUND: Immediately apply correct mute state when player is ready and cues are available
+  // This fixes the race condition where timeupdate hasn't fired yet
   useEffect(() => {
+    const player = playerRef.current;
     const video = videoRef.current;
-    if (!video) return;
+    if (!player || !video || loadState !== "ready") return;
 
-    if (audioMode === "original") {
+    if (audioMode === "with-cuts" && cues.length > 0) {
+      const currentTime = player.currentTime || 0;
+      const nowInCue = checkInCueRange(currentTime, cues);
+      setInCueRange(nowInCue);
+      video.muted = nowInCue || muted;
+    } else if (audioMode === "original") {
       video.muted = muted;
       setInCueRange(false);
     }
-  }, [audioMode, muted]);
+  }, [loadState, cues, audioMode, muted]);
 
-  // Update muted prop
+  // Update muted prop when in original mode
   useEffect(() => {
     const video = videoRef.current;
     if (!video || audioMode === "with-cuts") return;
