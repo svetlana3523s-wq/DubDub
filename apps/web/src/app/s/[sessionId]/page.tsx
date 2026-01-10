@@ -321,12 +321,22 @@ export default function SessionPage({ params }: PageProps) {
   // Error
   if (viewState === "error") {
     const isAuthError = error?.includes("авторизации") || error?.includes("initData");
+    const tgAvailable = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+    
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
           <div className="text-5xl">😕</div>
           <h2 className="text-xl font-bold">Ошибка</h2>
           <p className="text-tg-hint">{error}</p>
+          
+          {/* Diagnostic info */}
+          <div className="text-xs text-tg-hint bg-tg-secondary p-2 rounded">
+            <p>TG WebApp: {tgAvailable ? '✅' : '❌'}</p>
+            <p>initData: {initData ? '✅' : '❌'}</p>
+            <p>Session: {sessionId.slice(-8)}</p>
+          </div>
+          
           <div className="flex flex-col gap-2">
             {isAuthError && (
               <>
