@@ -261,7 +261,7 @@ export default function AdminSceneEditPage() {
             Отмена
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => handleDelete()}
             className="px-4 py-2 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors"
           >
             🗑 Удалить
