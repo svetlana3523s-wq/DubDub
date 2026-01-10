@@ -44,8 +44,10 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   };
 
   const handleSendToFriend = () => {
-    // Share only text without URL preview - use text parameter only
-    const shareUrl = `https://t.me/share/url?text=${encodeURIComponent(shareText)}`;
+    // Telegram share requires url parameter, but we make text the focus
+    // The url will show as a small preview at the bottom
+    const botLink = `https://t.me/${botUsername}`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=${encodeURIComponent(shareText)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(shareUrl);
     } else {
