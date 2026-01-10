@@ -420,23 +420,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       let cuesJson = "";
 
       try {
-        // Parse multipart form data
-        console.log("[Admin] Parsing multipart form data...");
+        // Use request.file() for video file (streaming)
+        console.log("[Admin] Getting video file...");
+        videoFile = await request.file();
+        if (!videoFile) {
+          console.log("[Admin] No video file in request");
+          return reply.status(400).send({ error: "No video file provided" });
+        }
+        console.log("[Admin] Video file received:", {
+          filename: videoFile.filename,
+          encoding: videoFile.encoding,
+          mimetype: videoFile.mimetype,
+        });
+
+        // Parse form fields from body (they come after the file in multipart)
+        console.log("[Admin] Parsing form fields...");
         const parts = request.parts();
-        let partCount = 0;
         for await (const part of parts) {
-          partCount++;
-          console.log(`[Admin] Processing part #${partCount}:`, { type: part.type, fieldname: part.fieldname });
-          if (part.type === "file") {
-            videoFile = part;
-            console.log("[Admin] Video file part received:", {
-              filename: videoFile.filename,
-              encoding: videoFile.encoding,
-              mimetype: videoFile.mimetype,
-            });
-            // IMPORTANT: Don't read the file stream here - we'll read it after parsing all parts
-            console.log("[Admin] Skipping file stream read for now, will read after all parts are parsed");
-          } else if (part.type === "field") {
+          if (part.type === "field") {
             if (part.fieldname === "title") {
               title = String(part.value || "").trim();
               console.log("[Admin] Title:", title);
@@ -450,7 +451,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        console.log("[Admin] All parts parsed. Total parts:", partCount);
         console.log("[Admin] Form data parsed. Video file:", !!videoFile, "Title:", title, "Category:", category);
 
       if (!videoFile) {
