@@ -59,6 +59,15 @@ export default function AdminUploadPage() {
       return;
     }
 
+    // Check file size (500 MB limit)
+    const maxSize = 500 * 1024 * 1024; // 500 MB
+    if (file.size > maxSize) {
+      setError(`Файл слишком большой (${(file.size / 1024 / 1024).toFixed(2)} MB). Максимум: ${(maxSize / 1024 / 1024).toFixed(0)} MB`);
+      return;
+    }
+
+    console.log("[Upload] File selected:", { name: file.name, size: file.size, type: file.type });
+
     setVideoFile(file);
     const url = URL.createObjectURL(file);
     setVideoUrl(url);
