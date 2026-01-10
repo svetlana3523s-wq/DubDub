@@ -488,14 +488,14 @@ export default function SessionPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Your fragment to dub */}
+          {/* Your fragment to dub - uses cuts video (muted during cue ranges) */}
           <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
             <PlyrVideoPlayer
               key={`fragment-${session.myRoleIndex}`}
-              src={session.sceneUrl}
+              src={session.sceneUrlCuts || session.sceneUrl}
               startTime={myCue?.startSec || 0}
               endTime={myCue ? myCue.startSec + myCue.durationSec : undefined}
               muted={true}
@@ -567,7 +567,7 @@ export default function SessionPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Your fragment to dub */}
+          {/* Your fragment to dub - uses cuts video (muted during cue ranges) */}
           {myCue && (
             <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
@@ -575,7 +575,7 @@ export default function SessionPage({ params }: PageProps) {
               </div>
               <PlyrVideoPlayer
                 key={`wait-fragment`}
-                src={session.sceneUrl}
+                src={session.sceneUrlCuts || session.sceneUrl}
                 startTime={myCue.startSec}
                 endTime={myCue.startSec + myCue.durationSec}
                 muted={true}

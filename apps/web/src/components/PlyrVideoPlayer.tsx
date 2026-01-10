@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Plyr from "plyr";
 import "plyr/dist/plyr.css";
 
@@ -33,9 +33,24 @@ export function PlyrVideoPlayer({
   const [audioMode, setAudioMode] = useState<AudioMode>(srcCuts ? "with-cuts" : "original");
   const [isPlaying, setIsPlaying] = useState(false);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  
+  // Unique key to force re-mount video element when source changes
+  const [videoKey, setVideoKey] = useState(0);
 
   // Get current video source based on mode
   const currentSrc = audioMode === "with-cuts" && srcCuts ? srcCuts : src;
+
+  // Handle audio mode change - force video element re-mount
+  const handleAudioModeChange = useCallback((mode: AudioMode) => {
+    // Destroy current player first
+    if (playerRef.current) {
+      playerRef.current.destroy();
+      playerRef.current = null;
+    }
+    setAudioMode(mode);
+    setVideoKey(prev => prev + 1); // Force re-mount
+    setLoadState("loading");
+  }, []);
 
   // Initialize Plyr
   useEffect(() => {
@@ -44,76 +59,75 @@ export function PlyrVideoPlayer({
 
     setLoadState("loading");
 
-    const player = new Plyr(video, {
-      controls: [
-        "play-large",
-        "restart",
-        "play",
-        "progress",
-      ],
-      keyboard: { focused: true, global: false },
-      tooltips: { controls: true, seek: true },
-      seekTime: 5,
-      clickToPlay: true,
-      hideControls: true,
-      resetOnEnd: false,
-      volume: 1.0,
-      muted: muted,
-    });
+    // Small delay to ensure video element is ready after re-mount
+    const initTimeout = setTimeout(() => {
+      const player = new Plyr(video, {
+        controls: [
+          "play-large",
+          "restart",
+          "play",
+          "progress",
+        ],
+        keyboard: { focused: true, global: false },
+        tooltips: { controls: true, seek: true },
+        seekTime: 5,
+        clickToPlay: true,
+        hideControls: true,
+        resetOnEnd: false,
+        volume: 1.0,
+        muted: muted,
+      });
 
-    playerRef.current = player;
+      playerRef.current = player;
 
-    const handleReady = () => {
-      setLoadState("ready");
-      player.volume = 1.0;
-      if (startTime > 0) {
-        player.currentTime = startTime;
-      }
-    };
+      const handleReady = () => {
+        setLoadState("ready");
+        player.volume = 1.0;
+        if (startTime > 0) {
+          player.currentTime = startTime;
+        }
+      };
 
-    const handleLoadedMetadata = () => {
-      if (startTime > 0) {
-        player.currentTime = startTime;
-      }
-    };
+      const handleLoadedMetadata = () => {
+        if (startTime > 0) {
+          player.currentTime = startTime;
+        }
+      };
 
-    const handleError = () => {
-      console.error("Video load error:", video.error);
-      setLoadState("error");
-    };
+      const handleError = () => {
+        console.error("Video load error:", video.error);
+        setLoadState("error");
+      };
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => setIsPlaying(false);
+      const handlePlay = () => setIsPlaying(true);
+      const handlePause = () => setIsPlaying(false);
+      const handleEnded = () => setIsPlaying(false);
 
-    // Handle endTime constraint
-    const handleTimeUpdate = () => {
-      if (endTime && player.currentTime >= endTime) {
-        player.pause();
-        player.currentTime = startTime;
-      }
-    };
+      // Handle endTime constraint
+      const handleTimeUpdate = () => {
+        if (endTime && player.currentTime >= endTime) {
+          player.pause();
+          player.currentTime = startTime;
+        }
+      };
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    player.on("ready", handleReady);
-    player.on("error", handleError);
-    player.on("play", handlePlay);
-    player.on("pause", handlePause);
-    player.on("ended", handleEnded);
-    player.on("timeupdate", handleTimeUpdate);
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
+      player.on("ready", handleReady);
+      player.on("error", handleError);
+      player.on("play", handlePlay);
+      player.on("pause", handlePause);
+      player.on("ended", handleEnded);
+      player.on("timeupdate", handleTimeUpdate);
+    }, 50);
 
     return () => {
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      player.off("play", handlePlay);
-      player.off("pause", handlePause);
-      player.off("ended", handleEnded);
-      player.off("timeupdate", handleTimeUpdate);
-      if (player) {
-        player.destroy();
+      clearTimeout(initTimeout);
+      if (playerRef.current) {
+        playerRef.current.destroy();
         playerRef.current = null;
       }
     };
-  }, [currentSrc, startTime, endTime, muted]);
+  }, [currentSrc, startTime, endTime, muted, videoKey]);
 
   // Update muted state
   useEffect(() => {
@@ -131,7 +145,7 @@ export function PlyrVideoPlayer({
       {showAudioModeSwitch && srcCuts && (
         <div className="flex gap-2 text-sm">
           <button
-            onClick={() => setAudioMode("with-cuts")}
+            onClick={() => handleAudioModeChange("with-cuts")}
             className={`px-3 py-1.5 rounded-full transition-colors ${
               audioMode === "with-cuts"
                 ? "bg-accent-primary text-white"
@@ -141,7 +155,7 @@ export function PlyrVideoPlayer({
             ✂️ С вырезами
           </button>
           <button
-            onClick={() => setAudioMode("original")}
+            onClick={() => handleAudioModeChange("original")}
             className={`px-3 py-1.5 rounded-full transition-colors ${
               audioMode === "original"
                 ? "bg-accent-primary text-white"
@@ -179,6 +193,7 @@ export function PlyrVideoPlayer({
         )}
 
         <video
+          key={videoKey}
           ref={videoRef}
           src={currentSrc}
           className="plyr-video w-full"
