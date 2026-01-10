@@ -327,8 +327,9 @@ export function createBot(): Telegraf {
   const bot = new Telegraf(config.botToken);
 
   // Main menu keyboard - всегда отображается внизу
-  const mainMenuKeyboard = {
-    keyboard: [
+  // For admins, will include admin panel button
+  const getMainMenuKeyboard = (userId?: number) => {
+    const baseKeyboard = [
       [
         { text: "🎭 Начать игру" },
         { text: "👥 Присоединиться к игре" },
@@ -336,10 +337,23 @@ export function createBot(): Telegraf {
       [
         { text: "💡 Предложить эпизод" },
       ],
-    ],
-    resize_keyboard: true,
-    persistent: true, // Постоянная клавиатура
+    ] as Array<Array<{ text: string }>>;
+
+    // Add admin panel button for admins
+    if (userId && isAdmin(userId)) {
+      baseKeyboard.push([
+        { text: "👑 Админ-панель" },
+      ]);
+    }
+
+    return {
+      keyboard: baseKeyboard,
+      resize_keyboard: true,
+      persistent: true, // Постоянная клавиатура
+    };
   };
+
+  const mainMenuKeyboard = getMainMenuKeyboard();
 
   // /start command - with optional deep link parameter
   bot.start(async (ctx) => {
@@ -387,9 +401,9 @@ export function createBot(): Telegraf {
           },
         });
       } else {
-        // Regular start - show menu
+        // Regular start - show menu with admin button if admin
         await ctx.reply(welcomeText, {
-          reply_markup: mainMenuKeyboard,
+          reply_markup: getMainMenuKeyboard(userId),
         });
       }
     } catch (err) {
@@ -521,7 +535,7 @@ export function createBot(): Telegraf {
       `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
       `👉 https://t.me/skameeckaa`,
       {
-        reply_markup: mainMenuKeyboard, // Вернуть главное меню
+        reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
       }
     );
   });
@@ -535,7 +549,7 @@ export function createBot(): Telegraf {
       `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
       `👉 https://t.me/skameeckaa`,
       {
-        reply_markup: mainMenuKeyboard, // Вернуть главное меню
+        reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
       }
     );
   });
@@ -558,17 +572,29 @@ export function createBot(): Telegraf {
         "Отправь видео — добавить новую сцену\n\n";
     }
 
-    await ctx.reply(helpText + "Нажми кнопку ниже, чтобы начать 👇", {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "🎭 Открыть DubDub",
-              web_app: { url: config.webappUrl },
-            },
-          ],
+    const keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: "🎭 Открыть DubDub",
+            web_app: { url: config.webappUrl },
+          },
         ],
-      },
+      ] as Array<Array<{ text: string; web_app?: { url: string }; url?: string }>>,
+    };
+
+    // Add admin panel button for admins
+    if (isUserAdmin) {
+      keyboard.inline_keyboard.push([
+        {
+          text: "👑 Админ-панель",
+          web_app: { url: `${config.webappUrl}/admin/scenes` },
+        },
+      ]);
+    }
+
+    await ctx.reply(helpText + "Нажми кнопку ниже, чтобы начать 👇", {
+      reply_markup: keyboard,
     });
   });
 
@@ -641,12 +667,12 @@ export function createBot(): Telegraf {
       
       if (hadPending) {
         await ctx.reply("❌ Операция отменена", {
-          reply_markup: mainMenuKeyboard, // Всегда возвращаем главное меню
+          reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
         });
       } else {
         // Даже если нет активных операций, показываем главное меню
         await ctx.reply("Главное меню", {
-          reply_markup: mainMenuKeyboard,
+          reply_markup: getMainMenuKeyboard(ctx.from?.id),
         });
       }
     }
@@ -1047,7 +1073,7 @@ export function createBot(): Telegraf {
       await ctx.reply(
         hadPending ? "❌ Операция отменена" : "Главное меню",
         {
-          reply_markup: mainMenuKeyboard, // Всегда возвращаем главное меню
+          reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
         }
       );
       return;
@@ -1150,13 +1176,13 @@ export function createBot(): Telegraf {
             `❌ Эта игра уже завершена.\n\n` +
             `Статус: ${completedSession.status}\n\n` +
             `Создай новую игру или присоединись к активной.`,
-            { reply_markup: mainMenuKeyboard }
+            { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
           );
         } else {
           await ctx.reply(
             `❌ Сессия с кодом "${sessionCode}" не найдена.\n\n` +
             `Проверьте код и попробуйте ещё раз.`,
-            { reply_markup: mainMenuKeyboard }
+            { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
           );
         }
         return;

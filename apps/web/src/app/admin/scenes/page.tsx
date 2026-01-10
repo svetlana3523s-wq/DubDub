@@ -29,19 +29,31 @@ export default function AdminScenesPage() {
 
   // Check admin access
   useEffect(() => {
-    if (!isReady || !initData) return;
+    if (!isReady) {
+      // Wait for Telegram to be ready
+      return;
+    }
+
+    if (!initData) {
+      // Not opened in Telegram Mini App
+      setError("Админка доступна только через Telegram Mini App. Откройте бота и нажмите кнопку для открытия приложения.");
+      setIsAdmin(false);
+      return;
+    }
 
     const checkAdmin = async () => {
       try {
         const result = await api.checkAdmin(initData);
         if (!result.isAdmin) {
-          router.push("/");
+          setError("У вас нет прав администратора");
+          setIsAdmin(false);
           return;
         }
         setIsAdmin(true);
       } catch (err) {
         console.error("Failed to check admin:", err);
-        router.push("/");
+        setError("Ошибка проверки прав администратора");
+        setIsAdmin(false);
       }
     };
 
@@ -103,7 +115,26 @@ export default function AdminScenesPage() {
   }
 
   if (!isAdmin) {
-    return null; // Will redirect
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="text-5xl mb-4">🔒</div>
+        <h2 className="text-2xl font-bold mb-4">Нет доступа</h2>
+        {error ? (
+          <p className="text-tg-hint mb-6">{error}</p>
+        ) : (
+          <p className="text-tg-hint mb-6">
+            Админка доступна только через Telegram Mini App.<br />
+            Откройте бота и используйте кнопку для входа в приложение.
+          </p>
+        )}
+        <button
+          onClick={() => router.push("/")}
+          className="btn-primary"
+        >
+          На главную
+        </button>
+      </div>
+    );
   }
 
   const totalPages = Math.ceil(total / limit);
