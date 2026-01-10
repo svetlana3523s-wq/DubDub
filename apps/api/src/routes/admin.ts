@@ -434,6 +434,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
               encoding: videoFile.encoding,
               mimetype: videoFile.mimetype,
             });
+            // IMPORTANT: Don't read the file stream here - we'll read it after parsing all parts
+            console.log("[Admin] Skipping file stream read for now, will read after all parts are parsed");
           } else if (part.type === "field") {
             if (part.fieldname === "title") {
               title = String(part.value || "").trim();
@@ -448,6 +450,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        console.log("[Admin] All parts parsed. Total parts:", partCount);
         console.log("[Admin] Form data parsed. Video file:", !!videoFile, "Title:", title, "Category:", category);
 
       if (!videoFile) {
