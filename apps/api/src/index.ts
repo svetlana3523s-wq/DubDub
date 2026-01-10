@@ -34,8 +34,6 @@ await fastify.register(multipart, {
     files: 1,
     fields: 10, // Max number of form fields
   },
-  attachFieldsToBody: false, // Don't attach fields to body - we'll parse manually
-  sharedSchemaId: false, // Don't use shared schema
 });
 
 // Rate limiting
