@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Plyr from "plyr";
+import "plyr/dist/plyr.css";
 import type { Cue } from "@dubdub/shared";
 
 interface PlyrVideoPlayerProps {
@@ -27,39 +29,73 @@ export function PlyrVideoPlayer({
   showAudioModeSwitch = false,
 }: PlyrVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<Plyr | null>(null);
   const [audioMode, setAudioMode] = useState<AudioMode>("with-cuts");
   const [inCueRange, setInCueRange] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [showControls, setShowControls] = useState(true);
-  const hideControlsTimeout = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track if we've done the initial "fake restart" workaround
+  const hasInitializedRef = useRef(false);
 
-  // Check if current time is within any cue range
-  const isInCueRange = (time: number): boolean => {
-    return cues.some((cue) => time >= cue.startSec && time < cue.startSec + cue.durationSec);
+  // Refs for accessing current values in timeupdate handler (avoid stale closures)
+  const cuesRef = useRef(cues);
+  const audioModeRef = useRef(audioMode);
+  const mutedRef = useRef(muted);
+  const endTimeRef = useRef(endTime);
+  const startTimeRef = useRef(startTime);
+
+  // Sync refs with props/state
+  useEffect(() => { cuesRef.current = cues; }, [cues]);
+  useEffect(() => { audioModeRef.current = audioMode; }, [audioMode]);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { endTimeRef.current = endTime; }, [endTime]);
+  useEffect(() => { startTimeRef.current = startTime; }, [startTime]);
+
+  // Helper function to check if time is in any cue range
+  const checkInCueRange = (time: number, currentCues: Cue[]): boolean => {
+    return currentCues.some((cue) => time >= cue.startSec && time < cue.startSec + cue.durationSec);
   };
 
-  // Format time as MM:SS
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Handle video events
+  // Initialize Plyr and set up timeupdate handler
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !src) return;
+
+    setLoadState("loading");
+
+    const player = new Plyr(video, {
+      controls: [
+        "play-large",
+        "restart",
+        "play",
+        "progress",
+      ],
+      keyboard: { focused: true, global: false },
+      tooltips: { controls: true, seek: true },
+      seekTime: 5,
+      clickToPlay: true,
+      hideControls: true,
+      resetOnEnd: false,
+      volume: 1.0, // Always maximum volume
+      muted: false,
+    });
+
+    playerRef.current = player;
+
+    const handleReady = () => {
+      setLoadState("ready");
+      // Set volume to maximum
+      player.volume = 1.0;
+      if (startTime > 0) {
+        player.currentTime = startTime;
+      }
+    };
 
     const handleLoadedMetadata = () => {
-      setLoadState("ready");
-      setDuration(video.duration);
       if (startTime > 0) {
-        video.currentTime = startTime;
+        player.currentTime = startTime;
       }
-      video.volume = 1.0;
     };
 
     const handleError = () => {
@@ -67,49 +103,109 @@ export function PlyrVideoPlayer({
       setLoadState("error");
     };
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setShowControls(true);
+    // Apply correct mute state based on current position
+    const applyMuteState = () => {
+      const currentCues = cuesRef.current;
+      const currentAudioMode = audioModeRef.current;
+      const currentMuted = mutedRef.current;
+
+      if (currentAudioMode === "with-cuts" && currentCues.length > 0) {
+        const currentTime = player.currentTime || 0;
+        const nowInCue = checkInCueRange(currentTime, currentCues);
+        setInCueRange(nowInCue);
+        video.muted = nowInCue || currentMuted;
+      }
     };
 
-    const handleTimeUpdate = () => {
-      const time = video.currentTime;
-      setCurrentTime(time);
-
-      // Handle cue-based muting
-      if (audioMode === "with-cuts" && cues.length > 0) {
-        const nowInCue = isInCueRange(time);
-        setInCueRange(nowInCue);
-        video.muted = nowInCue || muted;
+    const handlePlay = () => {
+      setIsPlaying(true);
+      
+      // WORKAROUND: On first play, do a "fake restart" - seek to start and back
+      // This simulates what happens when user manually restarts, which fixes mute intervals
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        const currentPos = player.currentTime || 0;
+        
+        // Quick restart sequence: pause -> seek to 0 -> seek back -> play
+        player.pause();
+        player.currentTime = 0;
+        
+        setTimeout(() => {
+          if (playerRef.current) {
+            playerRef.current.currentTime = currentPos;
+            applyMuteState();
+            playerRef.current.play();
+          }
+        }, 50);
+        return;
       }
+      
+      applyMuteState();
+    };
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
+    
+    // Also apply on seek
+    const handleSeeking = () => {
+      applyMuteState();
+    };
 
-      // Handle endTime constraint
-      if (endTime && time >= endTime) {
-        video.pause();
-        video.currentTime = startTime;
+    // Timeupdate handler - uses refs to always have current values
+    const handleTimeUpdate = () => {
+      const currentCues = cuesRef.current;
+      const currentAudioMode = audioModeRef.current;
+      const currentMuted = mutedRef.current;
+      const currentEndTime = endTimeRef.current;
+      const currentStartTime = startTimeRef.current;
+
+      // Only apply cue-based muting in "with-cuts" mode
+      if (currentAudioMode === "with-cuts" && currentCues.length > 0) {
+        const currentTime = player.currentTime || 0;
+        const nowInCue = checkInCueRange(currentTime, currentCues);
+        setInCueRange(nowInCue);
+
+        // Mute during cue ranges
+        video.muted = nowInCue || currentMuted;
+
+        // Handle endTime
+        if (currentEndTime && currentTime >= currentEndTime) {
+          player.pause();
+          player.currentTime = currentStartTime;
+        }
       }
     };
 
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("error", handleError);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
-    video.addEventListener("ended", handleEnded);
-    video.addEventListener("timeupdate", handleTimeUpdate);
+    player.on("ready", handleReady);
+    player.on("error", handleError);
+    player.on("play", handlePlay);
+    player.on("pause", handlePause);
+    player.on("ended", handleEnded);
+    player.on("timeupdate", handleTimeUpdate);
+    player.on("seeking", handleSeeking);
+    
+    // Ensure volume is always maximum
+    player.on("loadedmetadata", () => {
+      player.volume = 1.0;
+    });
 
     return () => {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("error", handleError);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
-      video.removeEventListener("ended", handleEnded);
-      video.removeEventListener("timeupdate", handleTimeUpdate);
+      player.off("play", handlePlay);
+      player.off("pause", handlePause);
+      player.off("ended", handleEnded);
+      player.off("timeupdate", handleTimeUpdate);
+      player.off("seeking", handleSeeking);
+      if (player) {
+        player.destroy();
+        playerRef.current = null;
+      }
+      // Reset initialization flag for next mount
+      hasInitializedRef.current = false;
     };
-  }, [src, startTime, endTime, audioMode, cues, muted]);
+  }, [src, startTime]);
 
-  // Update muted state when audio mode changes
+  // Update muted state when audio mode changes to original
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -117,81 +213,15 @@ export function PlyrVideoPlayer({
     if (audioMode === "original") {
       video.muted = muted;
       setInCueRange(false);
-    } else if (audioMode === "with-cuts" && cues.length > 0) {
-      const nowInCue = isInCueRange(video.currentTime);
-      setInCueRange(nowInCue);
-      video.muted = nowInCue || muted;
     }
-  }, [audioMode, muted, cues]);
+  }, [audioMode, muted]);
 
-  // Auto-hide controls when playing
+  // Update muted prop when in original mode
   useEffect(() => {
-    if (isPlaying) {
-      hideControlsTimeout.current = setTimeout(() => {
-        setShowControls(false);
-      }, 2000);
-    } else {
-      setShowControls(true);
-      if (hideControlsTimeout.current) {
-        clearTimeout(hideControlsTimeout.current);
-      }
-    }
-
-    return () => {
-      if (hideControlsTimeout.current) {
-        clearTimeout(hideControlsTimeout.current);
-      }
-    };
-  }, [isPlaying]);
-
-  const handleContainerClick = () => {
-    if (isPlaying) {
-      setShowControls(true);
-      if (hideControlsTimeout.current) {
-        clearTimeout(hideControlsTimeout.current);
-      }
-      hideControlsTimeout.current = setTimeout(() => {
-        if (isPlaying) setShowControls(false);
-      }, 2000);
-    }
-  };
-
-  const togglePlay = () => {
     const video = videoRef.current;
-    if (!video) return;
-
-    if (video.paused) {
-      video.play();
-    } else {
-      video.pause();
-    }
-  };
-
-  const handleRestart = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.currentTime = startTime;
-    video.play();
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const time = parseFloat(e.target.value);
-    video.currentTime = time;
-    setCurrentTime(time);
-
-    // Immediately apply mute state at new position
-    if (audioMode === "with-cuts" && cues.length > 0) {
-      const nowInCue = isInCueRange(time);
-      setInCueRange(nowInCue);
-      video.muted = nowInCue || muted;
-    }
-  };
-
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+    if (!video || audioMode === "with-cuts") return;
+    video.muted = muted;
+  }, [muted, audioMode]);
 
   return (
     <div className="space-y-2">
@@ -223,10 +253,7 @@ export function PlyrVideoPlayer({
         </div>
       )}
 
-      <div 
-        className="relative rounded-xl overflow-hidden bg-black"
-        onClick={handleContainerClick}
-      >
+      <div className="relative group rounded-xl overflow-hidden bg-black/20">
         {/* Loading placeholder */}
         {loadState === "loading" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
@@ -240,8 +267,7 @@ export function PlyrVideoPlayer({
             <div className="text-3xl mb-2">⚠️</div>
             <div className="text-sm">Не удалось загрузить видео</div>
             <button
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={() => {
                 setLoadState("loading");
                 videoRef.current?.load();
               }}
@@ -252,93 +278,13 @@ export function PlyrVideoPlayer({
           </div>
         )}
 
-        {/* Video element */}
         <video
           ref={videoRef}
           src={src}
-          className="w-full"
+          className="plyr-video w-full"
           playsInline
           preload="auto"
         />
-
-        {/* Large center play button (shown when paused) */}
-        {loadState === "ready" && !isPlaying && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePlay();
-            }}
-            className="absolute inset-0 flex items-center justify-center z-20"
-          >
-            <div className="w-16 h-16 bg-accent-primary/90 rounded-full flex items-center justify-center shadow-lg hover:bg-accent-primary transition-colors">
-              <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </div>
-          </button>
-        )}
-
-        {/* Controls bar */}
-        {loadState === "ready" && (
-          <div 
-            className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 transition-opacity duration-200 ${
-              showControls ? "opacity-100" : "opacity-0"
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Progress bar */}
-            <div className="mb-2">
-              <input
-                type="range"
-                min={0}
-                max={duration || 100}
-                step={0.1}
-                value={currentTime}
-                onChange={handleSeek}
-                className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #3390ec 0%, #3390ec ${progressPercent}%, rgba(255,255,255,0.3) ${progressPercent}%, rgba(255,255,255,0.3) 100%)`,
-                }}
-              />
-            </div>
-
-            {/* Control buttons */}
-            <div className="flex items-center gap-3">
-              {/* Restart button */}
-              <button
-                onClick={handleRestart}
-                className="text-white/80 hover:text-white transition-colors"
-                title="В начало"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-                </svg>
-              </button>
-
-              {/* Play/Pause button */}
-              <button
-                onClick={togglePlay}
-                className="text-white hover:text-white/80 transition-colors"
-                title={isPlaying ? "Пауза" : "Воспроизвести"}
-              >
-                {isPlaying ? (
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                )}
-              </button>
-
-              {/* Time display */}
-              <div className="text-white/80 text-xs ml-auto">
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* "Muted for cue" indicator */}
         {audioMode === "with-cuts" && inCueRange && isPlaying && (
@@ -349,7 +295,7 @@ export function PlyrVideoPlayer({
 
         {/* Time range indicator */}
         {showTimeRange && (startTime > 0 || endTime) && (
-          <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-xs text-white z-20">
+          <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs z-20">
             {startTime.toFixed(1)}s — {endTime?.toFixed(1) ?? "end"}
           </div>
         )}
@@ -357,3 +303,4 @@ export function PlyrVideoPlayer({
     </div>
   );
 }
+
