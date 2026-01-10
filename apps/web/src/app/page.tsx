@@ -13,12 +13,22 @@ export default function HomePage() {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  // Handle deep link join_CODE or startapp parameter
+  // Handle deep link startapp parameters
   useEffect(() => {
     if (!isReady) return;
 
     const startParam = getStartParam();
     if (!startParam) return;
+
+    console.log("[Home] start_param detected:", startParam);
+
+    // Handle s_sessionId format (direct session link from ?startapp=s_sessionId)
+    if (startParam.startsWith("s_")) {
+      const sessionId = startParam.slice(2); // Remove "s_" prefix
+      console.log("[Home] Direct session link, redirecting to:", sessionId);
+      router.push(`/s/${sessionId}`);
+      return;
+    }
 
     // Handle join_CODE format (from ?startapp=join_CODE)
     if (startParam.startsWith("join_")) {
@@ -31,11 +41,12 @@ export default function HomePage() {
         }
         handleJoinByCode(code);
       }
-    } else {
-      // Handle direct session ID (for viewing results)
-      // This works even without initData initially - the session page will handle auth
-      router.push(`/s/${startParam}`);
+      return;
     }
+    
+    // Other format - treat as direct session ID (for viewing results)
+    console.log("[Home] Other start_param, treating as session ID:", startParam);
+    router.push(`/s/${startParam}`);
   }, [isReady, initData]);
 
   const handleJoinByCode = async (code: string) => {

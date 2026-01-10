@@ -364,8 +364,19 @@ export function createBot(): Telegraf {
 
     // Send response immediately with persistent keyboard
     try {
-      // Check if this is a join deep link (format: join_CODE)
-      if (startPayload && startPayload.startsWith("join_")) {
+      // Check for startapp parameters - these are passed when Mini App opens via link
+      // Format: s_sessionId (direct session link) or join_CODE (join by code)
+      if (startPayload && startPayload.startsWith("s_")) {
+        // Direct session link - just show welcome, Mini App will handle the routing
+        const sessionId = startPayload.slice(2); // Remove "s_" prefix
+        console.log("[Bot] Direct session link, sessionId:", sessionId);
+        
+        await ctx.reply(
+          `🎬 Открываю игру...\n\n` +
+          `Нажмите кнопку меню "🎭 Играть" чтобы открыть приложение.`,
+          { reply_markup: getMainMenuKeyboard(userId) }
+        );
+      } else if (startPayload && startPayload.startsWith("join_")) {
         const sessionCode = startPayload.slice(5).toUpperCase(); // Remove "join_" prefix
         console.log("[Bot] Join deep link detected, code:", sessionCode);
         
@@ -385,20 +396,15 @@ export function createBot(): Telegraf {
         );
         
         if (session) {
-          const webAppUrl = `${config.webappUrl}/s/${session.id}`;
-          console.log("[Bot] Found session, opening:", session.id);
+          // Send link instead of inline web_app button (iOS bug workaround)
+          const joinLink = `https://t.me/${config.botUsername}?startapp=s_${session.id}`;
+          console.log("[Bot] Found session, sending link:", session.id);
           
           await ctx.reply(
             `🎬 Вас пригласили в игру!\n\n` +
             `Игроков: ${session.participants.length}/${session.maxPlayers}\n\n` +
-            `Нажмите кнопку, чтобы присоединиться:`,
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "🎮 Присоединиться", web_app: { url: webAppUrl } }],
-                ],
-              },
-            }
+            `👉 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
+            { reply_markup: getMainMenuKeyboard(userId) }
           );
         } else {
           // Session not found - show error
@@ -410,15 +416,10 @@ export function createBot(): Telegraf {
         }
       } else if (startPayload) {
         // Other deep link - treat as session ID (for result viewing)
-        const webAppUrl = `${config.webappUrl}/s/${startPayload}`;
-        console.log("[Bot] Session deep link, opening:", webAppUrl);
+        console.log("[Bot] Other deep link:", startPayload);
         
         await ctx.reply(welcomeText, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "🎮 Открыть игру", web_app: { url: webAppUrl } }],
-            ],
-          },
+          reply_markup: getMainMenuKeyboard(userId),
         });
       } else {
         // Regular start - show menu with admin button if admin
@@ -1262,23 +1263,17 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Всё ок, открываем Mini App
+      // Всё ок, открываем Mini App через ссылку (не inline web_app button)
+      // Inline web_app buttons имеют баг на iOS - открывают WebView вместо Mini App
+      const joinLink = `https://t.me/${config.botUsername}?startapp=s_${session.id}`;
       await ctx.reply(
         `✅ Найдена игра!\n\n` +
         `Игроков: ${session.participants.length}/${session.maxPlayers}\n` +
         `Категория: ${CATEGORY_LABELS[session.category as SceneCategory] || session.category}\n\n` +
-        `Нажмите кнопку, чтобы присоединиться:`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "🎮 Присоединиться",
-                  web_app: { url: `${config.webappUrl}/s/${session.id}` },
-                },
-              ],
-            ],
-          },
+        `👉 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
+        { 
+          reply_markup: getMainMenuKeyboard(ctx.from?.id),
+          // Telegram auto-converts the link to a clickable button
         }
       );
       return;
