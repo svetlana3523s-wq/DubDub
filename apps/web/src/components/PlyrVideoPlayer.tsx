@@ -205,23 +205,28 @@ export function PlyrVideoPlayer({
     };
   }, [src, startTime]);
 
-  // Update muted state when audio mode changes to original
+  // Update mute state when audioMode or cues change
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    const player = playerRef.current;
+    if (!video || !player) return;
 
     if (audioMode === "original") {
       video.muted = muted;
       setInCueRange(false);
+    } else if (audioMode === "with-cuts" && cues.length > 0) {
+      // Immediately apply correct mute state based on current position
+      const currentTime = player.currentTime || 0;
+      const nowInCue = checkInCueRange(currentTime, cues);
+      setInCueRange(nowInCue);
+      video.muted = nowInCue || muted;
     }
-  }, [audioMode, muted]);
+  }, [audioMode, muted, cues]);
 
-  // Update muted prop when in original mode
+  // Debug: log when cues change
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || audioMode === "with-cuts") return;
-    video.muted = muted;
-  }, [muted, audioMode]);
+    console.log("[PlyrVideoPlayer] Cues updated:", cues.length, "cues", cues.map(c => `${c.startSec}-${c.startSec + c.durationSec}`));
+  }, [cues]);
 
   return (
     <div className="space-y-2">
