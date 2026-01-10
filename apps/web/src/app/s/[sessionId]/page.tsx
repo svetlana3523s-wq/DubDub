@@ -23,11 +23,13 @@ const CATEGORY_LABELS: Record<string, string> = {
 function SessionCodeCard({ sessionId }: { sessionId: string }) {
   const sessionCode = sessionId.slice(-8).toUpperCase();
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || "DubDubBot";
-  const instructionText = `Код для присоединения: ${sessionCode}
+  
+  // Message for sharing - code in backticks makes it copyable in Telegram
+  const shareText = `🎬 Присоединяйся к озвучке!
 
-1. Открой бота @${botUsername}
-2. Нажми "👥 Присоединиться к игре"
-3. Введи код: ${sessionCode}`;
+Код: \`${sessionCode}\`
+
+Нажми 👥 Присоединиться в боте @${botUsername} и введи код`;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(sessionCode);
@@ -42,7 +44,8 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   };
 
   const handleSendToFriend = () => {
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=${sessionId}`)}&text=${encodeURIComponent(instructionText)}`;
+    // Share only text without URL preview - use text parameter only
+    const shareUrl = `https://t.me/share/url?text=${encodeURIComponent(shareText)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(shareUrl);
     } else {

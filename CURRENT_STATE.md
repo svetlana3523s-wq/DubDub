@@ -1,21 +1,20 @@
 # Current State
 
 ## Last updates
-- Parallel recording for 2 players (no turn-based restrictions, both can record simultaneously)
-- Replay functionality added (restart with same scene or new random scene from same category)
-- Bot state management improved (active session checks, cancel button always returns main menu)
-- Server deployment info documented (SSH access, PM2 services, commands)
-- Session code sharing simplified (clickable code, copy/share buttons)
-- Bot persistent menu implemented (always visible at bottom)
+- Fixed multipart parsing in admin scene upload - switched from `request.file()` + `request.parts()` to single `request.parts()` loop
+- Plyr video player integrated - seeking, pause, custom controls (no volume/settings/pip)
+- Admin Web UI for scene management - `/admin/scenes`, `/admin/upload`, `/admin/scenes/[id]/edit`
+- CueEditor component - frame-based navigation, frame inputs, 1-frame step slider
+- Bot state migrated to Redis (`bot-state.ts`) - persistent across restarts
+- Nginx/Fastify timeouts increased to 10 min for large uploads
 
 ## Known issues
-- Bot pending state in memory (lost on restart) - `pendingScenes`/`pendingEdits`/`pendingJoins` Maps
-- URL upload fails for Yandex.Disk sharing links (downloads HTML page instead of video)
-- Large files (>20MB) cannot be uploaded directly through Telegram
-- No support for cloud storage APIs (only direct file URLs work)
-- Error messages for ffprobe failures could be more user-friendly
+- URL upload fails for Yandex.Disk/Google Drive sharing links (returns HTML instead of video)
+- Large files (>50MB) cannot be uploaded directly through Telegram bot (use direct URL or Admin UI)
+- Plyr CSS overrides use `!important` - may conflict with future styling
+- `getVideoInfo` duplicate code in `bot.ts` and `admin.ts` - should be unified
 
 ## Next focus
-- Persistent bot state storage (Redis/database instead of in-memory Maps)
-- Cloud storage API integration (Yandex.Disk, Google Drive) for direct file access
-- Improve error handling and user messages for file upload failures
+- Test admin scene upload with various file sizes
+- Improve error messages for upload failures
+- Deduplicate `getVideoInfo` helper (move to shared lib)

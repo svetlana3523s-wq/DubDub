@@ -444,15 +444,8 @@ export function createBot(): Telegraf {
     
     console.log("[Bot] Join game button clicked", { userId });
 
-    const botUsername = config.botUsername;
-    const instructionText = `Код для присоединения: xxxxxxx
-
-1. Открой бота @${botUsername}
-2. Нажми "👥 Присоединиться к игре"
-3. Введи код: xxxxxxxxx`;
-
     await botState.setPendingJoin(userId);
-    await ctx.reply(instructionText, {
+    await ctx.reply("🔑 Введи код от друга:", {
       reply_markup: {
         keyboard: [
           [{ text: "❌ Отмена" }],
@@ -472,15 +465,8 @@ export function createBot(): Telegraf {
       
       console.log("[Bot] join_game inline button clicked", { userId });
 
-      const botUsername = config.botUsername;
-      const instructionText = `Код для присоединения: xxxxxxx
-
-1. Открой бота @${botUsername}
-2. Нажми "👥 Присоединиться к игре"
-3. Введи код: xxxxxxxxx`;
-
       await botState.setPendingJoin(userId);
-      await ctx.reply(instructionText, {
+      await ctx.reply("🔑 Введи код от друга:", {
         reply_markup: {
           keyboard: [
             [{ text: "❌ Отмена" }],
@@ -500,15 +486,8 @@ export function createBot(): Telegraf {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const botUsername = config.botUsername;
-    const instructionText = `Код для присоединения: xxxxxxx
-
-1. Открой бота @${botUsername}
-2. Нажми "👥 Присоединиться к игре"
-3. Введи код: xxxxxxxxx`;
-
     await botState.setPendingJoin(userId);
-    await ctx.reply(instructionText, {
+    await ctx.reply("🔑 Введи код от друга:", {
       reply_markup: {
         keyboard: [[{ text: "❌ Отмена" }]],
         resize_keyboard: true,
