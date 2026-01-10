@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import Plyr from "plyr";
 import "plyr/dist/plyr.css";
 import type { Cue } from "@dubdub/shared";
@@ -35,12 +35,26 @@ export function PlyrVideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
 
-  // Check if current time is within any cue range
-  const isInCueRange = useCallback((time: number): boolean => {
-    return cues.some((cue) => time >= cue.startSec && time < cue.startSec + cue.durationSec);
-  }, [cues]);
+  // Refs for accessing current values in timeupdate handler (avoid stale closures)
+  const cuesRef = useRef(cues);
+  const audioModeRef = useRef(audioMode);
+  const mutedRef = useRef(muted);
+  const endTimeRef = useRef(endTime);
+  const startTimeRef = useRef(startTime);
 
-  // Initialize Plyr
+  // Sync refs with props/state
+  useEffect(() => { cuesRef.current = cues; }, [cues]);
+  useEffect(() => { audioModeRef.current = audioMode; }, [audioMode]);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { endTimeRef.current = endTime; }, [endTime]);
+  useEffect(() => { startTimeRef.current = startTime; }, [startTime]);
+
+  // Helper function to check if time is in any cue range
+  const checkInCueRange = (time: number, currentCues: Cue[]): boolean => {
+    return currentCues.some((cue) => time >= cue.startSec && time < cue.startSec + cue.durationSec);
+  };
+
+  // Initialize Plyr and set up timeupdate handler
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
@@ -90,12 +104,38 @@ export function PlyrVideoPlayer({
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
 
+    // Timeupdate handler - uses refs to always have current values
+    const handleTimeUpdate = () => {
+      const currentCues = cuesRef.current;
+      const currentAudioMode = audioModeRef.current;
+      const currentMuted = mutedRef.current;
+      const currentEndTime = endTimeRef.current;
+      const currentStartTime = startTimeRef.current;
+
+      // Only apply cue-based muting in "with-cuts" mode
+      if (currentAudioMode === "with-cuts" && currentCues.length > 0) {
+        const currentTime = player.currentTime || 0;
+        const nowInCue = checkInCueRange(currentTime, currentCues);
+        setInCueRange(nowInCue);
+
+        // Mute during cue ranges
+        video.muted = nowInCue || currentMuted;
+
+        // Handle endTime
+        if (currentEndTime && currentTime >= currentEndTime) {
+          player.pause();
+          player.currentTime = currentStartTime;
+        }
+      }
+    };
+
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     player.on("ready", handleReady);
     player.on("error", handleError);
     player.on("play", handlePlay);
     player.on("pause", handlePause);
     player.on("ended", handleEnded);
+    player.on("timeupdate", handleTimeUpdate);
     
     // Ensure volume is always maximum
     player.on("loadedmetadata", () => {
@@ -107,40 +147,13 @@ export function PlyrVideoPlayer({
       player.off("play", handlePlay);
       player.off("pause", handlePause);
       player.off("ended", handleEnded);
+      player.off("timeupdate", handleTimeUpdate);
       if (player) {
         player.destroy();
         playerRef.current = null;
       }
     };
   }, [src, startTime]);
-
-  // Handle time updates for cue ranges
-  useEffect(() => {
-    const player = playerRef.current;
-    const video = videoRef.current;
-    if (!player || !video || audioMode !== "with-cuts" || cues.length === 0) return;
-
-    const handleTimeUpdate = () => {
-      const currentTime = player.currentTime || 0;
-      const nowInCue = isInCueRange(currentTime);
-      setInCueRange(nowInCue);
-
-      // Mute during cue ranges
-      video.muted = nowInCue || muted;
-
-      // Handle endTime
-      if (endTime && currentTime >= endTime) {
-        player.pause();
-        player.currentTime = startTime;
-      }
-    };
-
-    player.on("timeupdate", handleTimeUpdate);
-
-    return () => {
-      player.off("timeupdate", handleTimeUpdate);
-    };
-  }, [startTime, endTime, audioMode, cues, muted, isInCueRange]);
 
   // Update muted state when audio mode changes
   useEffect(() => {
@@ -159,11 +172,6 @@ export function PlyrVideoPlayer({
     if (!video || audioMode === "with-cuts") return;
     video.muted = muted;
   }, [muted, audioMode]);
-
-  const toggleAudioMode = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setAudioMode((prev) => (prev === "original" ? "with-cuts" : "original"));
-  };
 
   return (
     <div className="space-y-2">
