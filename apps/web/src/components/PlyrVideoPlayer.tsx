@@ -100,9 +100,32 @@ export function PlyrVideoPlayer({
       setLoadState("error");
     };
 
-    const handlePlay = () => setIsPlaying(true);
+    // Apply correct mute state based on current position
+    const applyMuteState = () => {
+      const currentCues = cuesRef.current;
+      const currentAudioMode = audioModeRef.current;
+      const currentMuted = mutedRef.current;
+
+      if (currentAudioMode === "with-cuts" && currentCues.length > 0) {
+        const currentTime = player.currentTime || 0;
+        const nowInCue = checkInCueRange(currentTime, currentCues);
+        setInCueRange(nowInCue);
+        video.muted = nowInCue || currentMuted;
+      }
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      // WORKAROUND: Apply correct mute immediately when play starts
+      applyMuteState();
+    };
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
+    
+    // Also apply on seek
+    const handleSeeking = () => {
+      applyMuteState();
+    };
 
     // Timeupdate handler - uses refs to always have current values
     const handleTimeUpdate = () => {
@@ -136,6 +159,7 @@ export function PlyrVideoPlayer({
     player.on("pause", handlePause);
     player.on("ended", handleEnded);
     player.on("timeupdate", handleTimeUpdate);
+    player.on("seeking", handleSeeking);
     
     // Ensure volume is always maximum
     player.on("loadedmetadata", () => {
@@ -148,6 +172,7 @@ export function PlyrVideoPlayer({
       player.off("pause", handlePause);
       player.off("ended", handleEnded);
       player.off("timeupdate", handleTimeUpdate);
+      player.off("seeking", handleSeeking);
       if (player) {
         player.destroy();
         playerRef.current = null;
@@ -155,23 +180,16 @@ export function PlyrVideoPlayer({
     };
   }, [src, startTime]);
 
-  // WORKAROUND: Immediately apply correct mute state when player is ready and cues are available
-  // This fixes the race condition where timeupdate hasn't fired yet
+  // Update muted state when audio mode changes to original
   useEffect(() => {
-    const player = playerRef.current;
     const video = videoRef.current;
-    if (!player || !video || loadState !== "ready") return;
+    if (!video) return;
 
-    if (audioMode === "with-cuts" && cues.length > 0) {
-      const currentTime = player.currentTime || 0;
-      const nowInCue = checkInCueRange(currentTime, cues);
-      setInCueRange(nowInCue);
-      video.muted = nowInCue || muted;
-    } else if (audioMode === "original") {
+    if (audioMode === "original") {
       video.muted = muted;
       setInCueRange(false);
     }
-  }, [loadState, cues, audioMode, muted]);
+  }, [audioMode, muted]);
 
   // Update muted prop when in original mode
   useEffect(() => {
