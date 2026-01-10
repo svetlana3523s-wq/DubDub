@@ -414,28 +414,55 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authMiddleware, adminMiddleware] },
     async (request, reply) => {
       console.log("[Admin] POST /admin/scenes received");
-      let videoFile: any = null;
       let title = "";
       let category = "memes";
       let cuesJson = "";
 
       try {
         // Parse all multipart parts at once
+        // IMPORTANT: File streams MUST be consumed immediately when encountered,
+        // otherwise the multipart parser hangs waiting for the stream to be read
         console.log("[Admin] Parsing multipart form data...");
         const parts = request.parts();
         let partCount = 0;
+        let videoBuffer: Buffer | null = null;
+        let videoFilename = "";
         
         for await (const part of parts) {
           partCount++;
           console.log(`[Admin] Processing part #${partCount}:`, { type: part.type, fieldname: part.fieldname });
           
           if (part.type === "file") {
-            videoFile = part;
+            videoFilename = part.filename || "video.mp4";
             console.log("[Admin] Video file part received:", {
-              filename: videoFile.filename,
-              encoding: videoFile.encoding,
-              mimetype: videoFile.mimetype,
+              filename: videoFilename,
+              encoding: part.encoding,
+              mimetype: part.mimetype,
             });
+            
+            // MUST read file stream immediately before continuing to next part
+            console.log("[Admin] Reading file stream...");
+            const chunks: Buffer[] = [];
+            let totalBytes = 0;
+            let chunkCount = 0;
+            let lastLogTime = Date.now();
+            
+            for await (const chunk of part.file) {
+              chunkCount++;
+              chunks.push(chunk);
+              totalBytes += chunk.length;
+              
+              // Log progress every 5 seconds
+              const now = Date.now();
+              if (now - lastLogTime > 5000) {
+                console.log(`[Admin] Reading: ${chunkCount} chunks, ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                lastLogTime = now;
+              }
+            }
+            
+            videoBuffer = Buffer.concat(chunks);
+            console.log(`[Admin] File read complete: ${(videoBuffer.length / (1024 * 1024)).toFixed(2)} MB`);
+            
           } else if (part.type === "field") {
             if (part.fieldname === "title") {
               title = String(part.value || "").trim();
@@ -451,9 +478,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         console.log("[Admin] All parts parsed. Total parts:", partCount);
-        console.log("[Admin] Form data parsed. Video file:", !!videoFile, "Title:", title, "Category:", category);
+        console.log("[Admin] Form data: video=" + (videoBuffer ? `${(videoBuffer.length / (1024 * 1024)).toFixed(2)}MB` : "null") + ", title=" + title + ", category=" + category);
 
-      if (!videoFile) {
+      if (!videoBuffer || videoBuffer.length === 0) {
         return reply.status(400).send({ error: "No video file provided" });
       }
 
@@ -474,35 +501,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (e) {
         return reply.status(400).send({ error: "Invalid cues JSON format" });
       }
-
-        // Read video file to buffer
-        console.log("[Admin] Starting to read video file stream...");
-        const chunks: Buffer[] = [];
-        let totalBytes = 0;
-        let lastLogTime = Date.now();
-        let chunkCount = 0;
-        
-        try {
-          console.log("[Admin] Entering stream read loop...");
-          for await (const chunk of videoFile.file) {
-            chunkCount++;
-            chunks.push(chunk);
-            totalBytes += chunk.length;
-            
-            // Log progress every 5 seconds or every 100 chunks
-            const now = Date.now();
-            if (now - lastLogTime > 5000 || chunkCount % 100 === 0) {
-              console.log(`[Admin] Reading progress: ${chunkCount} chunks, ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-              lastLogTime = now;
-            }
-          }
-          console.log(`[Admin] Stream read complete: ${chunkCount} chunks, ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-        } catch (streamError) {
-          console.error("[Admin] Error reading stream:", streamError);
-          throw streamError;
-        }
-        const videoBuffer = Buffer.concat(chunks);
-        console.log("[Admin] Video buffer size:", (videoBuffer.length / (1024 * 1024)).toFixed(2), "MB");
 
       // Save to temp file for ffprobe
       const tmpDir = path.join(os.tmpdir(), "dubdub-uploads");
