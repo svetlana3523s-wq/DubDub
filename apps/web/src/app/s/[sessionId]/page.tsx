@@ -488,18 +488,20 @@ export default function SessionPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Your fragment to dub - uses cuts video (muted during cue ranges) */}
+          {/* Your fragment to dub */}
           <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
             <VideoPlayer
               key={`fragment-${session.myRoleIndex}`}
-              src={session.sceneUrlCuts || session.sceneUrl}
+              src={session.sceneUrl}
+              srcCuts={session.sceneUrlCuts}
               startTime={myCue?.startSec || 0}
               endTime={myCue ? myCue.startSec + myCue.durationSec : undefined}
-              muted={true}
+              muted={false}
               showTimeRange={true}
+              showAudioModeSwitch={true}
             />
           </div>
 
@@ -567,7 +569,7 @@ export default function SessionPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Your fragment to dub - uses cuts video (muted during cue ranges) */}
+          {/* Your fragment to dub */}
           {myCue && (
             <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
@@ -575,11 +577,13 @@ export default function SessionPage({ params }: PageProps) {
               </div>
               <VideoPlayer
                 key={`wait-fragment`}
-                src={session.sceneUrlCuts || session.sceneUrl}
+                src={session.sceneUrl}
+                srcCuts={session.sceneUrlCuts}
                 startTime={myCue.startSec}
                 endTime={myCue.startSec + myCue.durationSec}
-                muted={true}
+                muted={false}
                 showTimeRange={true}
+                showAudioModeSwitch={true}
               />
             </div>
           )}
