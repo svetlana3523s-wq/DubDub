@@ -171,58 +171,65 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const body = createSessionSchema.parse(request.body);
       const user = request.tgUser;
 
-      // Get scenes the user has already completed in this category
-      // Check both sessions where user is creator OR participant
-      const completedSessionsByCreator = await prisma.session.findMany({
+      // Get ALL scenes the user has used (completed OR active) in this category
+      // This prevents selecting a scene that's already in an active session
+      const usedSessionsByCreator = await prisma.session.findMany({
         where: {
-          status: "ready",
           category: body.category,
           createdByTgUserId: user.id,
+          // Include all statuses except cancelled (if we had such status)
+          status: { in: ["lobby", "recording", "rendering", "ready"] },
         },
-        select: { sceneId: true },
+        select: { sceneId: true, status: true },
       });
 
-      const completedSessionsAsParticipant = await prisma.session.findMany({
+      const usedSessionsAsParticipant = await prisma.session.findMany({
         where: {
-          status: "ready",
           category: body.category,
+          status: { in: ["lobby", "recording", "rendering", "ready"] },
           participants: {
             some: { tgUserId: user.id },
           },
         },
-        select: { sceneId: true },
+        select: { sceneId: true, status: true },
       });
 
       // Combine and get unique scene IDs
       const allUsedSceneIds = new Set([
-        ...completedSessionsByCreator.map((s) => s.sceneId),
-        ...completedSessionsAsParticipant.map((s) => s.sceneId),
+        ...usedSessionsByCreator.map((s) => s.sceneId),
+        ...usedSessionsAsParticipant.map((s) => s.sceneId),
       ]);
 
       const usedSceneIds = Array.from(allUsedSceneIds);
 
-      // Find a scene the user hasn't played yet in this category
-      let scene = await prisma.scene.findFirst({
+      // Find ALL available scenes in this category that user hasn't used
+      const availableScenes = await prisma.scene.findMany({
         where: {
           category: body.category,
           id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
         },
-        orderBy: { createdAt: "desc" }, // Prefer newer scenes
       });
 
-      // If all scenes in category played, pick any from this category (reset cycle)
+      // Pick a RANDOM scene from available ones
+      let scene = availableScenes.length > 0
+        ? availableScenes[Math.floor(Math.random() * availableScenes.length)]
+        : null;
+
+      // If all scenes in category played, pick any RANDOM one from this category (reset cycle)
       if (!scene) {
-        scene = await prisma.scene.findFirst({
+        const allScenes = await prisma.scene.findMany({
           where: { category: body.category },
-          orderBy: { createdAt: "desc" },
         });
+        scene = allScenes.length > 0
+          ? allScenes[Math.floor(Math.random() * allScenes.length)]
+          : null;
       }
 
       if (!scene) {
         return reply.status(400).send({ error: `Нет сцен в категории "${body.category}"` });
       }
 
-      console.log(`[Session] User ${user.id} gets scene ${scene.id} (category: ${body.category}, used: ${usedSceneIds.length})`);
+      console.log(`[Session] User ${user.id} gets RANDOM scene ${scene.id} (category: ${body.category}, used: ${usedSceneIds.length}, available: ${availableScenes.length})`);
 
       // Set task only in "tasks" mode
       const task = body.gameMode === "tasks" ? getRandomTask() : null;
@@ -745,21 +752,20 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         // 3. Handle scene and role redistribution
         if (mode === "newScene") {
-          // Find all completed sessions by this user in the same category
-          // Use the same logic as session creation (find sessions where user is creator OR participant)
-          const completedSessionsByCreator = await tx.session.findMany({
+          // Find ALL sessions by this user in the same category (all statuses)
+          const usedSessionsByCreator = await tx.session.findMany({
             where: {
               category: session.category,
               createdByTgUserId: user.id,
-              status: "ready",
+              status: { in: ["lobby", "recording", "rendering", "ready"] },
             },
             select: { sceneId: true },
           });
 
-          const completedSessionsAsParticipant = await tx.session.findMany({
+          const usedSessionsAsParticipant = await tx.session.findMany({
             where: {
               category: session.category,
-              status: "ready",
+              status: { in: ["lobby", "recording", "rendering", "ready"] },
               participants: {
                 some: { tgUserId: user.id },
               },
@@ -767,46 +773,47 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
             select: { sceneId: true },
           });
 
-          // Combine and get unique scene IDs
+          // Combine and get unique scene IDs (include current scene to exclude it)
           const allUsedSceneIds = new Set([
-            ...completedSessionsByCreator.map((s) => s.sceneId),
-            ...completedSessionsAsParticipant.map((s) => s.sceneId),
+            ...usedSessionsByCreator.map((s) => s.sceneId),
+            ...usedSessionsAsParticipant.map((s) => s.sceneId),
           ]);
-
-          // Exclude current scene
-          allUsedSceneIds.delete(session.sceneId);
 
           const usedSceneIds = Array.from(allUsedSceneIds);
 
           console.log(`[Replay] User ${user.id} used scenes in ${session.category}: ${usedSceneIds.length} scenes`);
 
-          // Find a scene the user hasn't played yet (excluding current scene)
-          let newScene = await tx.scene.findFirst({
+          // Find ALL available scenes excluding used ones
+          const availableScenes = await tx.scene.findMany({
             where: {
               category: session.category,
-              id: { 
-                notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"], 
-              },
+              id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
             },
-            orderBy: { createdAt: "desc" }, // Prefer newer scenes
           });
 
-          // If all scenes in category played, pick any from category (excluding current, reset cycle)
+          // Pick a RANDOM scene from available ones
+          let newScene = availableScenes.length > 0
+            ? availableScenes[Math.floor(Math.random() * availableScenes.length)]
+            : null;
+
+          // If all scenes in category played, pick any RANDOM one (excluding current, reset cycle)
           if (!newScene) {
-            newScene = await tx.scene.findFirst({
+            const allOtherScenes = await tx.scene.findMany({
               where: { 
                 category: session.category,
                 id: { not: session.sceneId },
               },
-              orderBy: { createdAt: "desc" },
             });
+            newScene = allOtherScenes.length > 0
+              ? allOtherScenes[Math.floor(Math.random() * allOtherScenes.length)]
+              : null;
           }
 
           if (!newScene) {
             throw new Error(`No other scenes available in category "${session.category}"`);
           }
 
-          console.log(`[Replay] Selected new scene: ${newScene.id} (category: ${session.category}, used: ${usedSceneIds.length})`);
+          console.log(`[Replay] Selected RANDOM scene: ${newScene.id} (category: ${session.category}, used: ${usedSceneIds.length}, available: ${availableScenes.length})`);
 
           newSceneId = newScene.id;
 

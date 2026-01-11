@@ -435,20 +435,18 @@ export function createBot(): Telegraf {
   });
 
   // Handle "Start game" button (from text menu)
+  // NOTE: Using text link instead of inline web_app button - iOS bug workaround [[memory:13197292]]
   bot.hears("🎭 Начать игру", async (ctx) => {
-    const webAppUrl = config.webappUrl;
-    await ctx.reply("Открываю игру...", {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "🎮 Открыть игру",
-              web_app: { url: webAppUrl },
-            },
-          ],
-        ],
-      },
-    });
+    const botUsername = config.botUsername || "zlomem_bot";
+    // Use ?startapp= to open Mini App correctly on all platforms
+    const appLink = `https://t.me/${botUsername}/app`;
+    
+    await ctx.reply(
+      `🎮 Нажми на ссылку чтобы открыть игру:\n\n${appLink}`,
+      {
+        reply_markup: getMainMenuKeyboard(ctx.from?.id),
+      }
+    );
   });
 
   // Handle "Suggest episode" button (from text menu)
