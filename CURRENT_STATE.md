@@ -1,50 +1,29 @@
 # Current State
 
 ## Last updates
-- **Система подтверждения replay для мультиплеера** — когда один игрок нажимает "Новая сцена" или "Еще раз", второму приходит запрос на подтверждение; игра начинается только после согласия обоих
-- **Случайный выбор сцены** — теперь при создании игры выбирается СЛУЧАЙНАЯ сцена из неиспользованных; учитываются ВСЕ сессии (не только завершённые)
-- **Кнопка "Начать игру" исправлена** — заменена inline web_app кнопка на текстовую ссылку (iOS баг)
-- **VideoPlayer заменён на простой без Plyr** — используем нативный HTML5 video с кастомными контролами
-- **iOS workaround for inline web_app buttons** — inline кнопки с `web_app` открывают WebView без Telegram SDK; используем ссылки `?startapp=s_sessionId` (НЕ ТРОГАТЬ!)
+- **Multiplayer replay confirmation** — при нажатии "Ещё раз"/"Новая сцена" второму игроку приходит запрос; игра начинается после согласия обоих
+- **Навигация через window.location** — после replay используется `window.location.href` вместо `router.push` (избегает кеширование Next.js)
+- **Случайный выбор сцены** — при создании игры выбирается случайная сцена; учитываются ВСЕ сессии (lobby, recording, rendering, ready)
+- **User ID сравнение как строки** — `String(replayReq.requestedBy) === String(user.id)` для корректного определения requester
+- **Polling для всех игроков** — в мультиплеере polling replayStatus работает для обоих игроков
+- **Backup:** `git tag backup-multiplayer-replay-v1`
 
-## VideoPlayer решение (НЕ ТРОГАТЬ!)
-**Файл:** `apps/web/src/components/VideoPlayer.tsx`
+## Критичные решения (НЕ ТРОГАТЬ!)
 
-**Как работает:**
-- Принимает `src` (оригинал) и `srcCuts` (с вырезанным аудио)
-- Переключатель "С вырезами / Оригинал" меняет `currentSrc` между ними
-- Нативный HTML5 `<video>` без сторонних библиотек
-- Кастомные контролы: ползунок перемотки, кнопка play/pause, кнопка mute
-- Поддержка `startTime`/`endTime` для фрагментов
+### iOS deep links
+Inline кнопки с `web_app` открывают WebView без Telegram SDK. Используем ссылки `?startapp=s_sessionId`.
 
-**Почему не Plyr:**
-- Plyr падал при переключении src (race condition при destroy/create)
-- Сложная инициализация вызывала проблемы с кешированием
+### VideoPlayer
+Нативный HTML5 `<video>` без Plyr. Файл: `apps/web/src/components/VideoPlayer.tsx`
 
-**Использование на странице сессии:**
-```tsx
-// Полное видео с переключателем
-<VideoPlayer
-  src={session.sceneUrl}
-  srcCuts={session.sceneUrlCuts}
-  showAudioModeSwitch={true}
-/>
-
-// Фрагмент (тоже с переключателем)
-<VideoPlayer
-  src={session.sceneUrl}
-  srcCuts={session.sceneUrlCuts}
-  startTime={myCue.startSec}
-  endTime={myCue.startSec + myCue.durationSec}
-  showAudioModeSwitch={true}
-/>
-```
+### Replay navigation
+Использовать `window.location.href` вместо `router.push` для перехода после replay.
 
 ## Known issues
-- Медленная загрузка видео — возможно связано с FFmpeg обработкой при upload
-- URL upload fails for Yandex.Disk/Google Drive sharing links (returns HTML)
+- Медленная загрузка видео (FFmpeg обработка при upload)
+- "Отправка себе" после рендера не работает (needs review)
+- URL upload fails for Yandex.Disk/Google Drive (returns HTML)
 
 ## Next focus
-- Исправить оставшиеся баги по запросу пользователя
-- Не трогать логику присоединения через `?startapp=` — она работает!
-- Не трогать VideoPlayer — он работает!
+- Исправить "Отправка себе" (sendVideoToTelegram)
+- Оптимизировать загрузку видео
