@@ -94,21 +94,21 @@ export default function ResultPage({ params }: PageProps) {
 
     fetchData();
 
-    // Poll for render status and replay status (less frequent to avoid rate limit)
+    // Poll for replay status (for multiplayer) and render status
     const interval = setInterval(async () => {
       try {
-        // Only poll if waiting for confirmation (first player)
-        if (waitingForConfirmation) {
+        // For multiplayer, always poll replay status to catch incoming requests
+        if (isMultiplayer) {
           await fetchReplayStatus();
         } else if (render?.status !== "ready" && render?.status !== "failed") {
-          // Only poll render status if not ready yet
+          // Only poll render status if not ready yet (solo)
           const data = await api.getRenderStatus(initData, sessionId);
           setRender(data);
         }
       } catch {
         // ignore
       }
-    }, 3000); // Increased to 3 seconds
+    }, 3000); // 3 seconds to avoid rate limit
 
     return () => clearInterval(interval);
   }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
