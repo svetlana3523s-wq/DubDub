@@ -94,24 +94,21 @@ export default function ResultPage({ params }: PageProps) {
 
     fetchData();
 
-    // Poll for render status and replay status
+    // Poll for render status and replay status (less frequent to avoid rate limit)
     const interval = setInterval(async () => {
       try {
-        const data = await api.getRenderStatus(initData, sessionId);
-        setRender(data);
-        
-        // Also poll replay status for multiplayer
-        if (session?.session.maxPlayers && session.session.maxPlayers > 1) {
+        // Only poll if waiting for confirmation (first player)
+        if (waitingForConfirmation) {
           await fetchReplayStatus();
-        }
-        
-        if (data.status === "ready" || data.status === "failed") {
-          // Keep polling for replay status even after render is ready
+        } else if (render?.status !== "ready" && render?.status !== "failed") {
+          // Only poll render status if not ready yet
+          const data = await api.getRenderStatus(initData, sessionId);
+          setRender(data);
         }
       } catch {
         // ignore
       }
-    }, 2000);
+    }, 3000); // Increased to 3 seconds
 
     return () => clearInterval(interval);
   }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
@@ -187,9 +184,12 @@ export default function ResultPage({ params }: PageProps) {
     try {
       const result = await api.confirmReplay(initData, sessionId, confirm);
       
-      if (result.confirmed) {
-        // Confirmed - execute replay
-        await executeConfirmedReplay();
+      if (result.confirmed && result.mode) {
+        // Confirmed - execute replay directly (using the original replay API)
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        await api.replaySession(initData, sessionId, result.mode as "sameScene" | "newScene");
+        router.push(`/s/${sessionId}`);
+        router.refresh();
       } else {
         // Declined - just reset state
         setReplayStatus({ pending: false });
