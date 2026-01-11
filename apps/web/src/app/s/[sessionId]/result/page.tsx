@@ -53,6 +53,7 @@ export default function ResultPage({ params }: PageProps) {
       }
       
       const status = await api.getReplayStatus(initData, sessionId);
+      console.log("[ReplayStatus] Received:", status);
       setReplayStatus(status);
       
       // If confirmed and we're the requester, execute the replay
@@ -299,8 +300,8 @@ export default function ResultPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Waiting for confirmation banner */}
-        {waitingForConfirmation && (
+        {/* Waiting for confirmation banner - only show for requester */}
+        {waitingForConfirmation && replayStatus.isRequester && (
           <div className="card bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
             <div className="text-center">
               <div className="text-2xl mb-2">⏳</div>
