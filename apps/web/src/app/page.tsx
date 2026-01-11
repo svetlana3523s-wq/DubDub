@@ -119,7 +119,7 @@ export default function HomePage() {
         {/* Greeting */}
         {user && (
           <p className="text-tg-hint">
-            Привет, {user.firstName}! 👋
+            Озвучивай сцены один или с друзьями!, {user.firstName}! 👋
           </p>
         )}
 
