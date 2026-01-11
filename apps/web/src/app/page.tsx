@@ -127,7 +127,7 @@ export default function HomePage() {
         <p className="text-lg text-tg-hint leading-relaxed">
           Озвучивай немое видео с друзьями.
           <br />
-          Каждый слышит только часть!
+       
         </p>
 
         {/* CTA */}
