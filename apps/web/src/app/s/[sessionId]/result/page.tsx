@@ -28,6 +28,7 @@ export default function ResultPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
   const [showNewSceneConfirm, setShowNewSceneConfirm] = useState<"sameScene" | "newScene" | null>(null);
   
@@ -204,12 +205,20 @@ export default function ResultPage({ params }: PageProps) {
     if (!initData || sending || sent) return;
     
     setSending(true);
+    setSendError(null);
+    
     try {
-      await api.sendVideoToTelegram(initData, sessionId);
-      setSent(true);
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-    } catch (err) {
+      const result = await api.sendVideoToTelegram(initData, sessionId);
+      if (result.sent) {
+        setSent(true);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      } else {
+        setSendError(result.error || "Не удалось отправить");
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+      }
+    } catch (err: any) {
       console.error("Send failed:", err);
+      setSendError(err.message || "Ошибка отправки");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
     } finally {
       setSending(false);
@@ -315,7 +324,13 @@ export default function ResultPage({ params }: PageProps) {
           <button
             onClick={handleSendToTelegram}
             disabled={sending || sent}
-            className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-70"
+            className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors ${
+              sent 
+                ? "bg-green-500 text-white" 
+                : sendError 
+                  ? "bg-red-500 hover:bg-red-600 text-white" 
+                  : "btn-primary"
+            } disabled:opacity-70`}
           >
             {sent ? (
               <>✅ Отправлено в чат!</>
@@ -324,10 +339,19 @@ export default function ResultPage({ params }: PageProps) {
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Отправляем...
               </>
+            ) : sendError ? (
+              <>🔄 Повторить отправку</>
             ) : (
               <>📥 Сохранить в Telegram</>
             )}
           </button>
+          
+          {/* Error message */}
+          {sendError && !sent && (
+            <div className="text-center text-sm text-red-400">
+              ❌ {sendError}
+            </div>
+          )}
 
           {/* Replay buttons - disabled when waiting */}
           <div className="grid grid-cols-2 gap-3">

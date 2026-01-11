@@ -110,9 +110,6 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
       const { sessionId } = request.params;
       const user = request.tgUser;
 
-      // Respond immediately to prevent timeout on client
-      reply.code(200).send({ sent: true });
-
       try {
         // Check render exists and is ready
         const render = await prisma.render.findUnique({
@@ -122,25 +119,16 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!render || render.status !== "ready" || !render.s3Key) {
           console.error(`[SendVideo] Render not ready for session ${sessionId}`);
-          // Send error message to user
-          try {
-            const chatId = parseInt(user.id, 10);
-            await bot.telegram.sendMessage(
-              chatId,
-              "❌ Видео ещё не готово. Попробуйте позже."
-            );
-          } catch (msgErr) {
-            console.error("[SendVideo] Failed to send error message:", msgErr);
-          }
-          return;
+          return reply.code(400).send({ sent: false, error: "Видео ещё не готово" });
         }
 
         console.log(`[SendVideo] Sending video via URL to ${user.id}`);
         
-        // Use URL instead of Buffer for faster delivery (same as channel notification)
+        // Use URL instead of Buffer for faster delivery
         const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
         const chatId = parseInt(user.id, 10);
         
+        let sent = false;
         try {
           await bot.telegram.sendVideo(
             chatId,
@@ -159,44 +147,46 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
               },
             }
           );
-
+          sent = true;
           console.log(`[SendVideo] Successfully sent video to ${chatId} via URL`);
         } catch (sendErr: any) {
           console.error(`[SendVideo] Failed to send via URL:`, sendErr.message || sendErr);
           // Fallback: try with Buffer if URL method fails
           console.log(`[SendVideo] Falling back to Buffer method...`);
-          const videoBuffer = await storage.download(render.s3Key);
-          await bot.telegram.sendVideo(
-            chatId,
-            { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
-            {
-              caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-              supports_streaming: true,
-              reply_markup: {
-                keyboard: [
-                  [{ text: "🎭 Начать игру" }],
-                  [{ text: "👥 Присоединиться к игре" }],
-                  [{ text: "💡 Предложить эпизод" }],
-                ],
-                resize_keyboard: true,
-                is_persistent: true,
-              },
-            }
-          );
-          console.log(`[SendVideo] Successfully sent video to ${chatId} via Buffer fallback`);
+          try {
+            const videoBuffer = await storage.download(render.s3Key);
+            await bot.telegram.sendVideo(
+              chatId,
+              { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
+              {
+                caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
+                supports_streaming: true,
+                reply_markup: {
+                  keyboard: [
+                    [{ text: "🎭 Начать игру" }],
+                    [{ text: "👥 Присоединиться к игре" }],
+                    [{ text: "💡 Предложить эпизод" }],
+                  ],
+                  resize_keyboard: true,
+                  is_persistent: true,
+                },
+              }
+            );
+            sent = true;
+            console.log(`[SendVideo] Successfully sent video to ${chatId} via Buffer fallback`);
+          } catch (bufferErr: any) {
+            console.error(`[SendVideo] Buffer fallback also failed:`, bufferErr.message || bufferErr);
+          }
+        }
+
+        if (sent) {
+          return reply.code(200).send({ sent: true });
+        } else {
+          return reply.code(500).send({ sent: false, error: "Не удалось отправить видео" });
         }
       } catch (err: any) {
         console.error("[SendVideo] Unexpected error:", err);
-        // Try to notify user about error
-        try {
-          const chatId = parseInt(user.id, 10);
-          await bot.telegram.sendMessage(
-            chatId,
-            "❌ Произошла ошибка при отправке видео. Попробуйте позже."
-          );
-        } catch (msgErr) {
-          console.error("[SendVideo] Failed to send error message:", msgErr);
-        }
+        return reply.code(500).send({ sent: false, error: "Ошибка при отправке" });
       }
     }
   );

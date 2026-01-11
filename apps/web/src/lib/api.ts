@@ -128,7 +128,7 @@ export const api = {
   sendVideoToTelegram: (
     initData: string,
     sessionId: string
-  ): Promise<{ sent: boolean }> =>
+  ): Promise<{ sent: boolean; error?: string }> =>
     request(initData, `/files/renders/${sessionId}/send-to-telegram`, {
       method: "POST",
       body: JSON.stringify({}),
