@@ -1,11 +1,11 @@
 # Current State
 
 ## Last updates
+- **Система подтверждения replay для мультиплеера** — когда один игрок нажимает "Новая сцена" или "Еще раз", второму приходит запрос на подтверждение; игра начинается только после согласия обоих
 - **Случайный выбор сцены** — теперь при создании игры выбирается СЛУЧАЙНАЯ сцена из неиспользованных; учитываются ВСЕ сессии (не только завершённые)
 - **Кнопка "Начать игру" исправлена** — заменена inline web_app кнопка на текстовую ссылку (iOS баг)
-- **VideoPlayer заменён на простой без Plyr** — убрали Plyr библиотеку (вызывала ошибки при переключении режимов), используем нативный HTML5 video с кастомными контролами
-- **iOS workaround for inline web_app buttons** — inline кнопки с `web_app` открывают WebView без Telegram SDK; используем ссылки `?startapp=s_sessionId` вместо inline buttons (НЕ ТРОГАТЬ!)
-- Server-side audio processing — при загрузке видео FFmpeg создаёт версию с вырезанным аудио (`s3KeyCuts`)
+- **VideoPlayer заменён на простой без Plyr** — используем нативный HTML5 video с кастомными контролами
+- **iOS workaround for inline web_app buttons** — inline кнопки с `web_app` открывают WebView без Telegram SDK; используем ссылки `?startapp=s_sessionId` (НЕ ТРОГАТЬ!)
 
 ## VideoPlayer решение (НЕ ТРОГАТЬ!)
 **Файл:** `apps/web/src/components/VideoPlayer.tsx`
