@@ -1248,12 +1248,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        // Update session
+        // Update session - for multiplayer, all players are already in, so go to recording
+        const allPlayersReady = session.participants.length >= session.maxPlayers;
         return await tx.session.update({
           where: { id },
           data: {
             sceneId: newSceneId,
-            status: session.maxPlayers === 1 ? "recording" : "lobby",
+            status: allPlayersReady ? "recording" : "lobby",
             replayRequest: null, // Clear the request
             task: session.gameMode === "tasks" ? getRandomTask() : null,
           },
