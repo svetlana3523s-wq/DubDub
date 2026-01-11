@@ -46,9 +46,8 @@ export default function ResultPage({ params }: PageProps) {
       // Check session status first - if not "ready", replay already happened
       const sessionData = await api.getSession(initData, sessionId);
       if (sessionData.session.status !== "ready") {
-        // Replay already executed, redirect to session
-        router.push(`/s/${sessionId}`);
-        router.refresh();
+        // Replay already executed, redirect to session (use window.location for clean navigation)
+        window.location.href = `/s/${sessionId}`;
         return;
       }
       
@@ -62,8 +61,7 @@ export default function ResultPage({ params }: PageProps) {
       }
       // If confirmed and we're NOT the requester, also navigate
       if (status.confirmed && !status.isRequester) {
-        router.push(`/s/${sessionId}`);
-        router.refresh();
+        window.location.href = `/s/${sessionId}`;
       }
     } catch (err) {
       console.error("Fetch replay status failed:", err);
@@ -122,8 +120,8 @@ export default function ResultPage({ params }: PageProps) {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
       setSent(false);
       setWaitingForConfirmation(false);
-      router.push(`/s/${sessionId}`);
-      router.refresh();
+      // Use window.location for clean navigation
+      window.location.href = `/s/${sessionId}`;
     } catch (err) {
       console.error("Execute replay failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -153,8 +151,7 @@ export default function ResultPage({ params }: PageProps) {
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
           setSent(false);
           setShowNewSceneConfirm(null);
-          router.push(`/s/${sessionId}`);
-          router.refresh();
+          window.location.href = `/s/${sessionId}`;
         } else if (result.waitingForConfirmation) {
           // Multiplayer - waiting for confirmation
           setWaitingForConfirmation(true);
@@ -167,8 +164,7 @@ export default function ResultPage({ params }: PageProps) {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
         setSent(false);
         setShowNewSceneConfirm(null);
-        router.push(`/s/${sessionId}`);
-        router.refresh();
+        window.location.href = `/s/${sessionId}`;
       }
     } catch (err) {
       console.error("Replay failed:", err);
@@ -189,8 +185,8 @@ export default function ResultPage({ params }: PageProps) {
         // Confirmed - execute replay directly (using the original replay API)
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
         await api.replaySession(initData, sessionId, result.mode as "sameScene" | "newScene");
-        router.push(`/s/${sessionId}`);
-        router.refresh();
+        // Use window.location for clean navigation (avoids caching issues)
+        window.location.href = `/s/${sessionId}`;
       } else {
         // Declined - just reset state
         setReplayStatus({ pending: false });
