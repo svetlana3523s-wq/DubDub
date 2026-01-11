@@ -1092,6 +1092,8 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Compare as strings (user.id is number, requestedBy is string)
       const isRequester = String(replayReq.requestedBy) === String(user.id);
+      
+      console.log(`[ReplayStatus] User ${user.id} checking status. requestedBy: ${replayReq.requestedBy}, isRequester: ${isRequester}`);
 
       return {
         pending: true,
