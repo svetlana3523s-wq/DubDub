@@ -1264,8 +1264,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Build response (same as original)
-      const sceneCues = parseCueJson(updatedSession.scene.cueJson, updatedSession.scene.fps);
-      const sceneMeta = buildSceneMeta(updatedSession.scene, sceneCues);
+      const sceneMeta = buildSceneMeta(updatedSession.scene);
       const sceneUrl = getProxyUrl("scene", updatedSession.scene.s3Key);
       const sceneUrlCuts = updatedSession.scene.s3KeyCuts 
         ? getProxyUrl("scene", updatedSession.scene.s3KeyCuts) 
@@ -1273,7 +1272,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const myParticipant = updatedSession.participants.find(p => p.tgUserId === user.id);
       const isSolo = updatedSession.maxPlayers === 1;
-      const totalRoles = sceneCues.length;
+      const totalRoles = sceneMeta.cues.length;
       const currentTurn = updatedSession.takes.length;
 
       return {
