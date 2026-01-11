@@ -1023,8 +1023,8 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         requestedAt: string;
       };
 
-      // Can't confirm own request
-      if (replayReq.requestedBy === user.id) {
+      // Can't confirm own request (compare as strings)
+      if (String(replayReq.requestedBy) === String(user.id)) {
         return reply.status(400).send({ error: "Cannot confirm own request" });
       }
 
@@ -1090,7 +1090,8 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         confirmedAt?: string;
       };
 
-      const isRequester = replayReq.requestedBy === user.id;
+      // Compare as strings (user.id is number, requestedBy is string)
+      const isRequester = String(replayReq.requestedBy) === String(user.id);
 
       return {
         pending: true,
