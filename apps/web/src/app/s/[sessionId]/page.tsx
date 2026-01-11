@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
-import { PlyrVideoPlayer } from "@/components/PlyrVideoPlayer";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import type { SessionStateResponse, JoinSessionResponse } from "@dubdub/shared";
 
 interface PageProps {
@@ -477,7 +477,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Full scene with original audio */}
           <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
-            <PlyrVideoPlayer
+            <VideoPlayer
               key={`full-${session.myRoleIndex}`}
               src={session.sceneUrl}
               srcCuts={session.sceneUrlCuts}
@@ -493,7 +493,7 @@ export default function SessionPage({ params }: PageProps) {
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
-            <PlyrVideoPlayer
+            <VideoPlayer
               key={`fragment-${session.myRoleIndex}`}
               src={session.sceneUrlCuts || session.sceneUrl}
               startTime={myCue?.startSec || 0}
@@ -556,7 +556,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Full scene with original audio */}
           <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-            <PlyrVideoPlayer
+            <VideoPlayer
               key={`wait-full`}
               src={session.sceneUrl}
               srcCuts={session.sceneUrlCuts}
@@ -573,7 +573,7 @@ export default function SessionPage({ params }: PageProps) {
               <div className="text-sm text-tg-hint mb-2">
                 🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
               </div>
-              <PlyrVideoPlayer
+              <VideoPlayer
                 key={`wait-fragment`}
                 src={session.sceneUrlCuts || session.sceneUrl}
                 startTime={myCue.startSec}

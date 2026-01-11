@@ -1,22 +1,16 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
-
-interface Cue {
-  roleIndex: number;
-  startSec: number;
-  durationSec: number;
-}
+import { useRef, useEffect, useState } from "react";
 
 interface VideoPlayerProps {
-  src: string;
+  src: string;           // Original video URL
+  srcCuts?: string;      // Video with audio cut (server-processed)
   startTime?: number;
   endTime?: number;
   muted?: boolean;
-  showTimeRange?: boolean;  // Show time indicator
-  label?: string;  // Optional label above video
-  cues?: Cue[];  // Cues for mute ranges (for "with cuts" mode)
-  showAudioModeSwitch?: boolean;  // Show original/with-cuts toggle
+  showTimeRange?: boolean;
+  label?: string;
+  showAudioModeSwitch?: boolean;
 }
 
 type AudioMode = "original" | "with-cuts";
@@ -24,34 +18,31 @@ type LoadState = "loading" | "ready" | "error";
 
 export function VideoPlayer({ 
   src, 
+  srcCuts,
   startTime = 0, 
   endTime, 
   muted = false,
   showTimeRange = true,
   label,
-  cues = [],
   showAudioModeSwitch = false,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(muted);
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [audioMode, setAudioMode] = useState<AudioMode>("with-cuts");
-  const [inCueRange, setInCueRange] = useState(false);
+  // Default to "with-cuts" if srcCuts available
+  const [audioMode, setAudioMode] = useState<AudioMode>(srcCuts ? "with-cuts" : "original");
 
-  // Check if current time is within any cue range
-  const isInCueRange = useCallback((time: number): boolean => {
-    return cues.some(cue => 
-      time >= cue.startSec && time < cue.startSec + cue.durationSec
-    );
-  }, [cues]);
+  // Current video source based on mode
+  const currentSrc = audioMode === "with-cuts" && srcCuts ? srcCuts : src;
 
-  // Load video only when src changes
+  // Load video when src changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !src) return;
+    if (!video || !currentSrc) return;
 
     setLoadState("loading");
+    setIsPlaying(false);
 
     const handleLoadedMetadata = () => {
       video.currentTime = startTime;
@@ -70,6 +61,7 @@ export function VideoPlayer({
     video.addEventListener("canplay", handleCanPlay);
     video.addEventListener("error", handleError);
 
+    // Force reload when source changes
     video.load();
 
     return () => {
@@ -77,9 +69,9 @@ export function VideoPlayer({
       video.removeEventListener("canplay", handleCanPlay);
       video.removeEventListener("error", handleError);
     };
-  }, [src, startTime]);
+  }, [currentSrc, startTime]);
 
-  // Playback controls (separate from loading)
+  // Playback controls
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -89,12 +81,6 @@ export function VideoPlayer({
         video.pause();
         video.currentTime = startTime;
         setIsPlaying(false);
-      }
-
-      if (audioMode === "with-cuts" && cues.length > 0) {
-        const nowInCue = isInCueRange(video.currentTime);
-        setInCueRange(nowInCue);
-        video.muted = nowInCue || isMuted;
       }
     };
 
@@ -113,18 +99,7 @@ export function VideoPlayer({
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("play", handlePlay);
     };
-  }, [startTime, endTime, audioMode, cues, isMuted, isInCueRange]);
-
-  // Update muted state when audio mode changes
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    if (audioMode === "original") {
-      video.muted = isMuted;
-      setInCueRange(false);
-    }
-  }, [audioMode, isMuted]);
+  }, [startTime, endTime]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -144,17 +119,16 @@ export function VideoPlayer({
     if (video) {
       const newMuted = !isMuted;
       setIsMuted(newMuted);
-      // In original mode, directly set muted
-      // In with-cuts mode, muting is controlled by time position
-      if (audioMode === "original") {
-        video.muted = newMuted;
-      }
+      video.muted = newMuted;
     }
   };
 
-  const toggleAudioMode = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setAudioMode(prev => prev === "original" ? "with-cuts" : "original");
+  const handleModeChange = (mode: AudioMode) => {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+    }
+    setAudioMode(mode);
   };
 
   return (
@@ -163,11 +137,11 @@ export function VideoPlayer({
         <div className="text-sm text-tg-hint">{label}</div>
       )}
       
-      {/* Audio mode switch */}
-      {showAudioModeSwitch && cues.length > 0 && (
+      {/* Audio mode switch - only if srcCuts available */}
+      {showAudioModeSwitch && srcCuts && (
         <div className="flex gap-2 text-sm">
           <button
-            onClick={() => setAudioMode("with-cuts")}
+            onClick={() => handleModeChange("with-cuts")}
             className={`px-3 py-1.5 rounded-full transition-colors ${
               audioMode === "with-cuts"
                 ? "bg-accent-primary text-white"
@@ -177,7 +151,7 @@ export function VideoPlayer({
             ✂️ С вырезами
           </button>
           <button
-            onClick={() => setAudioMode("original")}
+            onClick={() => handleModeChange("original")}
             className={`px-3 py-1.5 rounded-full transition-colors ${
               audioMode === "original"
                 ? "bg-accent-primary text-white"
@@ -216,9 +190,9 @@ export function VideoPlayer({
 
         <video
           ref={videoRef}
-          src={src}
+          src={currentSrc}
           className="w-full"
-          muted={audioMode === "with-cuts" ? (inCueRange || isMuted) : isMuted}
+          muted={isMuted}
           playsInline
           preload="auto"
         />
@@ -247,13 +221,6 @@ export function VideoPlayer({
           {isMuted ? "🔇" : "🔊"}
         </button>
 
-        {/* "Muted for cue" indicator */}
-        {audioMode === "with-cuts" && inCueRange && isPlaying && (
-          <div className="absolute top-2 left-2 bg-orange-500/90 px-2 py-1 rounded text-xs text-white animate-pulse">
-            ✂️ Вырезано
-          </div>
-        )}
-
         {/* Time range indicator */}
         {showTimeRange && (startTime > 0 || endTime) && (
           <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs">
@@ -264,4 +231,3 @@ export function VideoPlayer({
     </div>
   );
 }
-
