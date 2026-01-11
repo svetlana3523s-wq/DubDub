@@ -39,10 +39,19 @@ export default function ResultPage({ params }: PageProps) {
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
 
-  // Fetch replay status
+  // Fetch replay status and session status
   const fetchReplayStatus = useCallback(async () => {
     if (!initData) return;
     try {
+      // Check session status first - if not "ready", replay already happened
+      const sessionData = await api.getSession(initData, sessionId);
+      if (sessionData.session.status !== "ready") {
+        // Replay already executed, redirect to session
+        router.push(`/s/${sessionId}`);
+        router.refresh();
+        return;
+      }
+      
       const status = await api.getReplayStatus(initData, sessionId);
       setReplayStatus(status);
       
@@ -58,7 +67,7 @@ export default function ResultPage({ params }: PageProps) {
     } catch (err) {
       console.error("Fetch replay status failed:", err);
     }
-  }, [initData, sessionId]);
+  }, [initData, sessionId, router]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
