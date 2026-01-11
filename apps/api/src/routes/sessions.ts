@@ -921,5 +921,391 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       };
     }
   );
+
+  // Request replay (for multiplayer - requires confirmation from other player)
+  fastify.post<{ 
+    Params: { id: string }; 
+    Querystring: { mode: "sameScene" | "newScene" };
+  }>(
+    "/sessions/:id/request-replay",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { mode } = request.query;
+      const user = request.tgUser;
+
+      if (mode !== "sameScene" && mode !== "newScene") {
+        return reply.status(400).send({ error: "Invalid mode" });
+      }
+
+      const session = await prisma.session.findUnique({
+        where: { id },
+        include: { participants: true },
+      });
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      // Check if user is a participant
+      const participant = session.participants.find(p => p.tgUserId === user.id);
+      if (!participant) {
+        return reply.status(403).send({ error: "Not a participant" });
+      }
+
+      // For solo games, just trigger replay directly
+      if (session.maxPlayers === 1) {
+        // Redirect to regular replay
+        return reply.status(200).send({ 
+          directReplay: true,
+          message: "Solo game - replay directly" 
+        });
+      }
+
+      // For multiplayer, create replay request
+      const replayRequest = {
+        requestedBy: user.id,
+        requestedByName: user.firstName,
+        mode,
+        requestedAt: new Date().toISOString(),
+      };
+
+      await prisma.session.update({
+        where: { id },
+        data: { replayRequest: JSON.stringify(replayRequest) },
+      });
+
+      console.log(`[ReplayRequest] User ${user.id} requested ${mode} for session ${id}`);
+
+      return { 
+        requested: true,
+        waitingForConfirmation: true,
+      };
+    }
+  );
+
+  // Confirm replay (second player confirms)
+  fastify.post<{ 
+    Params: { id: string };
+    Querystring: { confirm: string }; // "true" or "false"
+  }>(
+    "/sessions/:id/confirm-replay",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const confirm = request.query.confirm === "true";
+      const user = request.tgUser;
+
+      const session = await prisma.session.findUnique({
+        where: { id },
+        include: { participants: true },
+      });
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      // Check if user is a participant
+      const participant = session.participants.find(p => p.tgUserId === user.id);
+      if (!participant) {
+        return reply.status(403).send({ error: "Not a participant" });
+      }
+
+      // Check if there's a pending request
+      if (!session.replayRequest) {
+        return reply.status(400).send({ error: "No pending replay request" });
+      }
+
+      const replayReq = JSON.parse(session.replayRequest) as {
+        requestedBy: string;
+        requestedByName: string;
+        mode: "sameScene" | "newScene";
+        requestedAt: string;
+      };
+
+      // Can't confirm own request
+      if (replayReq.requestedBy === user.id) {
+        return reply.status(400).send({ error: "Cannot confirm own request" });
+      }
+
+      if (!confirm) {
+        // Declined - clear request
+        await prisma.session.update({
+          where: { id },
+          data: { replayRequest: null },
+        });
+        console.log(`[ReplayRequest] User ${user.id} declined replay for session ${id}`);
+        return { declined: true };
+      }
+
+      // Confirmed! Clear request and mark for replay execution
+      // Set a special status to indicate replay is confirmed
+      await prisma.session.update({
+        where: { id },
+        data: { 
+          replayRequest: JSON.stringify({
+            ...replayReq,
+            confirmedBy: user.id,
+            confirmedAt: new Date().toISOString(),
+          }),
+        },
+      });
+
+      console.log(`[ReplayRequest] User ${user.id} confirmed ${replayReq.mode} for session ${id}`);
+
+      return { 
+        confirmed: true,
+        mode: replayReq.mode,
+      };
+    }
+  );
+
+  // Get replay request status
+  fastify.get<{ Params: { id: string } }>(
+    "/sessions/:id/replay-status",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const user = request.tgUser;
+
+      const session = await prisma.session.findUnique({
+        where: { id },
+        select: { replayRequest: true, maxPlayers: true, participants: true },
+      });
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      if (!session.replayRequest) {
+        return { pending: false };
+      }
+
+      const replayReq = JSON.parse(session.replayRequest) as {
+        requestedBy: string;
+        requestedByName: string;
+        mode: "sameScene" | "newScene";
+        requestedAt: string;
+        confirmedBy?: string;
+        confirmedAt?: string;
+      };
+
+      const isRequester = replayReq.requestedBy === user.id;
+
+      return {
+        pending: true,
+        mode: replayReq.mode,
+        requestedBy: replayReq.requestedBy,
+        requestedByName: replayReq.requestedByName,
+        isRequester,
+        confirmed: !!replayReq.confirmedBy,
+      };
+    }
+  );
+
+  // Execute confirmed replay (after confirmation)
+  fastify.post<{ Params: { id: string } }>(
+    "/sessions/:id/execute-replay",
+    { preHandler: authMiddleware },
+    async (request, reply): Promise<SessionStateResponse> => {
+      const { id } = request.params;
+      const user = request.tgUser;
+
+      const session = await prisma.session.findUnique({
+        where: { id },
+        include: {
+          scene: true,
+          participants: { orderBy: { roleIndex: "asc" } },
+          takes: true,
+          render: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      // Check if user is a participant
+      const participant = session.participants.find(p => p.tgUserId === user.id);
+      if (!participant) {
+        return reply.status(403).send({ error: "Not a participant" });
+      }
+
+      // For solo games, no confirmation needed
+      if (session.maxPlayers > 1) {
+        // Check if replay was confirmed
+        if (!session.replayRequest) {
+          return reply.status(400).send({ error: "No replay request" });
+        }
+
+        const replayReq = JSON.parse(session.replayRequest) as {
+          requestedBy: string;
+          mode: "sameScene" | "newScene";
+          confirmedBy?: string;
+        };
+
+        if (!replayReq.confirmedBy) {
+          return reply.status(400).send({ error: "Replay not confirmed yet" });
+        }
+      }
+
+      // Get mode from request or use newScene as default for solo
+      let mode: "sameScene" | "newScene" = "newScene";
+      if (session.replayRequest) {
+        const replayReq = JSON.parse(session.replayRequest);
+        mode = replayReq.mode;
+      }
+
+      // Execute the replay (same logic as original /replay endpoint)
+      const updatedSession = await prisma.$transaction(async (tx) => {
+        // Delete takes and render
+        await tx.take.deleteMany({ where: { sessionId: id } });
+        await tx.render.deleteMany({ where: { sessionId: id } });
+
+        let newSceneId = session.sceneId;
+        let updatedParticipants = session.participants;
+
+        if (mode === "newScene") {
+          // Same random scene selection logic as before
+          const usedSessionsByCreator = await tx.session.findMany({
+            where: {
+              category: session.category,
+              createdByTgUserId: user.id,
+              status: { in: ["lobby", "recording", "rendering", "ready"] },
+            },
+            select: { sceneId: true },
+          });
+
+          const usedSessionsAsParticipant = await tx.session.findMany({
+            where: {
+              category: session.category,
+              status: { in: ["lobby", "recording", "rendering", "ready"] },
+              participants: { some: { tgUserId: user.id } },
+            },
+            select: { sceneId: true },
+          });
+
+          const allUsedSceneIds = new Set([
+            ...usedSessionsByCreator.map((s) => s.sceneId),
+            ...usedSessionsAsParticipant.map((s) => s.sceneId),
+          ]);
+
+          const usedSceneIds = Array.from(allUsedSceneIds);
+
+          const availableScenes = await tx.scene.findMany({
+            where: {
+              category: session.category,
+              id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
+            },
+          });
+
+          let newScene = availableScenes.length > 0
+            ? availableScenes[Math.floor(Math.random() * availableScenes.length)]
+            : null;
+
+          if (!newScene) {
+            const allOtherScenes = await tx.scene.findMany({
+              where: { 
+                category: session.category,
+                id: { not: session.sceneId },
+              },
+            });
+            newScene = allOtherScenes.length > 0
+              ? allOtherScenes[Math.floor(Math.random() * allOtherScenes.length)]
+              : null;
+          }
+
+          if (!newScene) {
+            throw new Error(`No other scenes available in category "${session.category}"`);
+          }
+
+          newSceneId = newScene.id;
+
+          // Shuffle roles for multiplayer
+          if (session.maxPlayers > 1) {
+            const shuffledParticipants = [...session.participants];
+            for (let i = shuffledParticipants.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j]!, shuffledParticipants[i]!];
+            }
+            
+            for (let i = 0; i < shuffledParticipants.length; i++) {
+              const p = shuffledParticipants[i];
+              if (!p || i >= 2) continue;
+              await tx.participant.update({
+                where: { id: p.id },
+                data: { roleIndex: i },
+              });
+            }
+
+            updatedParticipants = await tx.participant.findMany({
+              where: { sessionId: id },
+              orderBy: { roleIndex: "asc" },
+            });
+          }
+        }
+
+        // Update session
+        return await tx.session.update({
+          where: { id },
+          data: {
+            sceneId: newSceneId,
+            status: session.maxPlayers === 1 ? "recording" : "lobby",
+            replayRequest: null, // Clear the request
+            task: session.gameMode === "tasks" ? getRandomTask() : null,
+          },
+          include: {
+            scene: true,
+            participants: { orderBy: { roleIndex: "asc" } },
+            takes: true,
+            render: true,
+          },
+        });
+      });
+
+      // Build response (same as original)
+      const sceneCues = parseCueJson(updatedSession.scene.cueJson, updatedSession.scene.fps);
+      const sceneMeta = buildSceneMeta(updatedSession.scene, sceneCues);
+      const sceneUrl = getProxyUrl("scene", updatedSession.scene.s3Key);
+      const sceneUrlCuts = updatedSession.scene.s3KeyCuts 
+        ? getProxyUrl("scene", updatedSession.scene.s3KeyCuts) 
+        : undefined;
+
+      const myParticipant = updatedSession.participants.find(p => p.tgUserId === user.id);
+      const isSolo = updatedSession.maxPlayers === 1;
+      const totalRoles = sceneCues.length;
+      const currentTurn = updatedSession.takes.length;
+
+      return {
+        session: {
+          id: updatedSession.id,
+          category: updatedSession.category as Category,
+          gameMode: updatedSession.gameMode as GameMode,
+          task: updatedSession.task ?? null,
+          status: updatedSession.status as SessionStatus,
+          maxPlayers: updatedSession.maxPlayers,
+          createdByTgUserId: updatedSession.createdByTgUserId,
+          sceneMeta,
+        },
+        participants: updatedSession.participants.map((p) => ({
+          id: p.id,
+          tgUserId: p.tgUserId ?? null,
+          displayName: p.displayName,
+          roleIndex: p.roleIndex,
+        })),
+        myRoleIndex: isSolo
+          ? (currentTurn < totalRoles ? currentTurn : null)
+          : (myParticipant?.roleIndex ?? null),
+        currentTurn,
+        takes: updatedSession.takes.map((t) => ({
+          roleIndex: t.roleIndex,
+          durationSec: t.durationSec,
+        })),
+        render: null,
+        sceneUrl,
+        sceneUrlCuts,
+      };
+    }
+  );
 };
 

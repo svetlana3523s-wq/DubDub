@@ -144,6 +144,45 @@ export const api = {
       body: JSON.stringify({}),
     }),
 
+  // Request replay (for multiplayer - requires confirmation)
+  requestReplay: (
+    initData: string,
+    sessionId: string,
+    mode: "sameScene" | "newScene"
+  ): Promise<{ requested?: boolean; directReplay?: boolean; waitingForConfirmation?: boolean }> =>
+    request(initData, `/sessions/${sessionId}/request-replay?mode=${mode}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  // Confirm replay (second player confirms or declines)
+  confirmReplay: (
+    initData: string,
+    sessionId: string,
+    confirm: boolean
+  ): Promise<{ confirmed?: boolean; declined?: boolean; mode?: string }> =>
+    request(initData, `/sessions/${sessionId}/confirm-replay?confirm=${confirm}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  // Get replay status
+  getReplayStatus: (
+    initData: string,
+    sessionId: string
+  ): Promise<{ pending: boolean; mode?: string; requestedByName?: string; isRequester?: boolean; confirmed?: boolean }> =>
+    request(initData, `/sessions/${sessionId}/replay-status`),
+
+  // Execute confirmed replay
+  executeReplay: (
+    initData: string,
+    sessionId: string
+  ): Promise<SessionStateResponse> =>
+    request(initData, `/sessions/${sessionId}/execute-replay`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
   // Admin endpoints
   checkAdmin: (initData: string): Promise<{ isAdmin: boolean }> =>
     request(initData, "/admin/check"),

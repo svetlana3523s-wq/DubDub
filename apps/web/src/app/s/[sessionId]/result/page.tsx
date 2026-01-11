@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
@@ -9,6 +9,14 @@ import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared"
 
 interface PageProps {
   params: { sessionId: string };
+}
+
+interface ReplayStatus {
+  pending: boolean;
+  mode?: string;
+  requestedByName?: string;
+  isRequester?: boolean;
+  confirmed?: boolean;
 }
 
 export default function ResultPage({ params }: PageProps) {
@@ -22,6 +30,35 @@ export default function ResultPage({ params }: PageProps) {
   const [sent, setSent] = useState(false);
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
   const [showNewSceneConfirm, setShowNewSceneConfirm] = useState<"sameScene" | "newScene" | null>(null);
+  
+  // Multiplayer replay confirmation
+  const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ pending: false });
+  const [waitingForConfirmation, setWaitingForConfirmation] = useState(false);
+  const [confirmingReplay, setConfirmingReplay] = useState(false);
+
+  // Check if this is a multiplayer session
+  const isMultiplayer = session && session.session.maxPlayers > 1;
+
+  // Fetch replay status
+  const fetchReplayStatus = useCallback(async () => {
+    if (!initData) return;
+    try {
+      const status = await api.getReplayStatus(initData, sessionId);
+      setReplayStatus(status);
+      
+      // If confirmed and we're the requester, execute the replay
+      if (status.confirmed && status.isRequester) {
+        executeConfirmedReplay();
+      }
+      // If confirmed and we're NOT the requester, also navigate
+      if (status.confirmed && !status.isRequester) {
+        router.push(`/s/${sessionId}`);
+        router.refresh();
+      }
+    } catch (err) {
+      console.error("Fetch replay status failed:", err);
+    }
+  }, [initData, sessionId]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -34,6 +71,11 @@ export default function ResultPage({ params }: PageProps) {
         ]);
         setRender(renderData);
         setSession(sessionData);
+        
+        // Also fetch replay status for multiplayer
+        if (sessionData.session.maxPlayers > 1) {
+          await fetchReplayStatus();
+        }
       } catch (err) {
         console.error("Fetch failed:", err);
       } finally {
@@ -43,21 +85,44 @@ export default function ResultPage({ params }: PageProps) {
 
     fetchData();
 
-    // Poll while not ready
+    // Poll for render status and replay status
     const interval = setInterval(async () => {
       try {
         const data = await api.getRenderStatus(initData, sessionId);
         setRender(data);
+        
+        // Also poll replay status for multiplayer
+        if (session?.session.maxPlayers && session.session.maxPlayers > 1) {
+          await fetchReplayStatus();
+        }
+        
         if (data.status === "ready" || data.status === "failed") {
-          clearInterval(interval);
+          // Keep polling for replay status even after render is ready
         }
       } catch {
         // ignore
       }
-    }, 3000);
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, [isReady, initData, sessionId]);
+  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
+
+  // Execute confirmed replay
+  const executeConfirmedReplay = async () => {
+    if (!initData) return;
+    try {
+      await api.executeReplay(initData, sessionId);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      setSent(false);
+      setWaitingForConfirmation(false);
+      router.push(`/s/${sessionId}`);
+      router.refresh();
+    } catch (err) {
+      console.error("Execute replay failed:", err);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+      setWaitingForConfirmation(false);
+    }
+  };
 
   const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
     if (!initData || replaying) return;
@@ -69,23 +134,63 @@ export default function ResultPage({ params }: PageProps) {
     }
     
     setReplaying(mode);
+    
     try {
-      // Replay session (resets takes and render, updates session)
-      await api.replaySession(initData, sessionId, mode);
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-      
-      // Reset sent state for new game
-      setSent(false);
-      setShowNewSceneConfirm(null);
-      
-      // Navigate back to session page (will show lobby/recording state)
-      router.push(`/s/${sessionId}`);
-      router.refresh(); // Force refresh to get new state
+      // For multiplayer, request confirmation from other player
+      if (isMultiplayer) {
+        const result = await api.requestReplay(initData, sessionId, mode);
+        
+        if (result.directReplay) {
+          // Solo game - do direct replay
+          await api.replaySession(initData, sessionId, mode);
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+          setSent(false);
+          setShowNewSceneConfirm(null);
+          router.push(`/s/${sessionId}`);
+          router.refresh();
+        } else if (result.waitingForConfirmation) {
+          // Multiplayer - waiting for confirmation
+          setWaitingForConfirmation(true);
+          setShowNewSceneConfirm(null);
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        }
+      } else {
+        // Solo - direct replay
+        await api.replaySession(initData, sessionId, mode);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        setSent(false);
+        setShowNewSceneConfirm(null);
+        router.push(`/s/${sessionId}`);
+        router.refresh();
+      }
     } catch (err) {
       console.error("Replay failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+    } finally {
       setReplaying(null);
-      setShowNewSceneConfirm(null);
+    }
+  };
+
+  const handleConfirmReplay = async (confirm: boolean) => {
+    if (!initData) return;
+    setConfirmingReplay(true);
+    
+    try {
+      const result = await api.confirmReplay(initData, sessionId, confirm);
+      
+      if (result.confirmed) {
+        // Confirmed - execute replay
+        await executeConfirmedReplay();
+      } else {
+        // Declined - just reset state
+        setReplayStatus({ pending: false });
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("warning");
+      }
+    } catch (err) {
+      console.error("Confirm replay failed:", err);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setConfirmingReplay(false);
     }
   };
 
@@ -97,7 +202,6 @@ export default function ResultPage({ params }: PageProps) {
       await api.sendVideoToTelegram(initData, sessionId);
       setSent(true);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-      // Don't close mini app - let user continue playing
     } catch (err) {
       console.error("Send failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -105,8 +209,6 @@ export default function ResultPage({ params }: PageProps) {
       setSending(false);
     }
   };
-
-  // Auto-send is disabled - user must click button to send
 
   if (loading || !isReady) {
     return (
@@ -188,6 +290,19 @@ export default function ResultPage({ params }: PageProps) {
           </div>
         )}
 
+        {/* Waiting for confirmation banner */}
+        {waitingForConfirmation && (
+          <div className="card bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
+            <div className="text-center">
+              <div className="text-2xl mb-2">⏳</div>
+              <p className="font-medium">Ждём подтверждения от партнёра...</p>
+              <p className="text-sm text-tg-hint mt-1">
+                Другой игрок должен подтвердить запуск новой игры
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
           {/* Send to Telegram - prominent */}
@@ -208,17 +323,17 @@ export default function ResultPage({ params }: PageProps) {
             )}
           </button>
 
-          {/* Replay buttons */}
+          {/* Replay buttons - disabled when waiting */}
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => handleReplay("sameScene")}
-              disabled={replaying !== null}
+              disabled={replaying !== null || waitingForConfirmation}
               className="btn-primary disabled:opacity-70"
             >
               {replaying === "sameScene" ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
-                  Перезапуск...
+                  ...
                 </>
               ) : (
                 <>🔄 Еще раз</>
@@ -226,23 +341,22 @@ export default function ResultPage({ params }: PageProps) {
             </button>
             <button
               onClick={() => handleReplay("newScene")}
-              disabled={replaying !== null}
+              disabled={replaying !== null || waitingForConfirmation}
               className="btn-primary disabled:opacity-70"
             >
               {replaying === "newScene" ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
-                  Перезапуск...
+                  ...
                 </>
               ) : (
                 <>🎲 Новая сцена</>
               )}
             </button>
           </div>
-
         </div>
 
-        {/* Replay Confirmation Dialog */}
+        {/* "Unsent video" Confirmation Dialog */}
         {showNewSceneConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
             <div className="card max-w-sm w-full space-y-4 animate-slide-up">
@@ -272,8 +386,42 @@ export default function ResultPage({ params }: PageProps) {
             </div>
           </div>
         )}
+
+        {/* Multiplayer Replay Confirmation Dialog (for other player) */}
+        {replayStatus.pending && !replayStatus.isRequester && !replayStatus.confirmed && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
+            <div className="card max-w-sm w-full space-y-4 animate-slide-up">
+              <div className="text-center">
+                <div className="text-4xl mb-3">🎮</div>
+                <h3 className="text-lg font-bold mb-2">
+                  {replayStatus.mode === "newScene" ? "Новая сцена" : "Повторить игру"}
+                </h3>
+                <p className="text-sm text-tg-hint">
+                  <span className="font-medium text-white">{replayStatus.requestedByName}</span> хочет {replayStatus.mode === "newScene" ? "начать новую сцену" : "повторить текущую сцену"}. Вы согласны?
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleConfirmReplay(false)}
+                  disabled={confirmingReplay}
+                  className="btn-secondary disabled:opacity-70"
+                >
+                  {confirmingReplay ? "..." : "Нет"}
+                </button>
+                <button
+                  onClick={() => handleConfirmReplay(true)}
+                  disabled={confirmingReplay}
+                  className="btn-primary disabled:opacity-70"
+                >
+                  {confirmingReplay ? (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                  ) : "Да, поехали!"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

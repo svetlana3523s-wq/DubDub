@@ -37,6 +37,10 @@ model Session {
   participants    Participant[]
   takes           Take[]
   render          Render?
+  
+  // Replay request for multiplayer confirmation
+  // JSON: { requestedBy: string, mode: "sameScene" | "newScene", requestedAt: string }
+  replayRequest   String?       // null = no pending request
 
   @@index([createdByTgUserId])
   @@index([status])
