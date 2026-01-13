@@ -45,34 +45,46 @@ export default function ResultPage({ params }: PageProps) {
   // Track render error count for retry logic
   const [renderErrorCount, setRenderErrorCount] = useState(0);
 
+  // Execute confirmed replay - only redirect if render is ready (users saw the result)
+  const executeConfirmedReplay = useCallback(async () => {
+    if (!initData) return;
+    
+    // Only execute replay if render is ready (users have seen the result)
+    if (render?.status !== "ready") {
+      console.log("[ExecuteReplay] Waiting for render to be ready before replay");
+      return;
+    }
+    
+    try {
+      await api.executeReplay(initData, sessionId);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      setSent(false);
+      setWaitingForConfirmation(false);
+      // Use window.location for clean navigation
+      window.location.href = `/s/${sessionId}`;
+    } catch (err) {
+      console.error("Execute replay failed:", err);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+      setWaitingForConfirmation(false);
+    }
+  }, [initData, sessionId, render]);
+
   // Fetch replay status and session status
   const fetchReplayStatus = useCallback(async () => {
     if (!initData) return;
     try {
-      // Check session status first - if not "ready", replay already happened
-      const sessionData = await api.getSession(initData, sessionId);
-      if (sessionData.session.status !== "ready") {
-        // Replay already executed, redirect to session (use window.location for clean navigation)
-        console.log("[Polling] Session status changed to:", sessionData.session.status, "- redirecting");
-        window.location.href = `/s/${sessionId}?t=${Date.now()}`;
-        return;
-      }
-      
       const status = await api.getReplayStatus(initData, sessionId);
       console.log("[ReplayStatus] Received:", status);
       setReplayStatus(status);
       
       // If confirmed and we're the requester, execute the replay
-      // Only requester executes - non-requester will be redirected by session.status change above
       if (status.confirmed && status.isRequester) {
         executeConfirmedReplay();
       }
-      // Non-requester: don't redirect here, let session.status polling handle it
-      // This prevents race condition where redirect happens before execute-replay completes
     } catch (err) {
       console.error("Fetch replay status failed:", err);
     }
-  }, [initData, sessionId]);
+  }, [initData, sessionId, executeConfirmedReplay]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -132,23 +144,6 @@ export default function ResultPage({ params }: PageProps) {
 
     return () => clearInterval(interval);
   }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
-
-  // Execute confirmed replay
-  const executeConfirmedReplay = async () => {
-    if (!initData) return;
-    try {
-      await api.executeReplay(initData, sessionId);
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-      setSent(false);
-      setWaitingForConfirmation(false);
-      // Use window.location for clean navigation
-      window.location.href = `/s/${sessionId}`;
-    } catch (err) {
-      console.error("Execute replay failed:", err);
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
-      setWaitingForConfirmation(false);
-    }
-  };
 
   const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
     if (!initData || replaying) return;
