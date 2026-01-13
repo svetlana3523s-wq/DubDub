@@ -114,6 +114,15 @@ export default function ResultPage({ params }: PageProps) {
     // Poll for replay status (for multiplayer) and render status
     const interval = setInterval(async () => {
       try {
+        // Check session status first - if not "ready", replay was executed, redirect both players
+        const sessionData = await api.getSession(initData, sessionId);
+        if (sessionData.session.status !== "ready") {
+          // Replay was executed (status changed to "recording" or other), redirect both players
+          console.log("[Polling] Session status changed to:", sessionData.session.status, "- redirecting after replay");
+          window.location.href = `/s/${sessionId}`;
+          return;
+        }
+        
         // For multiplayer, always poll replay status to catch incoming requests
         if (isMultiplayer) {
           await fetchReplayStatus();
