@@ -122,74 +122,32 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!render || render.status !== "ready" || !render.s3Key) {
-          console.error(`[SendVideo] Render not ready for session ${sessionId}`);
-          return reply.code(400).send({ sent: false, error: "Видео ещё не готово" });
+          return reply.status(404).send({ sent: false, error: "Видео ещё не готово" });
         }
 
-        console.log(`[SendVideo] Sending video via URL to ${user.id}`);
-        
-        // Use URL instead of Buffer for faster delivery
-        const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
-        const chatId = parseInt(user.id, 10);
-        
-        let sent = false;
-        
-        // Try sending via URL first (faster)
-        try {
-          await bot.telegram.sendVideo(
-            chatId,
-            { url: videoUrl },
-            {
-              caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-              supports_streaming: true,
-              reply_markup: {
-                keyboard: [
-                  [{ text: "🎭 Начать игру" }],
-                  [{ text: "👥 Присоединиться к игре" }],
-                  [{ text: "💡 Предложить эпизод" }],
-                ],
-                resize_keyboard: true,
-                is_persistent: true,
-              },
-            }
-          );
-          sent = true;
-          console.log(`[SendVideo] Successfully sent video to ${chatId} via URL`);
-        } catch (sendErr: any) {
-          console.error(`[SendVideo] Failed to send via URL:`, sendErr.message || sendErr);
-          // Fallback: try with Buffer
-          console.log(`[SendVideo] Falling back to Buffer method...`);
-          try {
-            const videoBuffer = await storage.download(render.s3Key);
-            await bot.telegram.sendVideo(
-              chatId,
-              { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
-              {
-                caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-                supports_streaming: true,
-                reply_markup: {
-                  keyboard: [
-                    [{ text: "🎭 Начать игру" }],
-                    [{ text: "👥 Присоединиться к игре" }],
-                    [{ text: "💡 Предложить эпизод" }],
-                  ],
-                  resize_keyboard: true,
-                  is_persistent: true,
-                },
-              }
-            );
-            sent = true;
-            console.log(`[SendVideo] Successfully sent video to ${chatId} via Buffer fallback`);
-          } catch (bufferErr: any) {
-            console.error(`[SendVideo] Buffer fallback also failed:`, bufferErr.message || bufferErr);
+        // Download video from S3
+        const videoBuffer = await storage.download(render.s3Key);
+
+        // Send video via Telegram
+        await bot.telegram.sendVideo(
+          parseInt(user.id, 10),
+          { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
+          {
+            caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
+            supports_streaming: true,
+            reply_markup: {
+              keyboard: [
+                [{ text: "🎭 Начать игру" }],
+                [{ text: "👥 Присоединиться к игре" }],
+                [{ text: "💡 Предложить эпизод" }],
+              ],
+              resize_keyboard: true,
+              is_persistent: true,
+            },
           }
-        }
+        );
 
-        if (sent) {
-          return reply.code(200).send({ sent: true });
-        } else {
-          return reply.code(500).send({ sent: false, error: "Не удалось отправить видео" });
-        }
+        return reply.code(200).send({ sent: true });
       } catch (err: any) {
         console.error("[SendVideo] Unexpected error:", err);
         return reply.code(500).send({ sent: false, error: "Ошибка при отправке" });
