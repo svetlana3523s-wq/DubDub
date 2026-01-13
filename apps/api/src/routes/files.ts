@@ -42,7 +42,8 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Serve rendered videos (streaming)
   // URL format: /files/renders/:sessionId.mp4 (sessionId param includes .mp4)
-  fastify.get<{ Params: { sessionId: string } }>(
+  // Supports ?t=timestamp query param for cache-busting
+  fastify.get<{ Params: { sessionId: string }; Querystring: { t?: string } }>(
     "/files/renders/:sessionId",
     async (request, reply) => {
       // Strip .mp4 extension if present (URL is /files/renders/abc123.mp4)
@@ -55,7 +56,10 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         
         reply
           .header("Content-Type", "video/mp4")
-          .header("Cache-Control", "public, max-age=86400")
+          // No caching for renders - they can be re-rendered with same sessionId
+          .header("Cache-Control", "no-cache, no-store, must-revalidate")
+          .header("Pragma", "no-cache")
+          .header("Expires", "0")
           .header("Accept-Ranges", "bytes");
         
         if (contentLength) {

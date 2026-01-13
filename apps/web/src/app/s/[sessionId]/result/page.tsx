@@ -40,6 +40,9 @@ export default function ResultPage({ params }: PageProps) {
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
 
+  // Track render error count for retry logic
+  const [renderErrorCount, setRenderErrorCount] = useState(0);
+
   // Fetch replay status and session status
   const fetchReplayStatus = useCallback(async () => {
     if (!initData) return;
@@ -48,7 +51,8 @@ export default function ResultPage({ params }: PageProps) {
       const sessionData = await api.getSession(initData, sessionId);
       if (sessionData.session.status !== "ready") {
         // Replay already executed, redirect to session (use window.location for clean navigation)
-        window.location.href = `/s/${sessionId}`;
+        console.log("[Polling] Session status changed to:", sessionData.session.status, "- redirecting");
+        window.location.href = `/s/${sessionId}?t=${Date.now()}`;
         return;
       }
       
@@ -57,17 +61,16 @@ export default function ResultPage({ params }: PageProps) {
       setReplayStatus(status);
       
       // If confirmed and we're the requester, execute the replay
+      // Only requester executes - non-requester will be redirected by session.status change above
       if (status.confirmed && status.isRequester) {
         executeConfirmedReplay();
       }
-      // If confirmed and we're NOT the requester, also navigate
-      if (status.confirmed && !status.isRequester) {
-        window.location.href = `/s/${sessionId}`;
-      }
+      // Non-requester: don't redirect here, let session.status polling handle it
+      // This prevents race condition where redirect happens before execute-replay completes
     } catch (err) {
       console.error("Fetch replay status failed:", err);
     }
-  }, [initData, sessionId, router]);
+  }, [initData, sessionId]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -100,15 +103,30 @@ export default function ResultPage({ params }: PageProps) {
         // For multiplayer, always poll replay status to catch incoming requests
         if (isMultiplayer) {
           await fetchReplayStatus();
-        } else if (render?.status !== "ready" && render?.status !== "failed") {
-          // Only poll render status if not ready yet (solo)
+        }
+        
+        // Poll render status if not ready yet (for both solo and multiplayer)
+        if (render?.status !== "ready") {
           const data = await api.getRenderStatus(initData, sessionId);
-          setRender(data);
+          
+          // Only show "failed" after 3 consecutive failures (avoid false positives)
+          if (data.status === "failed") {
+            setRenderErrorCount(prev => {
+              const newCount = prev + 1;
+              if (newCount >= 3) {
+                setRender(data); // Only show failed after 3 tries
+              }
+              return newCount;
+            });
+          } else {
+            setRenderErrorCount(0); // Reset error count on success
+            setRender(data);
+          }
         }
       } catch {
-        // ignore
+        // ignore network errors
       }
-    }, 3000); // 3 seconds to avoid rate limit
+    }, 5000); // 5 seconds to avoid rate limit and give FFmpeg time
 
     return () => clearInterval(interval);
   }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
@@ -282,10 +300,10 @@ export default function ResultPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Video */}
+        {/* Video - add timestamp to bust cache after replay */}
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
           <PlyrVideoPlayer
-            src={render.videoUrl || ""}
+            src={render.videoUrl ? `${render.videoUrl}?t=${Date.now()}` : ""}
             muted={false}
             showTimeRange={false}
           />

@@ -50,6 +50,8 @@ async function uploadToS3(
   );
 }
 
+const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     console.log("FFmpeg:", "ffmpeg", args.join(" "));
@@ -57,6 +59,17 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
     const ffmpeg = spawn("ffmpeg", args);
     let stdout = "";
     let stderr = "";
+    let killed = false;
+
+    // Timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      if (!killed) {
+        killed = true;
+        ffmpeg.kill("SIGKILL");
+        console.error("FFmpeg killed due to timeout (5 minutes)");
+        reject(new Error("FFmpeg timeout: process killed after 5 minutes"));
+      }
+    }, FFMPEG_TIMEOUT_MS);
 
     ffmpeg.stdout.on("data", (data) => {
       stdout += data.toString();
@@ -67,6 +80,9 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
     });
 
     ffmpeg.on("close", (code) => {
+      clearTimeout(timeout);
+      if (killed) return; // Already rejected by timeout
+      
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -75,7 +91,10 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
       }
     });
 
-    ffmpeg.on("error", reject);
+    ffmpeg.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
   });
 }
 
@@ -254,7 +273,7 @@ export async function renderVideo(input: RenderInput): Promise<string> {
       "-c:v",
       "libx264",
       "-preset",
-      "medium",
+      "fast",
       "-crf",
       "23",
       "-c:a",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
@@ -85,7 +85,11 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
 export default function SessionPage({ params }: PageProps) {
   const { sessionId } = params;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isReady, initData, user, retry } = useTelegram();
+
+  // Use timestamp param to force re-fetch (cache-busting after replay)
+  const cacheKey = searchParams.get("t") || "";
 
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -194,9 +198,20 @@ export default function SessionPage({ params }: PageProps) {
     [router, sessionId]
   );
 
+  // Reset state when cacheKey changes (after replay)
+  useEffect(() => {
+    if (cacheKey) {
+      console.log("[Session] Cache key changed, resetting state", { cacheKey });
+      setViewState("loading");
+      setSession(null);
+      setHasRecorded(false);
+      setRetakeUsed(false);
+    }
+  }, [cacheKey]);
+
   // Initial load
   useEffect(() => {
-    console.log("[Init] Component mounted/updated", { isReady, hasInitData: !!initData, sessionId });
+    console.log("[Init] Component mounted/updated", { isReady, hasInitData: !!initData, sessionId, cacheKey });
     
     if (!isReady) {
       console.log("[Init] Waiting for Telegram to be ready...");
@@ -244,7 +259,7 @@ export default function SessionPage({ params }: PageProps) {
     };
 
     init();
-  }, [isReady, initData, sessionId, joinSession, fetchSession, determineViewState]);
+  }, [isReady, initData, sessionId, joinSession, fetchSession, determineViewState, cacheKey]);
 
   // Polling - refresh session state periodically
   useEffect(() => {
