@@ -1169,59 +1169,31 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         let updatedParticipants = session.participants;
 
         if (mode === "newScene") {
-          // Same random scene selection logic as before
-          const usedSessionsByCreator = await tx.session.findMany({
-            where: {
-              category: session.category,
-              createdByTgUserId: user.id,
-              status: { in: ["lobby", "recording", "rendering", "ready"] },
-            },
-            select: { sceneId: true },
+          // Get ALL scenes in this category
+          const allScenes = await tx.scene.findMany({
+            where: { category: session.category },
           });
 
-          const usedSessionsAsParticipant = await tx.session.findMany({
-            where: {
-              category: session.category,
-              status: { in: ["lobby", "recording", "rendering", "ready"] },
-              participants: { some: { tgUserId: user.id } },
-            },
-            select: { sceneId: true },
-          });
+          // Filter out current scene to ensure we always get a different one
+          const otherScenes = allScenes.filter(s => s.id !== session.sceneId);
 
-          const allUsedSceneIds = new Set([
-            ...usedSessionsByCreator.map((s) => s.sceneId),
-            ...usedSessionsAsParticipant.map((s) => s.sceneId),
-          ]);
+          console.log(`[Replay] Category: ${session.category}, Total scenes: ${allScenes.length}, Other scenes: ${otherScenes.length}, Current: ${session.sceneId}`);
 
-          const usedSceneIds = Array.from(allUsedSceneIds);
-
-          const availableScenes = await tx.scene.findMany({
-            where: {
-              category: session.category,
-              id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
-            },
-          });
-
-          let newScene = availableScenes.length > 0
-            ? availableScenes[Math.floor(Math.random() * availableScenes.length)]
+          let newScene = otherScenes.length > 0
+            ? otherScenes[Math.floor(Math.random() * otherScenes.length)]
             : null;
 
-          if (!newScene) {
-            const allOtherScenes = await tx.scene.findMany({
-              where: { 
-                category: session.category,
-                id: { not: session.sceneId },
-              },
-            });
-            newScene = allOtherScenes.length > 0
-              ? allOtherScenes[Math.floor(Math.random() * allOtherScenes.length)]
-              : null;
+          // If only one scene exists, use the same one
+          if (!newScene && allScenes.length > 0) {
+            newScene = allScenes[0];
+            console.log(`[Replay] Only one scene available, reusing: ${newScene?.id}`);
           }
 
           if (!newScene) {
-            throw new Error(`No other scenes available in category "${session.category}"`);
+            throw new Error(`No scenes available in category "${session.category}"`);
           }
 
+          console.log(`[Replay] Selected new scene: ${newScene.id}`);
           newSceneId = newScene.id;
 
           // Shuffle roles for multiplayer
