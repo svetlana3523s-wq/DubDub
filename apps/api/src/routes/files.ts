@@ -134,48 +134,30 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         
         let sent = false;
         
-        // Try sending via URL first (with retry for rate limit)
-        const maxRetries = 3;
-        let retryCount = 0;
-        while (!sent && retryCount < maxRetries) {
-          try {
-            await bot.telegram.sendVideo(
-              chatId,
-              { url: videoUrl },
-              {
-                caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-                supports_streaming: true,
-                reply_markup: {
-                  keyboard: [
-                    [{ text: "🎭 Начать игру" }],
-                    [{ text: "👥 Присоединиться к игре" }],
-                    [{ text: "💡 Предложить эпизод" }],
-                  ],
-                  resize_keyboard: true,
-                  is_persistent: true,
-                },
-              }
-            );
-            sent = true;
-            console.log(`[SendVideo] Successfully sent video to ${chatId} via URL`);
-          } catch (sendErr: any) {
-            // Check for rate limit (429) - wait and retry
-            if (sendErr.response?.statusCode === 429 || sendErr.message?.includes("rate limit")) {
-              retryCount++;
-              const waitTime = retryCount * 2000; // 2s, 4s, 6s
-              console.log(`[SendVideo] Rate limit hit, waiting ${waitTime}ms before retry ${retryCount}/${maxRetries}`);
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-              continue;
+        // Try sending via URL first (faster)
+        try {
+          await bot.telegram.sendVideo(
+            chatId,
+            { url: videoUrl },
+            {
+              caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
+              supports_streaming: true,
+              reply_markup: {
+                keyboard: [
+                  [{ text: "🎭 Начать игру" }],
+                  [{ text: "👥 Присоединиться к игре" }],
+                  [{ text: "💡 Предложить эпизод" }],
+                ],
+                resize_keyboard: true,
+                is_persistent: true,
+              },
             }
-            
-            // Other errors - try Buffer fallback
-            console.error(`[SendVideo] Failed to send via URL:`, sendErr.message || sendErr);
-            break;
-          }
-        }
-        
-        // Fallback: try with Buffer if URL method failed
-        if (!sent) {
+          );
+          sent = true;
+          console.log(`[SendVideo] Successfully sent video to ${chatId} via URL`);
+        } catch (sendErr: any) {
+          console.error(`[SendVideo] Failed to send via URL:`, sendErr.message || sendErr);
+          // Fallback: try with Buffer
           console.log(`[SendVideo] Falling back to Buffer method...`);
           try {
             const videoBuffer = await storage.download(render.s3Key);
