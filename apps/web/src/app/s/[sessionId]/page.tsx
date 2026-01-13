@@ -93,6 +93,7 @@ export default function SessionPage({ params }: PageProps) {
   const [joinData, setJoinData] = useState<JoinSessionResponse | null>(null);
   const [hasRecorded, setHasRecorded] = useState(false);
   const [retakeUsed, setRetakeUsed] = useState(false);
+  const [finishing, setFinishing] = useState(false);
 
   const fetchSession = useCallback(async () => {
     if (!initData) return null;
@@ -294,13 +295,15 @@ export default function SessionPage({ params }: PageProps) {
   };
 
   const handleFinish = async () => {
-    if (!initData) return;
+    if (!initData || finishing) return;
+    setFinishing(true);
     try {
       await api.finishSession(initData, sessionId);
       setViewState("rendering");
     } catch (err) {
       console.error("Finish failed:", err);
       setError(err instanceof Error ? err.message : "Ошибка");
+      setFinishing(false); // Reset on error
     }
   };
 
@@ -615,8 +618,12 @@ export default function SessionPage({ params }: PageProps) {
             </p>
           </div>
           {canStartRender && (
-            <button onClick={handleFinish} className="btn-primary text-lg px-8 py-4">
-              ✨ Собрать видео
+            <button 
+              onClick={handleFinish} 
+              disabled={finishing}
+              className="btn-primary text-lg px-8 py-4 disabled:opacity-70"
+            >
+              {finishing ? "⏳ Собираем..." : "✨ Собрать видео"}
             </button>
           )}
         </div>

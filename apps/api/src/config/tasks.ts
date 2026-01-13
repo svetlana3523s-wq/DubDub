@@ -19,17 +19,9 @@ export const TASKS = [
   "Озвучь в стиле цитат Джейсона Стэтхэма",
 ] as const;
 
-// Track last used task to avoid repetition
-let lastTaskIndex = -1;
-
 export function getRandomTask(): string {
-  // Get random index that's different from last used
-  let newIndex: number;
-  do {
-    newIndex = Math.floor(Math.random() * TASKS.length);
-  } while (newIndex === lastTaskIndex && TASKS.length > 1);
-  
-  lastTaskIndex = newIndex;
-  return TASKS[newIndex] ?? TASKS[0]!;
+  // Simply return random task - no tracking needed (each session gets random task)
+  const randomIndex = Math.floor(Math.random() * TASKS.length);
+  return TASKS[randomIndex] ?? TASKS[0]!;
 }
 
