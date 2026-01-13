@@ -50,7 +50,7 @@ async function uploadToS3(
   );
 }
 
-const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const FFMPEG_TIMEOUT_MS = 1.5 * 60 * 1000; // 1.5 minutes
 
 function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {

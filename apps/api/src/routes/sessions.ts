@@ -171,65 +171,19 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       const body = createSessionSchema.parse(request.body);
       const user = request.tgUser;
 
-      // Get ALL scenes the user has used (completed OR active) in this category
-      // This prevents selecting a scene that's already in an active session
-      const usedSessionsByCreator = await prisma.session.findMany({
-        where: {
-          category: body.category,
-          createdByTgUserId: user.id,
-          // Include all statuses except cancelled (if we had such status)
-          status: { in: ["lobby", "recording", "rendering", "ready"] },
-        },
-        select: { sceneId: true, status: true },
+      // Get ALL scenes in this category - always pick random for simplicity
+      const allScenes = await prisma.scene.findMany({
+        where: { category: body.category },
       });
 
-      const usedSessionsAsParticipant = await prisma.session.findMany({
-        where: {
-          category: body.category,
-          status: { in: ["lobby", "recording", "rendering", "ready"] },
-          participants: {
-            some: { tgUserId: user.id },
-          },
-        },
-        select: { sceneId: true, status: true },
-      });
-
-      // Combine and get unique scene IDs
-      const allUsedSceneIds = new Set([
-        ...usedSessionsByCreator.map((s) => s.sceneId),
-        ...usedSessionsAsParticipant.map((s) => s.sceneId),
-      ]);
-
-      const usedSceneIds = Array.from(allUsedSceneIds);
-
-      // Find ALL available scenes in this category that user hasn't used
-      const availableScenes = await prisma.scene.findMany({
-        where: {
-          category: body.category,
-          id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
-        },
-      });
-
-      // Pick a RANDOM scene from available ones
-      let scene = availableScenes.length > 0
-        ? availableScenes[Math.floor(Math.random() * availableScenes.length)]
-        : null;
-
-      // If all scenes in category played, pick any RANDOM one from this category (reset cycle)
-      if (!scene) {
-        const allScenes = await prisma.scene.findMany({
-          where: { category: body.category },
-        });
-        scene = allScenes.length > 0
-          ? allScenes[Math.floor(Math.random() * allScenes.length)]
-          : null;
-      }
-
-      if (!scene) {
+      if (allScenes.length === 0) {
         return reply.status(400).send({ error: `Нет сцен в категории "${body.category}"` });
       }
 
-      console.log(`[Session] User ${user.id} gets RANDOM scene ${scene.id} (category: ${body.category}, used: ${usedSceneIds.length}, available: ${availableScenes.length})`);
+      // Pick a RANDOM scene - always random, no tracking
+      const scene = allScenes[Math.floor(Math.random() * allScenes.length)]!;
+
+      console.log(`[Session] User ${user.id} gets RANDOM scene ${scene.id} (category: ${body.category}, total: ${allScenes.length})`);
 
       // Set task only in "tasks" mode
       const task = body.gameMode === "tasks" ? getRandomTask() : null;
