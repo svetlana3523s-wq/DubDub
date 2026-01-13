@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
@@ -85,11 +85,18 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
 export default function SessionPage({ params }: PageProps) {
   const { sessionId } = params;
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { isReady, initData, user, retry } = useTelegram();
 
   // Use timestamp param to force re-fetch (cache-busting after replay)
-  const cacheKey = searchParams.get("t") || "";
+  // Using window.location instead of useSearchParams to avoid Suspense requirement
+  const [cacheKey, setCacheKey] = useState("");
+  
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      setCacheKey(urlParams.get("t") || "");
+    }
+  }, []);
 
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [error, setError] = useState<string | null>(null);
