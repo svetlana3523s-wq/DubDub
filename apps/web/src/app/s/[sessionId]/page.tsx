@@ -87,17 +87,6 @@ export default function SessionPage({ params }: PageProps) {
   const router = useRouter();
   const { isReady, initData, user, retry } = useTelegram();
 
-  // Use timestamp param to force re-fetch (cache-busting after replay)
-  // Using window.location instead of useSearchParams to avoid Suspense requirement
-  const [cacheKey, setCacheKey] = useState("");
-  
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      setCacheKey(urlParams.get("t") || "");
-    }
-  }, []);
-
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionStateResponse | null>(null);
@@ -205,20 +194,9 @@ export default function SessionPage({ params }: PageProps) {
     [router, sessionId]
   );
 
-  // Reset state when cacheKey changes (after replay)
-  useEffect(() => {
-    if (cacheKey) {
-      console.log("[Session] Cache key changed, resetting state", { cacheKey });
-      setViewState("loading");
-      setSession(null);
-      setHasRecorded(false);
-      setRetakeUsed(false);
-    }
-  }, [cacheKey]);
-
   // Initial load
   useEffect(() => {
-    console.log("[Init] Component mounted/updated", { isReady, hasInitData: !!initData, sessionId, cacheKey });
+    console.log("[Init] Component mounted/updated", { isReady, hasInitData: !!initData, sessionId });
     
     if (!isReady) {
       console.log("[Init] Waiting for Telegram to be ready...");
@@ -266,7 +244,7 @@ export default function SessionPage({ params }: PageProps) {
     };
 
     init();
-  }, [isReady, initData, sessionId, joinSession, fetchSession, determineViewState, cacheKey]);
+  }, [isReady, initData, sessionId, joinSession, fetchSession, determineViewState]);
 
   // Polling - refresh session state periodically
   useEffect(() => {
