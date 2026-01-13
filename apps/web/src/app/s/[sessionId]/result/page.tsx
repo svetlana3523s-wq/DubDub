@@ -26,6 +26,8 @@ export default function ResultPage({ params }: PageProps) {
   const [render, setRender] = useState<RenderStatusResponse | null>(null);
   const [session, setSession] = useState<SessionStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // Fixed timestamp for cache-busting (set once on mount)
+  const [cacheTimestamp] = useState(() => Date.now());
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -300,10 +302,10 @@ export default function ResultPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Video - add timestamp to bust cache after replay */}
+        {/* Video - add fixed timestamp to bust cache after replay */}
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
           <VideoPlayer
-            src={render.videoUrl ? `${render.videoUrl}?t=${Date.now()}` : ""}
+            src={render.videoUrl ? `${render.videoUrl}?t=${cacheTimestamp}` : ""}
             muted={false}
             showTimeRange={false}
           />
