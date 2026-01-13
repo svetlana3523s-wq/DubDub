@@ -63,14 +63,40 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
       };
     });
 
-    // Render video
-    const s3Key = await renderVideo({
-      sessionId,
-      sceneS3Key: session.scene.s3Key,
-      takes: takesData,
-      cues,
-      sceneDuration: session.scene.durationSec,
-    });
+    // Render video with retry on timeout (up to 2 retries)
+    const maxRetries = 2;
+    let retryCount = 0;
+    let s3Key: string | null = null;
+    
+    while (!s3Key && retryCount <= maxRetries) {
+      try {
+        s3Key = await renderVideo({
+          sessionId,
+          sceneS3Key: session.scene.s3Key,
+          takes: takesData,
+          cues,
+          sceneDuration: session.scene.durationSec,
+        });
+        console.log(`[${sessionId}] Render succeeded on attempt ${retryCount + 1}`);
+      } catch (renderErr: any) {
+        const isTimeout = renderErr.message?.includes("timeout") || renderErr.message?.includes("FFmpeg timeout");
+        
+        if (isTimeout && retryCount < maxRetries) {
+          retryCount++;
+          const waitTime = retryCount * 5000; // 5s, 10s
+          console.log(`[${sessionId}] Render timeout on attempt ${retryCount}, retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        // Not a timeout or max retries reached - throw error
+        throw renderErr;
+      }
+    }
+
+    if (!s3Key) {
+      throw new Error("Render failed after retries");
+    }
 
     // Update records
     await prisma.render.update({
