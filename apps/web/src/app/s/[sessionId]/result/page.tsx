@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
-import { PlyrVideoPlayer } from "@/components/PlyrVideoPlayer";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
 
 interface PageProps {
@@ -302,7 +302,7 @@ export default function ResultPage({ params }: PageProps) {
 
         {/* Video - add timestamp to bust cache after replay */}
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <PlyrVideoPlayer
+          <VideoPlayer
             src={render.videoUrl ? `${render.videoUrl}?t=${Date.now()}` : ""}
             muted={false}
             showTimeRange={false}
