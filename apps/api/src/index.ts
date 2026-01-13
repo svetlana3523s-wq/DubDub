@@ -36,10 +36,10 @@ await fastify.register(multipart, {
   },
 });
 
-// Rate limiting
+// Rate limiting - increased for polling (5s interval = 12 req/min per user)
 await fastify.register(rateLimit, {
   global: true,
-  max: 100,
+  max: 200, // Increased from 100 to handle polling + user actions
   timeWindow: "1 minute",
   redis,
 });
