@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { config } from "../config.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { bot } from "../lib/bot-instance.js";
+import { sendTelegramQueue } from "../lib/queue.js";
 
 /**
  * File proxy routes - serves files from S3 through the API
@@ -106,7 +107,7 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Send video to user via Telegram bot (using URL for faster delivery, like channel)
+  // Send video to user via Telegram bot (queued job)
   fastify.post<{ Params: { sessionId: string } }>(
     "/files/renders/:sessionId/send-to-telegram",
     { preHandler: authMiddleware },
@@ -122,67 +123,104 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!render || render.status !== "ready" || !render.s3Key) {
-          return reply.status(404).send({ sent: false, error: "Видео ещё не готово" });
+          return reply.status(404).send({ status: "error", error: "Видео ещё не готово" });
         }
 
-        // Use URL method like in worker (faster and more reliable)
-        const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
-        const chatId = parseInt(user.id, 10);
-
-        try {
-          // Try URL method first (faster, like channel)
-          await bot.telegram.sendVideo(
-            chatId,
-            { url: videoUrl },
-            {
-              caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-              supports_streaming: true,
-              reply_markup: {
-                keyboard: [
-                  [{ text: "🎭 Начать игру" }],
-                  [{ text: "👥 Присоединиться к игре" }],
-                  [{ text: "💡 Предложить эпизод" }],
-                ],
-                resize_keyboard: true,
-                is_persistent: true,
-              },
-            }
-          );
-          console.log(`[SendVideo] Successfully sent video to ${chatId} via URL`);
-          return reply.code(200).send({ sent: true });
-        } catch (urlErr: any) {
-          console.error(`[SendVideo] URL method failed:`, urlErr.message || urlErr);
-          // Fallback: try Buffer method
-          console.log(`[SendVideo] Falling back to Buffer method...`);
-          try {
-            const videoBuffer = await storage.download(render.s3Key);
-            await bot.telegram.sendVideo(
-              chatId,
-              { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
-              {
-                caption: `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`,
-                supports_streaming: true,
-                reply_markup: {
-                  keyboard: [
-                    [{ text: "🎭 Начать игру" }],
-                    [{ text: "👥 Присоединиться к игре" }],
-                    [{ text: "💡 Предложить эпизод" }],
-                  ],
-                  resize_keyboard: true,
-                  is_persistent: true,
-                },
-              }
-            );
-            console.log(`[SendVideo] Successfully sent video to ${chatId} via Buffer fallback`);
-            return reply.code(200).send({ sent: true });
-          } catch (bufferErr: any) {
-            console.error(`[SendVideo] Buffer fallback also failed:`, bufferErr.message || bufferErr);
-            return reply.code(500).send({ sent: false, error: "Не удалось отправить видео" });
-          }
+        // Check if already queued or sending
+        if (render.sendStatus === "queued" || render.sendStatus === "sending") {
+          return reply.code(200).send({ 
+            status: render.sendStatus, 
+            message: "Отправка уже в процессе" 
+          });
         }
+
+        // Check if already sent
+        if (render.sendStatus === "sent") {
+          return reply.code(200).send({ 
+            status: "sent", 
+            message: "Видео уже отправлено" 
+          });
+        }
+
+        // Queue send job
+        const job = await sendTelegramQueue.add("send", {
+          sessionId,
+          telegramUserId: user.id,
+          s3Key: render.s3Key,
+        });
+
+        // Update render status
+        await prisma.render.update({
+          where: { sessionId },
+          data: { 
+            sendStatus: "queued",
+            sendError: null,
+            sendAttempts: 0,
+          },
+        });
+
+        console.log(`[SendVideo] Queued send job ${job.id} for session ${sessionId}, user ${user.id}`);
+        
+        return reply.code(200).send({ 
+          status: "queued", 
+          jobId: job.id,
+          message: "Отправка поставлена в очередь" 
+        });
       } catch (err: any) {
         console.error("[SendVideo] Unexpected error:", err);
-        return reply.code(500).send({ sent: false, error: "Ошибка при отправке" });
+        return reply.code(500).send({ status: "error", error: "Ошибка при постановке в очередь" });
+      }
+    }
+  );
+
+  // Get send status
+  fastify.get<{ Params: { sessionId: string } }>(
+    "/files/renders/:sessionId/send-status",
+    {
+      preHandler: authMiddleware,
+      config: {
+        rateLimit: {
+          max: 600, // Higher limit for status polling (600 req/min)
+          timeWindow: "1 minute",
+        },
+      },
+    },
+    async (request, reply) => {
+      const { sessionId } = request.params;
+      const user = request.tgUser;
+
+      try {
+        const render = await prisma.render.findUnique({
+          where: { sessionId },
+        });
+
+        if (!render) {
+          return reply.status(404).send({ error: "Render not found" });
+        }
+
+        // Check if user is participant (security)
+        const session = await prisma.session.findUnique({
+          where: { id: sessionId },
+          include: { participants: true },
+        });
+
+        if (!session) {
+          return reply.status(404).send({ error: "Session not found" });
+        }
+
+        const isParticipant = session.participants.some(p => p.tgUserId === user.id);
+        if (!isParticipant) {
+          return reply.status(403).send({ error: "Not a participant" });
+        }
+
+        return reply.code(200).send({
+          status: render.sendStatus || null,
+          error: render.sendError || null,
+          attempts: render.sendAttempts || 0,
+        });
+      } catch (err: any) {
+        console.error("[SendStatus] Unexpected error:", err);
+        return reply.code(500).send({ error: "Ошибка при получении статуса" });
       }
     }
   );

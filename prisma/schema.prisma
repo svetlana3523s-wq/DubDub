@@ -74,13 +74,16 @@ model Take {
 }
 
 model Render {
-  id        String   @id @default(cuid())
-  sessionId String   @unique
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  status    String   @default("pending") // pending | rendering | ready | failed
-  s3Key     String?  // renders/<sessionId>.mp4
-  error     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status       String   @default("pending") // pending | rendering | ready | failed
+  s3Key        String?  // renders/<sessionId>.mp4
+  error        String?
+  sendStatus   String?  // queued | sending | sent | failed | too_large
+  sendError    String?  // краткая причина ошибки отправки
+  sendAttempts Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 

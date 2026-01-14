@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
@@ -44,6 +44,11 @@ export default function ResultPage({ params }: PageProps) {
 
   // Track render error count for retry logic
   const [renderErrorCount, setRenderErrorCount] = useState(0);
+  
+  // Ref for send status polling
+  const sendStatusPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sendStatusPollAttemptRef = useRef<number>(0);
+  const sendStatusPollStartTimeRef = useRef<number>(0);
 
   // Execute confirmed replay - only redirect if render is ready (users saw the result)
   const executeConfirmedReplay = useCallback(async () => {
@@ -151,7 +156,14 @@ export default function ResultPage({ params }: PageProps) {
       }
     }, 5000); // 5 seconds to avoid rate limit and give FFmpeg time
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Cleanup send status polling on unmount
+      if (sendStatusPollTimeoutRef.current) {
+        clearTimeout(sendStatusPollTimeoutRef.current);
+        sendStatusPollTimeoutRef.current = null;
+      }
+    };
   }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
 
   const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
@@ -233,19 +245,106 @@ export default function ResultPage({ params }: PageProps) {
     
     try {
       const result = await api.sendVideoToTelegram(initData, sessionId);
-      if (result.sent) {
+      
+      if (result.status === "queued") {
+        // Job queued - start polling for status with backoff
+        setSending(true);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        
+        // Clear any existing timeout
+        if (sendStatusPollTimeoutRef.current) {
+          clearTimeout(sendStatusPollTimeoutRef.current);
+        }
+        
+        // Reset polling state
+        sendStatusPollAttemptRef.current = 0;
+        sendStatusPollStartTimeRef.current = Date.now();
+        
+        // Backoff intervals: 3s, 3s, 5s, 8s, 13s, потом 15s (макс)
+        const backoffIntervals = [3000, 3000, 5000, 8000, 13000, 15000];
+        const MAX_POLL_DURATION = 180000; // 180 seconds
+        
+        const pollSendStatus = async () => {
+          try {
+            const statusResult = await api.getSendStatus(initData, sessionId);
+            
+            // Stop polling if final status
+            if (statusResult.status === "sent" || statusResult.status === "failed" || statusResult.status === "too_large") {
+              if (sendStatusPollTimeoutRef.current) {
+                clearTimeout(sendStatusPollTimeoutRef.current);
+                sendStatusPollTimeoutRef.current = null;
+              }
+              
+              if (statusResult.status === "sent") {
+                setSent(true);
+                setSending(false);
+                window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+              } else {
+                setSending(false);
+                setSendError(statusResult.error || "Не удалось отправить видео");
+                window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+              }
+              return;
+            }
+            
+            // Check timeout
+            const elapsed = Date.now() - sendStatusPollStartTimeRef.current;
+            if (elapsed >= MAX_POLL_DURATION) {
+              if (sendStatusPollTimeoutRef.current) {
+                clearTimeout(sendStatusPollTimeoutRef.current);
+                sendStatusPollTimeoutRef.current = null;
+              }
+              setSending(false);
+              setSendError("Отправка занимает слишком много времени. Попробуйте позже.");
+              return;
+            }
+            
+            // Continue polling with backoff (queued or sending)
+            const attemptIndex = Math.min(sendStatusPollAttemptRef.current, backoffIntervals.length - 1);
+            const delay = backoffIntervals[attemptIndex];
+            sendStatusPollAttemptRef.current++;
+            
+            sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, delay);
+          } catch (err) {
+            console.error("Poll send status failed:", err);
+            
+            // Check timeout even on error
+            const elapsed = Date.now() - sendStatusPollStartTimeRef.current;
+            if (elapsed >= MAX_POLL_DURATION) {
+              if (sendStatusPollTimeoutRef.current) {
+                clearTimeout(sendStatusPollTimeoutRef.current);
+                sendStatusPollTimeoutRef.current = null;
+              }
+              setSending(false);
+              setSendError("Отправка занимает слишком много времени. Попробуйте позже.");
+              return;
+            }
+            
+            // Continue polling with backoff even on error
+            const attemptIndex = Math.min(sendStatusPollAttemptRef.current, backoffIntervals.length - 1);
+            const delay = backoffIntervals[attemptIndex];
+            sendStatusPollAttemptRef.current++;
+            sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, delay);
+          }
+        };
+        
+        // Start polling with first interval (3s)
+        const firstDelay = backoffIntervals[0];
+        sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, firstDelay);
+      } else if (result.status === "sent") {
         setSent(true);
+        setSending(false);
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
       } else {
-        setSendError(result.error || "Не удалось отправить");
+        setSending(false);
+        setSendError(result.error || result.message || "Не удалось отправить");
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       }
     } catch (err: any) {
       console.error("Send failed:", err);
+      setSending(false);
       setSendError(err.message || "Ошибка отправки");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
-    } finally {
-      setSending(false);
     }
   };
 
@@ -361,7 +460,7 @@ export default function ResultPage({ params }: PageProps) {
             ) : sending ? (
               <>
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Отправляем...
+                {sendError ? "Повторная отправка..." : "Отправляем..."}
               </>
             ) : sendError ? (
               <>🔄 Повторить отправку</>

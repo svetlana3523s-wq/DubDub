@@ -8,7 +8,15 @@ export const rendersRoutes: FastifyPluginAsync = async (fastify) => {
   // Get render status
   fastify.get<{ Params: { sessionId: string } }>(
     "/renders/:sessionId",
-    { preHandler: authMiddleware },
+    {
+      preHandler: authMiddleware,
+      config: {
+        rateLimit: {
+          max: 600, // Higher limit for status polling (600 req/min)
+          timeWindow: "1 minute",
+        },
+      },
+    },
     async (request, reply): Promise<RenderStatusResponse> => {
       const { sessionId } = request.params;
 

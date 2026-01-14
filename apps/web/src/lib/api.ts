@@ -128,11 +128,17 @@ export const api = {
   sendVideoToTelegram: (
     initData: string,
     sessionId: string
-  ): Promise<{ sent: boolean; error?: string }> =>
+  ): Promise<{ status: string; jobId?: string; message?: string; error?: string }> =>
     request(initData, `/files/renders/${sessionId}/send-to-telegram`, {
       method: "POST",
       body: JSON.stringify({}),
     }),
+
+  getSendStatus: (
+    initData: string,
+    sessionId: string
+  ): Promise<{ status: string | null; error: string | null; attempts: number }> =>
+    request(initData, `/files/renders/${sessionId}/send-status`),
 
   replaySession: (
     initData: string,

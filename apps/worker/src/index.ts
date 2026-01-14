@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { Telegraf } from "telegraf";
 import { createServer } from "http";
 import { renderVideo } from "./render.js";
+import { sendVideoToTelegram, type SendTelegramInput } from "./send-telegram.js";
 import { config } from "./config.js";
 import type { Cue } from "@dubdub/shared";
 import { parseCuesFromJson } from "@dubdub/shared";
@@ -18,6 +19,12 @@ const redis = new Redis(config.redisUrl, {
 
 interface RenderJobData {
   sessionId: string;
+}
+
+interface SendTelegramJobData {
+  sessionId: string;
+  telegramUserId: string;
+  s3Key: string;
 }
 
 async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
@@ -148,27 +155,53 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
   }
 }
 
-const worker = new Worker<RenderJobData>("render", processRenderJob, {
+// Process send-to-telegram jobs
+async function processSendTelegramJob(job: Job<SendTelegramJobData>): Promise<void> {
+  const { sessionId, telegramUserId, s3Key } = job.data;
+  console.log(`[SendTelegram:${sessionId}] Processing send job (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+  
+  await sendVideoToTelegram({ sessionId, telegramUserId, s3Key });
+}
+
+const renderWorker = new Worker<RenderJobData>("render", processRenderJob, {
   connection: redis,
   concurrency: 2,
 });
 
-worker.on("completed", (job) => {
-  console.log(`Job ${job.id} completed for session ${job.data.sessionId}`);
+const sendTelegramWorker = new Worker<SendTelegramJobData>("send_to_telegram", processSendTelegramJob, {
+  connection: redis,
+  concurrency: 3, // Can send multiple videos in parallel
 });
 
-worker.on("failed", (job, err) => {
-  console.error(`Job ${job?.id} failed:`, err.message);
+renderWorker.on("completed", (job) => {
+  console.log(`[Render] Job ${job.id} completed for session ${job.data.sessionId}`);
 });
 
-worker.on("error", (err) => {
-  console.error("Worker error:", err);
+renderWorker.on("failed", (job, err) => {
+  console.error(`[Render] Job ${job?.id} failed:`, err.message);
+});
+
+renderWorker.on("error", (err) => {
+  console.error("[Render] Worker error:", err);
+});
+
+sendTelegramWorker.on("completed", (job) => {
+  console.log(`[SendTelegram] Job ${job.id} completed for session ${job.data.sessionId}`);
+});
+
+sendTelegramWorker.on("failed", (job, err) => {
+  console.error(`[SendTelegram] Job ${job?.id} failed (attempts: ${job?.attemptsMade}):`, err.message);
+});
+
+sendTelegramWorker.on("error", (err) => {
+  console.error("[SendTelegram] Worker error:", err);
 });
 
 // Graceful shutdown
 const shutdown = async () => {
-  console.log("Shutting down worker...");
-  await worker.close();
+  console.log("Shutting down workers...");
+  await renderWorker.close();
+  await sendTelegramWorker.close();
   await redis.quit();
   await prisma.$disconnect();
   // Health server will be closed when process exits
@@ -178,7 +211,7 @@ const shutdown = async () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-console.log("Worker started, listening for render jobs...");
+console.log("Worker started, listening for render and send-telegram jobs...");
 
 // Health check HTTP server
 const healthPort = parseInt(process.env.WORKER_HEALTH_PORT || "3002");
