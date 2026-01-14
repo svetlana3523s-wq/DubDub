@@ -3,6 +3,12 @@ import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s
 import { config } from "./config.js";
 import { PrismaClient } from "@prisma/client";
 import { Readable } from "stream";
+import { createWriteStream, createReadStream, unlink } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import { promisify } from "util";
+
+const unlinkAsync = promisify(unlink);
 
 const prisma = new PrismaClient();
 const bot = new Telegraf(config.botToken);
@@ -19,8 +25,7 @@ const s3Client = new S3Client({
 
 const bucket = config.s3.bucket;
 
-// Size thresholds in bytes
-const SIZE_THRESHOLD_SMALL = 20 * 1024 * 1024; // 20MB
+// Size threshold in bytes
 const SIZE_THRESHOLD_LARGE = 50 * 1024 * 1024; // 50MB
 
 export interface SendTelegramInput {
@@ -54,79 +59,77 @@ async function getFileSize(s3Key: string): Promise<number> {
 }
 
 /**
- * Send video via URL method (for small files)
+ * Send video via upload (downloads to temp file, then uploads to Telegram)
+ * Uses temporary file to avoid loading entire file into RAM
  */
-async function sendViaUrl(
-  sessionId: string,
-  telegramUserId: string,
-  videoUrl: string,
-  caption: string
-): Promise<void> {
-  const chatId = parseInt(telegramUserId, 10);
-  await bot.telegram.sendVideo(chatId, { url: videoUrl }, {
-    caption,
-    supports_streaming: true,
-    reply_markup: {
-      keyboard: [
-        [{ text: "🎭 Начать игру" }],
-        [{ text: "👥 Присоединиться к игре" }],
-        [{ text: "💡 Предложить эпизод" }],
-      ],
-      resize_keyboard: true,
-      is_persistent: true,
-    },
-  });
-}
-
-/**
- * Send video via Buffer (for medium files, 20-50MB)
- * Downloads from S3 and sends as Buffer
- * Note: For very large files, this will use significant memory
- */
-async function sendViaBuffer(
+async function sendViaUpload(
   sessionId: string,
   telegramUserId: string,
   s3Key: string,
   caption: string
-): Promise<void> {
+): Promise<string> {
   const chatId = parseInt(telegramUserId, 10);
   
-  // Download from S3
-  const response = await s3Client.send(
-    new GetObjectCommand({
-      Bucket: bucket,
-      Key: s3Key,
-    })
-  );
+  // Create temporary file path
+  const tempFile = join(tmpdir(), `dubdub-${sessionId}-${Date.now()}.mp4`);
   
-  const stream = response.Body as Readable;
-  const chunks: Buffer[] = [];
-  
-  // Collect stream into buffer
-  for await (const chunk of stream) {
-    chunks.push(chunk as Buffer);
-  }
-  
-  const videoBuffer = Buffer.concat(chunks);
-  
-  // Send via Telegram API with buffer
-  await bot.telegram.sendVideo(
-    chatId,
-    { source: videoBuffer, filename: `dubdub-${sessionId}.mp4` },
-    {
-      caption,
-      supports_streaming: true,
-      reply_markup: {
-        keyboard: [
-          [{ text: "🎭 Начать игру" }],
-          [{ text: "👥 Присоединиться к игре" }],
-          [{ text: "💡 Предложить эпизод" }],
-        ],
-        resize_keyboard: true,
-        is_persistent: true,
-      },
+  try {
+    // Download from S3 to temp file (streaming, doesn't load into RAM)
+    const downloadStartTime = Date.now();
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: s3Key,
+      })
+    );
+    
+    const stream = response.Body as Readable;
+    const writeStream = createWriteStream(tempFile);
+    
+    // Pipe S3 stream to temp file
+    await new Promise<void>((resolve, reject) => {
+      stream.pipe(writeStream);
+      stream.on("error", reject);
+      writeStream.on("error", reject);
+      writeStream.on("finish", resolve);
+    });
+    
+    const downloadTime = Date.now() - downloadStartTime;
+    console.log(`[SendTelegram:${sessionId}] [${downloadTime}ms] Downloaded to temp file: ${tempFile}`);
+    
+    // Send via Telegram API using file stream
+    const uploadStartTime = Date.now();
+    await bot.telegram.sendVideo(
+      chatId,
+      { source: createReadStream(tempFile), filename: `dubdub-${sessionId}.mp4` },
+      {
+        caption,
+        supports_streaming: true,
+        reply_markup: {
+          keyboard: [
+            [{ text: "🎭 Начать игру" }],
+            [{ text: "👥 Присоединиться к игре" }],
+            [{ text: "💡 Предложить эпизод" }],
+          ],
+          resize_keyboard: true,
+          is_persistent: true,
+        },
+      }
+    );
+    
+    const uploadTime = Date.now() - uploadStartTime;
+    console.log(`[SendTelegram:${sessionId}] [${uploadTime}ms] Telegram upload completed`);
+    
+    return tempFile;
+  } catch (err) {
+    // Clean up temp file on error
+    try {
+      await unlinkAsync(tempFile).catch(() => {});
+    } catch {
+      // Ignore cleanup errors
     }
-  );
+    throw err;
+  }
 }
 
 /**
@@ -166,7 +169,6 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
     }
 
     const caption = `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`;
-    const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
 
     // Get file size (HEAD request to S3)
     const sizeCheckStartTime = Date.now();
@@ -183,7 +185,7 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
       },
     });
 
-    // Choose strategy based on file size
+    // Check file size limit
     if (fileSize > SIZE_THRESHOLD_LARGE) {
       // Too large - mark as too_large
       await prisma.renderSend.update({
@@ -194,19 +196,27 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
         },
       });
       throw new Error(`File too large: ${fileSizeMB}MB (max 50MB)`);
-    } else if (fileSize <= SIZE_THRESHOLD_SMALL) {
-      // Small file - use URL method
-      console.log(`[SendTelegram:${sessionId}] Using URL method (${fileSizeMB}MB)`);
-      const sendStartTime = Date.now();
-      await sendViaUrl(sessionId, telegramUserId, videoUrl, caption);
-      console.log(`[SendTelegram:${sessionId}] [${Date.now() - sendStartTime}ms] URL send completed`);
-    } else {
-      // Medium file - use buffer method
-      console.log(`[SendTelegram:${sessionId}] Using buffer method (${fileSizeMB}MB)`);
-      const downloadStartTime = Date.now();
-      const sendStartTime = Date.now();
-      await sendViaBuffer(sessionId, telegramUserId, s3Key, caption);
-      console.log(`[SendTelegram:${sessionId}] [${Date.now() - downloadStartTime}ms] Download + [${Date.now() - sendStartTime}ms] Send = [${Date.now() - downloadStartTime}ms] Total buffer send`);
+    }
+
+    // For all files <=50MB, use upload method (download to temp file, then upload)
+    console.log(`[SendTelegram:${sessionId}] Using upload method (${fileSizeMB}MB)`);
+    const sendStartTime = Date.now();
+    let tempFile: string | null = null;
+    
+    try {
+      tempFile = await sendViaUpload(sessionId, telegramUserId, s3Key, caption);
+      const sendTime = Date.now() - sendStartTime;
+      console.log(`[SendTelegram:${sessionId}] [${sendTime}ms] Total send time (download_to_temp + telegram_upload)`);
+    } finally {
+      // Clean up temp file
+      if (tempFile) {
+        try {
+          await unlinkAsync(tempFile);
+          console.log(`[SendTelegram:${sessionId}] Temp file deleted: ${tempFile}`);
+        } catch (err) {
+          console.error(`[SendTelegram:${sessionId}] Failed to delete temp file ${tempFile}:`, err);
+        }
+      }
     }
 
     // Success - update status (clear error and retryAfterSeconds)
