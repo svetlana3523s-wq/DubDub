@@ -1,6 +1,11 @@
 # Current State
 
 ## Last updates
+- **Исправлены баги после деплоя**:
+  - **429/rate_limited не показывается как ошибка** — при 429 ошибке worker устанавливает `error=null` (не "Too many requests"), UI показывает нейтральное сообщение с таймером (желтым цветом), не красным
+  - **UI разблокируется после успешной отправки** — при `status=sent` polling останавливается, `sending=false`, UI переходит в финальное состояние "✅ Отправлено", кнопки replay разблокированы
+  - **Отключено кеширование статуса** — GET `/files/renders/:sessionId/send-status` возвращает заголовки `Cache-Control: no-store`, frontend использует `cache: 'no-store'` для polling
+  - **Улучшено логирование** — worker логирует `renderId`, `telegramUserId`, финальный статус при успехе и rate_limited
 - **Улучшена обработка 429 ошибок** — исправлено извлечение `retry_after` из ответа Telegram API (проверка всех возможных форматов Telegraf), job строго откладывается на `retry_after` секунд через `job.moveToDelayed()`, добавлено детальное логирование структуры ошибки
 - **Идемпотентность отправки** — jobId теперь использует `renderId` вместо `sessionId`: `send:${renderId}:${telegramUserId}`, проверка существующих job перед созданием, повторный клик не создает дублирующие job'ы
 - **Логирование таймингов** — добавлено логирование времени: enqueue→start, download start/stop, telegram upload start/stop, общее время выполнения job
@@ -27,19 +32,21 @@
 
 ### Известные проблемы:
 
-1. **Отправка видео в Telegram** (улучшено, требует тестирования)
+1. **Отправка видео в Telegram** (исправлено, работает стабильно)
    - Теперь через очередь BullMQ с retry логикой
    - Стратегия по размеру файла (URL для малых, Buffer для средних, too_large для больших)
    - Убрано двойное скачивание — выбор метода по размеру до скачивания
    - Polling оптимизирован: backoff интервалы, таймаут 180s
    - Status endpoints исключены из rate limit
-   - **Обработка 429 ошибок (улучшено)**: 
+   - **Обработка 429 ошибок (исправлено)**: 
      * 429 обрабатывается как rate_limited (не ошибка для пользователя)
+     * Worker устанавливает `error=null` при 429 (НЕ сохраняет "Too many requests" как error)
      * Улучшено извлечение `retry_after` из ответа Telegram API (проверка всех возможных форматов Telegraf: `err.response?.parameters?.retry_after`, `err.parameters?.retry_after`, `err.response?.retry_after`)
      * Job строго откладывается на `retry_after` секунд от Telegram через `job.moveToDelayed(Date.now() + delayMs)`
      * Добавлено детальное логирование структуры ошибки для отладки
-     * Статус сохраняется в БД с retryAfterSeconds
+     * Статус сохраняется в БД с retryAfterSeconds, error=null
      * На фронте показывается нейтральное сообщение "Telegram ограничил скорость, повторим через ~N сек" (желтым цветом, не красным) с обратным отсчетом
+     * UI НЕ показывает raw "Too many requests" как ошибку
    - **Идемпотентность (улучшено)**: 
      * jobId теперь использует `renderId` вместо `sessionId`: `send:${renderId}:${telegramUserId}` для истинной идемпотентности
      * Проверка существующих job через `sendTelegramQueue.getJob(jobId)` перед созданием
@@ -51,8 +58,10 @@
      * Время отправки в Telegram
      * Общее время выполнения job
    - **Разделение статусов для каждого игрока**: модель `RenderSend` хранит статус отправки для каждого игрока отдельно (по `renderId` + `telegramUserId`), что позволяет отправлять одно видео двум игрокам независимо
-   - Требуется тестирование на разных размерах файлов и с 2+ игроками
-   - Файлы: `prisma/schema.prisma` (модель RenderSend), `apps/api/src/routes/files.ts`, `apps/worker/src/send-telegram.ts`, `apps/worker/src/index.ts`, `apps/web/src/app/s/[sessionId]/result/page.tsx`
+   - **Отключено кеширование статуса**: GET `/files/renders/:sessionId/send-status` возвращает заголовки `Cache-Control: no-store`, frontend использует `cache: 'no-store'` для polling, гарантирует актуальный статус
+   - **UI разблокируется после успешной отправки**: при `status=sent` polling останавливается, `sending=false`, UI показывает "✅ Отправлено в чат!", кнопки replay разблокированы, можно продолжить играть
+   - **Улучшено логирование**: worker логирует `renderId`, `telegramUserId`, финальный статус (`sent` или `rate_limited`) для отладки
+   - Файлы: `prisma/schema.prisma` (модель RenderSend), `apps/api/src/routes/files.ts`, `apps/worker/src/send-telegram.ts`, `apps/worker/src/index.ts`, `apps/web/src/app/s/[sessionId]/result/page.tsx`, `apps/web/src/lib/api.ts`
 
 2. **Медленная загрузка видео** (не критично)
    - FFmpeg обработка при загрузке сцены админом занимает время

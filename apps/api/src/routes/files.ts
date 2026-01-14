@@ -247,7 +247,7 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(403).send({ status: "unknown", error: "Not a participant" });
         }
 
-        // Get RenderSend status for this user
+        // Get RenderSend status for this user (renderId + telegramUserId)
         const renderSend = await prisma.renderSend.findUnique({
           where: {
             renderId_telegramUserId: {
@@ -258,15 +258,25 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!renderSend) {
-          return reply.code(200).send({ status: "unknown", error: "Статус отправки не найден" });
+          return reply
+            .header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+            .header("Pragma", "no-cache")
+            .header("Expires", "0")
+            .code(200)
+            .send({ status: "unknown", error: "Статус отправки не найден" });
         }
 
-        return reply.code(200).send({
-          status: renderSend.status as any,
-          error: renderSend.error || null,
-          attempts: renderSend.attempts || 0,
-          retryAfterSeconds: renderSend.retryAfterSeconds || null,
-        });
+        return reply
+          .header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+          .header("Pragma", "no-cache")
+          .header("Expires", "0")
+          .code(200)
+          .send({
+            status: renderSend.status as any,
+            error: renderSend.error || null,
+            attempts: renderSend.attempts || 0,
+            retryAfterSeconds: renderSend.retryAfterSeconds || null,
+          });
       } catch (err: any) {
         console.error("[SendStatus] Unexpected error:", err);
         return reply.code(500).send({ status: "error", error: "Ошибка при получении статуса" });

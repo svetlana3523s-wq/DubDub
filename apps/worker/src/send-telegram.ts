@@ -209,17 +209,18 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
       console.log(`[SendTelegram:${sessionId}] [${Date.now() - downloadStartTime}ms] Download + [${Date.now() - sendStartTime}ms] Send = [${Date.now() - downloadStartTime}ms] Total buffer send`);
     }
 
-    // Success - update status
+    // Success - update status (clear error and retryAfterSeconds)
     await prisma.renderSend.update({
       where: { id: renderSend.id },
       data: {
         status: "sent",
         error: null,
+        retryAfterSeconds: null,
       },
     });
 
     const totalTime = Date.now() - startTime;
-    console.log(`[SendTelegram:${sessionId}] [${totalTime}ms] Successfully sent video to ${telegramUserId}`);
+    console.log(`[SendTelegram:${sessionId}] [${totalTime}ms] Successfully sent video. renderId=${render.id}, telegramUserId=${telegramUserId}, status=sent`);
   } catch (err: any) {
     const errorMessage = err.message || String(err);
     const isTooLarge = errorMessage.includes("too large") || errorMessage.includes("too_large");
@@ -279,16 +280,17 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
       });
       
       // Update status to rate_limited (not an error for user)
+      // IMPORTANT: error=null - do NOT store "Too many requests" as error for UI
       await prisma.renderSend.update({
         where: { id: renderSend.id },
         data: {
           status: "rate_limited",
-          error: null, // Don't store error - rate_limited is not an error
+          error: null, // Don't store error - rate_limited is not an error, UI will show neutral message
           retryAfterSeconds: retryAfter,
         },
       });
       
-      console.log(`[SendTelegram:${sessionId}] Rate limited, retry after ${retryAfter}s (will delay job)`);
+      console.log(`[SendTelegram:${sessionId}] Rate limited, retry after ${retryAfter}s. renderId=${render.id}, telegramUserId=${telegramUserId}, status=rate_limited`);
       // Throw RateLimitError to let worker delay the job
       throw new RateLimitError(`Rate limited: retry after ${retryAfter}s`, retryAfter);
     }

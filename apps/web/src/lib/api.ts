@@ -138,7 +138,9 @@ export const api = {
     initData: string,
     sessionId: string
   ): Promise<{ status: string | null; error: string | null; attempts: number; retryAfterSeconds?: number | null }> =>
-    request(initData, `/files/renders/${sessionId}/send-status`),
+    request(initData, `/files/renders/${sessionId}/send-status`, {
+      cache: "no-store", // Prevent caching for status polling
+    }),
 
   replaySession: (
     initData: string,

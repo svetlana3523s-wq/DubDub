@@ -302,28 +302,33 @@ export default function ResultPage({ params }: PageProps) {
               }
               setSendError(null); // Don't show as error - it's a rate limit, not a failure
               // Continue polling - don't stop
-            } else if (statusResult.status === "sent" || statusResult.status === "failed" || statusResult.status === "too_large") {
-              // Stop polling if final status
+            } else if (statusResult.status === "sent") {
+              // SUCCESS: Stop polling, unlock UI, show success state
               if (sendStatusPollTimeoutRef.current) {
                 clearTimeout(sendStatusPollTimeoutRef.current);
                 sendStatusPollTimeoutRef.current = null;
               }
               
-              if (statusResult.status === "sent") {
-                setSent(true);
-                setSending(false);
-                setSendError(null);
-                setRetryAfterSeconds(null);
-                setCountdown(null);
-                window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-              } else {
-                setSending(false);
-                setSendError(statusResult.error || "Не удалось отправить видео");
-                setRetryAfterSeconds(null);
-                setCountdown(null);
-                window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+              setSent(true);
+              setSending(false); // Unlock UI
+              setSendError(null);
+              setRetryAfterSeconds(null);
+              setCountdown(null);
+              window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+              return; // Stop polling
+            } else if (statusResult.status === "failed" || statusResult.status === "too_large") {
+              // ERROR: Stop polling, show error
+              if (sendStatusPollTimeoutRef.current) {
+                clearTimeout(sendStatusPollTimeoutRef.current);
+                sendStatusPollTimeoutRef.current = null;
               }
-              return;
+              
+              setSending(false); // Unlock UI even on error
+              setSendError(statusResult.error || "Не удалось отправить видео");
+              setRetryAfterSeconds(null);
+              setCountdown(null);
+              window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+              return; // Stop polling
             }
             
             // Check timeout
