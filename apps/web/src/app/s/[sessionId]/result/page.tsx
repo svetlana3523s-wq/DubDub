@@ -31,6 +31,8 @@ export default function ResultPage({ params }: PageProps) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
   const [showNewSceneConfirm, setShowNewSceneConfirm] = useState<"sameScene" | "newScene" | null>(null);
   
@@ -90,6 +92,25 @@ export default function ResultPage({ params }: PageProps) {
       console.error("Fetch replay status failed:", err);
     }
   }, [initData, sessionId, executeConfirmedReplay]);
+
+  // Countdown timer for rate_limited status
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) {
+      setCountdown(null);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [countdown, retryAfterSeconds]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -242,6 +263,8 @@ export default function ResultPage({ params }: PageProps) {
     
     setSending(true);
     setSendError(null);
+    setRetryAfterSeconds(null);
+    setCountdown(null);
     
     try {
       const result = await api.sendVideoToTelegram(initData, sessionId);
@@ -268,8 +291,19 @@ export default function ResultPage({ params }: PageProps) {
           try {
             const statusResult = await api.getSendStatus(initData, sessionId);
             
-            // Stop polling if final status
-            if (statusResult.status === "sent" || statusResult.status === "failed" || statusResult.status === "too_large") {
+            // Handle rate_limited status (show neutral message with timer, continue polling)
+            if (statusResult.status === "rate_limited") {
+              // Use retryAfterSeconds from API response
+              const retryAfter = statusResult.retryAfterSeconds || 60;
+              setRetryAfterSeconds(retryAfter);
+              // Update countdown if it's different (in case retry_after changed)
+              if (countdown === null || countdown !== retryAfter) {
+                setCountdown(retryAfter);
+              }
+              setSendError(null); // Don't show as error - it's a rate limit, not a failure
+              // Continue polling - don't stop
+            } else if (statusResult.status === "sent" || statusResult.status === "failed" || statusResult.status === "too_large") {
+              // Stop polling if final status
               if (sendStatusPollTimeoutRef.current) {
                 clearTimeout(sendStatusPollTimeoutRef.current);
                 sendStatusPollTimeoutRef.current = null;
@@ -278,10 +312,15 @@ export default function ResultPage({ params }: PageProps) {
               if (statusResult.status === "sent") {
                 setSent(true);
                 setSending(false);
+                setSendError(null);
+                setRetryAfterSeconds(null);
+                setCountdown(null);
                 window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
               } else {
                 setSending(false);
                 setSendError(statusResult.error || "Не удалось отправить видео");
+                setRetryAfterSeconds(null);
+                setCountdown(null);
                 window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
               }
               return;
@@ -450,7 +489,7 @@ export default function ResultPage({ params }: PageProps) {
             className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors ${
               sent 
                 ? "bg-green-500 text-white" 
-                : sendError 
+                : sendError
                   ? "bg-red-500 hover:bg-red-600 text-white" 
                   : "btn-primary"
             } disabled:opacity-70`}
@@ -460,7 +499,13 @@ export default function ResultPage({ params }: PageProps) {
             ) : sending ? (
               <>
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {sendError ? "Повторная отправка..." : "Отправляем..."}
+                {retryAfterSeconds !== null && countdown !== null ? (
+                  <>Ожидаем, повторим через {countdown} сек</>
+                ) : sendError ? (
+                  <>Повторная отправка...</>
+                ) : (
+                  <>Отправляем...</>
+                )}
               </>
             ) : sendError ? (
               <>🔄 Повторить отправку</>
@@ -469,8 +514,15 @@ export default function ResultPage({ params }: PageProps) {
             )}
           </button>
           
-          {/* Error message */}
-          {sendError && !sent && (
+          {/* Rate limit message (neutral, not an error) - shown separately from button */}
+          {retryAfterSeconds !== null && countdown !== null && countdown > 0 && !sent && (
+            <div className="text-center text-sm text-yellow-400">
+              ⏳ Telegram ограничил скорость, повторим через ~{countdown} сек
+            </div>
+          )}
+          
+          {/* Error message (only for real errors, not rate_limited) */}
+          {sendError && !sent && retryAfterSeconds === null && (
             <div className="text-center text-sm text-red-400">
               ❌ {sendError}
             </div>

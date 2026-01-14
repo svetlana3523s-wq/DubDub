@@ -137,7 +137,7 @@ export const api = {
   getSendStatus: (
     initData: string,
     sessionId: string
-  ): Promise<{ status: string | null; error: string | null; attempts: number }> =>
+  ): Promise<{ status: string | null; error: string | null; attempts: number; retryAfterSeconds?: number | null }> =>
     request(initData, `/files/renders/${sessionId}/send-status`),
 
   replaySession: (

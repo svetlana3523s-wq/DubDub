@@ -106,7 +106,7 @@ pnpm dev                      # All services on localhost
 
 **Production (VPS):**
 ```bash
-ssh root@130.49.146.229 "cd /var/www/dubdub && git pull && pnpm install && pnpm -r build && pm2 restart dubdub-api dubdub-web dubdub-worker"
+ssh root@130.49.146.229 "cd /var/www/dubdub && git pull && pnpm install && pnpm db:generate && pnpm db:push && pnpm -r build && pm2 restart dubdub-api dubdub-web dubdub-worker"
 ```
 
 **Server info:**

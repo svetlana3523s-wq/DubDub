@@ -126,40 +126,82 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(404).send({ status: "error", error: "Видео ещё не готово" });
         }
 
-        // Check if already queued or sending
-        if (render.sendStatus === "queued" || render.sendStatus === "sending") {
-          return reply.code(200).send({ 
-            status: render.sendStatus, 
-            message: "Отправка уже в процессе" 
-          });
-        }
-
-        // Check if already sent
-        if (render.sendStatus === "sent") {
-          return reply.code(200).send({ 
-            status: "sent", 
-            message: "Видео уже отправлено" 
-          });
-        }
-
-        // Queue send job
-        const job = await sendTelegramQueue.add("send", {
-          sessionId,
-          telegramUserId: user.id,
-          s3Key: render.s3Key,
-        });
-
-        // Update render status
-        await prisma.render.update({
-          where: { sessionId },
-          data: { 
-            sendStatus: "queued",
-            sendError: null,
-            sendAttempts: 0,
+        // Check if RenderSend already exists
+        let renderSend = await prisma.renderSend.findUnique({
+          where: {
+            renderId_telegramUserId: {
+              renderId: render.id,
+              telegramUserId: user.id,
+            },
           },
         });
 
-        console.log(`[SendVideo] Queued send job ${job.id} for session ${sessionId}, user ${user.id}`);
+        // Idempotency: if already queued, sending, rate_limited, or sent, don't create new job
+        if (renderSend && ["queued", "sending", "rate_limited", "sent"].includes(renderSend.status)) {
+          return reply.code(200).send({ 
+            status: renderSend.status as any, 
+            message: "Отправка уже в процессе",
+            retryAfterSeconds: renderSend.retryAfterSeconds,
+          });
+        }
+
+        // Unique job ID based on renderId and telegramUserId (not sessionId)
+        // This ensures true idempotency: same render + same user = same job
+        const jobId = `send:${render.id}:${user.id}`;
+        
+        // Check if job already exists in queue (BullMQ will handle this, but we check to avoid duplicate upsert)
+        const existingJob = await sendTelegramQueue.getJob(jobId);
+        if (existingJob) {
+          // Job exists - return current status
+          const currentRenderSend = await prisma.renderSend.findUnique({
+            where: {
+              renderId_telegramUserId: {
+                renderId: render.id,
+                telegramUserId: user.id,
+              },
+            },
+          });
+          
+          return reply.code(200).send({ 
+            status: currentRenderSend?.status || "queued", 
+            message: "Отправка уже в очереди",
+            retryAfterSeconds: currentRenderSend?.retryAfterSeconds,
+          });
+        }
+
+        // Queue send job with unique jobId
+        const enqueueStartTime = Date.now();
+        const job = await sendTelegramQueue.add(
+          jobId,
+          {
+            sessionId,
+            telegramUserId: user.id,
+            s3Key: render.s3Key,
+          }
+        );
+        console.log(`[SendVideo] [${Date.now() - enqueueStartTime}ms] Queued send job ${job.id} (${jobId}) for session ${sessionId}, user ${user.id}`);
+
+        // Upsert RenderSend record (create if not exists, update if exists)
+        renderSend = await prisma.renderSend.upsert({
+          where: {
+            renderId_telegramUserId: {
+              renderId: render.id,
+              telegramUserId: user.id,
+            },
+          },
+          update: {
+            status: "queued",
+            error: null,
+            attempts: 0,
+            retryAfterSeconds: null,
+          },
+          create: {
+            renderId: render.id,
+            telegramUserId: user.id,
+            status: "queued",
+            attempts: 0,
+          },
+        });
         
         return reply.code(200).send({ 
           status: "queued", 
@@ -190,37 +232,44 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
       const user = request.tgUser;
 
       try {
-        const render = await prisma.render.findUnique({
-          where: { sessionId },
-        });
-
-        if (!render) {
-          return reply.status(404).send({ error: "Render not found" });
-        }
-
         // Check if user is participant (security)
         const session = await prisma.session.findUnique({
           where: { id: sessionId },
-          include: { participants: true },
+          include: { participants: true, render: true },
         });
 
-        if (!session) {
-          return reply.status(404).send({ error: "Session not found" });
+        if (!session || !session.render) {
+          return reply.status(404).send({ status: "unknown", error: "Session or render not found" });
         }
 
         const isParticipant = session.participants.some(p => p.tgUserId === user.id);
         if (!isParticipant) {
-          return reply.status(403).send({ error: "Not a participant" });
+          return reply.status(403).send({ status: "unknown", error: "Not a participant" });
+        }
+
+        // Get RenderSend status for this user
+        const renderSend = await prisma.renderSend.findUnique({
+          where: {
+            renderId_telegramUserId: {
+              renderId: session.render.id,
+              telegramUserId: user.id,
+            },
+          },
+        });
+
+        if (!renderSend) {
+          return reply.code(200).send({ status: "unknown", error: "Статус отправки не найден" });
         }
 
         return reply.code(200).send({
-          status: render.sendStatus || null,
-          error: render.sendError || null,
-          attempts: render.sendAttempts || 0,
+          status: renderSend.status as any,
+          error: renderSend.error || null,
+          attempts: renderSend.attempts || 0,
+          retryAfterSeconds: renderSend.retryAfterSeconds || null,
         });
       } catch (err: any) {
         console.error("[SendStatus] Unexpected error:", err);
-        return reply.code(500).send({ error: "Ошибка при получении статуса" });
+        return reply.code(500).send({ status: "error", error: "Ошибка при получении статуса" });
       }
     }
   );

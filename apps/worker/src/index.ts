@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { Telegraf } from "telegraf";
 import { createServer } from "http";
 import { renderVideo } from "./render.js";
-import { sendVideoToTelegram, type SendTelegramInput } from "./send-telegram.js";
+import { sendVideoToTelegram, type SendTelegramInput, RateLimitError } from "./send-telegram.js";
 import { config } from "./config.js";
 import type { Cue } from "@dubdub/shared";
 import { parseCuesFromJson } from "@dubdub/shared";
@@ -158,9 +158,33 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
 // Process send-to-telegram jobs
 async function processSendTelegramJob(job: Job<SendTelegramJobData>): Promise<void> {
   const { sessionId, telegramUserId, s3Key } = job.data;
-  console.log(`[SendTelegram:${sessionId}] Processing send job (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+  const jobStartTime = Date.now();
+  const jobEnqueuedAt = job.timestamp || Date.now();
+  const timeSinceEnqueue = jobStartTime - jobEnqueuedAt;
   
-  await sendVideoToTelegram({ sessionId, telegramUserId, s3Key });
+  console.log(`[SendTelegram:${sessionId}] Processing send job (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+  console.log(`[SendTelegram:${sessionId}] [${timeSinceEnqueue}ms] Time from enqueue to start processing`);
+  
+  try {
+    await sendVideoToTelegram({ sessionId, telegramUserId, s3Key });
+    const totalJobTime = Date.now() - jobStartTime;
+    console.log(`[SendTelegram:${sessionId}] [${totalJobTime}ms] Job completed successfully`);
+  } catch (err: any) {
+    // Handle rate limit errors: delay job instead of retrying immediately
+    if (err instanceof RateLimitError) {
+      const delayMs = err.retryAfter * 1000; // Convert seconds to milliseconds
+      const delayTimestamp = Date.now() + delayMs;
+      console.log(`[SendTelegram:${sessionId}] Rate limited, delaying job for ${err.retryAfter}s (until ${new Date(delayTimestamp).toISOString()})`);
+      await job.moveToDelayed(delayTimestamp);
+      console.log(`[SendTelegram:${sessionId}] Job moved to delayed queue, will retry at ${new Date(delayTimestamp).toISOString()}`);
+      return; // Don't throw error - job will be retried after delay
+    }
+    
+    const totalJobTime = Date.now() - jobStartTime;
+    console.error(`[SendTelegram:${sessionId}] [${totalJobTime}ms] Job failed:`, err.message);
+    // Re-throw other errors for BullMQ retry mechanism
+    throw err;
+  }
 }
 
 const renderWorker = new Worker<RenderJobData>("render", processRenderJob, {
