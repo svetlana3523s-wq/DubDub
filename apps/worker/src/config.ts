@@ -33,5 +33,7 @@ export const config = {
   
   // URLs  
   apiBaseUrl: required("API_BASE_URL"),
+  cdnUrl: process.env.CDN_URL || "",
+  publicFilesBaseUrl: process.env.PUBLIC_FILES_BASE_URL || "",
 } as const;
 

@@ -27,6 +27,7 @@ const bucket = config.s3.bucket;
 
 // Size threshold in bytes
 const SIZE_THRESHOLD_LARGE = 50 * 1024 * 1024; // 50MB
+const CDN_HEAD_TIMEOUT_MS = 5000;
 
 export interface SendTelegramInput {
   sessionId: string;
@@ -56,6 +57,57 @@ async function getFileSize(s3Key: string): Promise<number> {
     })
   );
   return response.ContentLength || 0;
+}
+
+function getPublicBaseUrl(): string {
+  const baseUrl = config.publicFilesBaseUrl || config.cdnUrl;
+  return baseUrl ? baseUrl.replace(/\/+$/, "") : "";
+}
+
+async function headWithTimeout(url: string, headers?: Record<string, string>): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CDN_HEAD_TIMEOUT_MS);
+  try {
+    return await fetch(url, { method: "HEAD", headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function isCdnUrlCompatible(
+  url: string,
+  sessionId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    console.log(`[SEND-TELEGRAM-CDN] attempt url=${url} sessionId=${sessionId}`);
+    const head = await headWithTimeout(url);
+    const headContentType = head.headers.get("content-type") || "";
+    const headContentLength = head.headers.get("content-length") || "";
+    const headAcceptRanges = head.headers.get("accept-ranges") || "";
+    console.log(
+      `[SEND-TELEGRAM-CDN] head status=${head.status} ct=${headContentType || "missing"} len=${headContentLength || "missing"} ar=${headAcceptRanges || "missing"}`
+    );
+    if (head.status !== 200) {
+      return { ok: false, reason: `HEAD status ${head.status}` };
+    }
+    if (!headContentType.includes("video/mp4")) {
+      return { ok: false, reason: `content-type ${headContentType || "missing"}` };
+    }
+
+    const rangeHead = await headWithTimeout(url, { Range: "bytes=0-1023" });
+    const rangeContentRange = rangeHead.headers.get("content-range") || "";
+    const rangeAcceptRanges = rangeHead.headers.get("accept-ranges") || "";
+    console.log(
+      `[SEND-TELEGRAM-CDN] range status=${rangeHead.status} cr=${rangeContentRange || "missing"} ar=${rangeAcceptRanges || "missing"}`
+    );
+    if (rangeHead.status !== 206) {
+      return { ok: false, reason: `Range status ${rangeHead.status}` };
+    }
+
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, reason: err?.message || "CDN HEAD failed" };
+  }
 }
 
 /**
@@ -199,24 +251,67 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
     }
 
     // For all files <=50MB, use upload method (download to temp file, then upload)
-    console.log(`[SendTelegram:${sessionId}] Using upload method (${fileSizeMB}MB)`);
-    const sendStartTime = Date.now();
-    let tempFile: string | null = null;
-    
-    try {
-      tempFile = await sendViaUpload(sessionId, telegramUserId, s3Key, caption);
-      const sendTime = Date.now() - sendStartTime;
-      console.log(`[SendTelegram:${sessionId}] [${sendTime}ms] Total send time (download_to_temp + telegram_upload)`);
-    } finally {
-      // Clean up temp file
-      if (tempFile) {
-        try {
-          await unlinkAsync(tempFile);
-          console.log(`[SendTelegram:${sessionId}] Temp file deleted: ${tempFile}`);
-        } catch (err) {
-          console.error(`[SendTelegram:${sessionId}] Failed to delete temp file ${tempFile}:`, err);
+    const publicBaseUrl = getPublicBaseUrl();
+    const cdnUrl = publicBaseUrl ? `${publicBaseUrl}/renders/${sessionId}.mp4` : "";
+    console.log(`[SEND-TELEGRAM-CDN enabled] publicBaseUrl=${publicBaseUrl || "<empty>"} cdnUrl=${cdnUrl || "<empty>"} sessionId=${sessionId}`);
+    let sentViaCdn = false;
+
+    if (cdnUrl) {
+      console.log(`[SEND-TELEGRAM-CDN] enabled=true reason=public_base_url`);
+      const cdnCheck = await isCdnUrlCompatible(cdnUrl, sessionId);
+      if (cdnCheck.ok) {
+        console.log(`[SEND-TELEGRAM-CDN] use_url`);
+        console.log(`[SendTelegram:${sessionId}] Using CDN URL (${fileSizeMB}MB): ${cdnUrl}`);
+        await bot.telegram.sendVideo(
+          chatId,
+          cdnUrl,
+          {
+            caption,
+            supports_streaming: true,
+            reply_markup: {
+              keyboard: [
+                [{ text: "à??- ?ø‘Øø‘'‘? ñ?‘?‘?" }],
+                [{ text: "à?'? ?‘?ñ‘??ç?ñ?ñ‘'‘?‘?‘? ó ñ?‘?ç" }],
+                [{ text: "à?'ö ?‘?ç?>?ñ‘'‘? ‘?õñú??" }],
+              ],
+              resize_keyboard: true,
+              is_persistent: true,
+            },
+          }
+        );
+        sentViaCdn = true;
+      } else {
+        console.log(
+          `[SEND-TELEGRAM-CDN] fallback_upload reason=${cdnCheck.reason || "unknown"}`
+        );
+        console.log(`[SendTelegram:${sessionId}] CDN URL not compatible, falling back to upload`);
+      }
+    } else {
+      console.log(`[SEND-TELEGRAM-CDN] enabled=false reason=no_public_base_url`);
+      console.log(`[SEND-TELEGRAM-CDN] disabled reason=no_public_base_url`);
+    }
+
+    if (!sentViaCdn) {
+      console.log(`[SendTelegram:${sessionId}] Using upload method (${fileSizeMB}MB)`);
+      const sendStartTime = Date.now();
+      let tempFile: string | null = null;
+      
+      try {
+        tempFile = await sendViaUpload(sessionId, telegramUserId, s3Key, caption);
+        const sendTime = Date.now() - sendStartTime;
+        console.log(`[SendTelegram:${sessionId}] [${sendTime}ms] Total send time (download_to_temp + telegram_upload)`);
+      } finally {
+        // Clean up temp file
+        if (tempFile) {
+          try {
+            await unlinkAsync(tempFile);
+            console.log(`[SendTelegram:${sessionId}] Temp file deleted: ${tempFile}`);
+          } catch (err) {
+            console.error(`[SendTelegram:${sessionId}] Failed to delete temp file ${tempFile}:`, err);
+          }
         }
       }
+    }
     }
 
     // Success - update status (clear error and retryAfterSeconds)
