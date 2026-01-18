@@ -60,7 +60,11 @@ if [ -d "prisma" ]; then
     exit 1
   fi
   pnpm db:generate
-  pnpm db:migrate
+  if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+    pnpm db:migrate
+  else
+    echo "Warning: prisma/migrations is empty; skipping prisma migrate deploy"
+  fi
 fi
 
 pnpm prune --prod
