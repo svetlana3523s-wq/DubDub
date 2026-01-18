@@ -85,12 +85,9 @@ jobs:
 
       - name: Remote deploy
         run: |
-          ssh -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
-          "set -euo pipefail; rm -rf /tmp/release_unpack; mkdir -p /tmp/release_unpack; \
-          tar -xzf /tmp/release.tgz -C /tmp/release_unpack; \
-          bash /tmp/release_unpack/deploy_remote.sh /tmp/release.tgz \"${DEPLOY_PATH}\""
+          ssh -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "set -euo pipefail; rm -rf /tmp/release_unpack; mkdir -p /tmp/release_unpack; tar -xzf /tmp/release.tgz -C /tmp/release_unpack; bash /tmp/release_unpack/deploy_remote.sh /tmp/release.tgz \"${DEPLOY_PATH}\""
 
       - name: Post-deploy check (TODO: set API domain)
         run: |
           echo "TODO: set API domain for post-deploy check"
-          curl -sS -D - "https://<API_DOMAIN>/meta/version" || true
+          curl -sS -D - "https://API_DOMAIN_PLACEHOLDER/meta/version" || true
