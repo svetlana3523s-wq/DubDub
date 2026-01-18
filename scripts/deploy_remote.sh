@@ -32,10 +32,21 @@ fi
 
 cd "$RELEASE_DIR"
 
+if [ -f "$SHARED_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$SHARED_DIR/.env"
+  set +a
+fi
+
 corepack enable
 pnpm install --frozen-lockfile
 
 if [ -d "prisma" ]; then
+  if [ -z "${DATABASE_URL:-}" ]; then
+    echo "Error: DATABASE_URL is not set (expected in $SHARED_DIR/.env)"
+    exit 1
+  fi
   pnpm db:generate
   pnpm db:migrate
 fi
