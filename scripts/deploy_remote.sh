@@ -21,6 +21,7 @@ TIMESTAMP="$(date -u +%Y%m%d_%H%M%S)"
 RELEASE_DIR="$RELEASES_DIR/$TIMESTAMP"
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR"
+mkdir -p "$RELEASE_DIR"
 tar -xzf "$TARBALL" -C "$RELEASE_DIR"
 
 if [ -f "$SHARED_DIR/.env" ]; then
