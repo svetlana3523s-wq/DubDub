@@ -54,6 +54,9 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Prisma generate (required for @prisma/client types)
+        run: pnpm db:generate
+
       - name: Set web build id
         run: echo "NEXT_PUBLIC_WEB_BUILD_ID=web_${GITHUB_SHA::12}" >> "$GITHUB_ENV"
 
