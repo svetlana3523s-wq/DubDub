@@ -59,9 +59,9 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
     console.log(`[${sessionId}] Parsed ${cues.length} cues, FPS: ${fps}`);
 
     // Build takes data with participant info
-    const takesData = session.takes.map((take) => {
+    const takesData = session.takes.map((take: (typeof session.takes)[number]) => {
       const participant = session.participants.find(
-        (p) => p.roleIndex === take.roleIndex
+        (p: (typeof session.participants)[number]) => p.roleIndex === take.roleIndex
       );
       return {
         roleIndex: take.roleIndex,
@@ -125,7 +125,7 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
         const categoryLabel = session.category === "movies" ? "🎬 Кино" : 
                               session.category === "memes" ? "😂 Мемы" : "🏛️ Политика";
         const modeLabel = session.gameMode === "tasks" ? `📝 ${session.task}` : "🎭 Импровизация";
-        const players = session.participants.map(p => p.displayName).join(", ");
+        const players = session.participants.map((p: (typeof session.participants)[number]) => p.displayName).join(", ");
         
         await bot.telegram.sendVideo(
           config.notifyChannelId,

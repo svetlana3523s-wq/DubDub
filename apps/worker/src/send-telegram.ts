@@ -189,6 +189,7 @@ async function sendViaUpload(
  */
 export async function sendVideoToTelegram(input: SendTelegramInput): Promise<void> {
   const { sessionId, telegramUserId, s3Key } = input;
+  const chatId = parseInt(telegramUserId, 10);
   
   const startTime = Date.now();
   console.log(`[SendTelegram:${sessionId}] [${startTime}] Starting send job for user ${telegramUserId}`);
@@ -312,7 +313,6 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
         }
       }
     }
-    }
 
     // Success - update status (clear error and retryAfterSeconds)
     await prisma.renderSend.update({
@@ -416,4 +416,3 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
     throw err; // Re-throw to allow BullMQ retry
   }
 }
-
