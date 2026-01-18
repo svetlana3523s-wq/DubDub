@@ -11,7 +11,12 @@ import type {
   ScenesListResponse,
 } from "@dubdub/shared";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const apiBaseUrlRaw =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "http://localhost:4000";
+
+const API_URL = apiBaseUrlRaw.replace(/\/+$/, "");
 
 class ApiError extends Error {
   constructor(

@@ -58,7 +58,9 @@ jobs:
         run: pnpm db:generate
 
       - name: Set web build id
-        run: echo "NEXT_PUBLIC_WEB_BUILD_ID=web_${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+        run: |
+          echo "NEXT_PUBLIC_WEB_BUILD_ID=web_${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_API_URL=${{ secrets.PROD_API_BASE_URL }}" >> "$GITHUB_ENV"
 
       - name: Lint (optional)
         continue-on-error: true
