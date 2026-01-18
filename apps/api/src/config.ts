@@ -46,6 +46,9 @@ export const config = {
   // Admin
   adminSecretKey: optional("ADMIN_SECRET_KEY", "change-me-in-production"),
   adminTgUserIds: optional("ADMIN_TG_USER_IDS", "").split(",").map(id => id.trim()).filter(Boolean),
+
+  // Version gate
+  minWebBuildId: process.env.MIN_WEB_BUILD_ID || "",
 } as const;
 
 export type Config = typeof config;
