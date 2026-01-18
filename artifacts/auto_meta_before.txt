@@ -1,0 +1,57 @@
+=== Auto Meta Before Deploy ===
+
+**Date:** 2026-01-18 15:37:04 UTC
+**Hostname:** tvotototo.ru
+**Repository:** `/var/www/dubdub`
+**Task:** Deploy commit cd1d7a8ff5c6ae7a83dfbae2598cb8706b96c71a with metaRoutes
+
+---
+
+## Git Remote
+
+```
+origin	https://github.com/svetlana3523s-wq/dubdub.git (fetch)
+origin	https://github.com/svetlana3523s-wq/dubdub.git (push)
+```
+
+**Status:** ✅ Remote matches expected pattern
+
+---
+
+## Git HEAD (Before)
+
+**Hash:** `8b8111c56c0c1c8091fdbb930ee8d7a1ec037a16`
+**Short:** `8b8111c`
+**Commit:** `fix(api): restore minWebBuildId default to empty string`
+
+---
+
+## Git Status (Before)
+
+**Local changes:** Only untracked files (backup files, artifacts, scripts)
+
+**Untracked files:**
+- `.env.bak.*`
+- `apps/api/src/config.ts.backup`
+- `apps/api/src/routes/meta.ts`
+- `artifacts/`
+- `scripts/`
+- etc.
+
+---
+
+## PM2 Status (Before)
+
+```
+┌────┬──────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┐
+│ id │ name             │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │
+├────┼──────────────────┼─────────────┼─────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┤
+│ 0  │ dubdub-api       │ default     │ N/A     │ fork    │ 1298552  │ 38m    │ 2328 │ online    │
+│ 4  │ dubdub-web       │ default     │ N/A     │ fork    │ 1145092  │ 118m   │ 36   │ online    │
+│ 1  │ dubdub-worker    │ default     │ N/A     │ fork    │ 396606   │ 17h    │ 77   │ online    │
+└────┴──────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┘
+```
+
+---
+
+=== END ===

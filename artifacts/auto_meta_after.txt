@@ -1,0 +1,42 @@
+=== Auto Meta After Deploy ===
+
+**Date:** 2026-01-18
+**Repository:** `/var/www/dubdub`
+**Task:** Deploy commit cd1d7a8ff5c6ae7a83dfbae2598cb8706b96c71a with metaRoutes
+
+---
+
+## Git HEAD (After)
+
+**Hash:** <will be filled after deploy>
+**Short:** <will be filled>
+**Commit:** <will be filled>
+
+---
+
+## /meta/version Response
+
+<will be filled after deploy>
+
+---
+
+## PM2 Status (After)
+
+<will be filled after deploy>
+
+---
+
+## Issue
+
+**Problem:** `origin/main` local reference not updating after `git fetch`
+
+**Attempted solutions:**
+1. `git fetch origin` - local `origin/main` still points to `8b8111c`
+2. `git fetch origin --prune` - local `origin/main` still points to `8b8111c`
+3. `git fetch origin +refs/heads/main:refs/remotes/origin/main` - local `origin/main` still points to `8b8111c`
+
+**Solution:** Direct checkout to remote hash via `git checkout -f <remote-hash>`
+
+---
+
+=== END ===
