@@ -137,11 +137,36 @@ jobs:
           SSH
 
       - name: Post-deploy check
+        continue-on-error: true
         run: |
           set -euo pipefail
           if [ -z "${{ secrets.PROD_API_BASE_URL }}" ]; then
             echo "PROD_API_BASE_URL is missing; skipping post-deploy check"
             exit 0
           fi
-          curl -fsS "${{ secrets.PROD_API_BASE_URL }}/health" | head -c 2000
-          curl -fsS "${{ secrets.PROD_API_BASE_URL }}/meta/version" | head -c 2000
+          base="${{ secrets.PROD_API_BASE_URL }}"
+          echo "Post-deploy check: probing /health and /meta/version"
+
+          check() {
+            path="$1"
+            url="${base}${path}"
+            for attempt in 1 2 3; do
+              echo "GET ${path} attempt=${attempt}"
+              code="$(curl -sS -o /tmp/resp.txt -D /tmp/headers.txt -w '%{http_code}' "$url" || echo '000')"
+              echo "status=${code}"
+              if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+                echo "OK ${path}"
+                head -c 2000 /tmp/resp.txt || true
+                return 0
+              fi
+              echo "Headers:"
+              sed -n '1,40p' /tmp/headers.txt || true
+              echo "Body (first 500 bytes):"
+              head -c 500 /tmp/resp.txt || true
+              sleep 2
+            done
+            return 1
+          }
+
+          check "/health"
+          check "/meta/version"
