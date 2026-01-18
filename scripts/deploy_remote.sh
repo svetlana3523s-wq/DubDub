@@ -73,16 +73,37 @@ pnpm install --frozen-lockfile --prod --force
 
 ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
 
-pm2 startOrReload "$CURRENT_LINK/ecosystem.config.cjs" --update-env || \
-  (pm2 reload "$CURRENT_LINK/ecosystem.config.cjs" --update-env || pm2 start "$CURRENT_LINK/ecosystem.config.cjs" --update-env)
+# Ensure PM2 uses the new `current` release paths.
+pm2 delete dubdub-api dubdub-worker dubdub-web 2>/dev/null || true
+pm2 start "$CURRENT_LINK/ecosystem.config.cjs" --update-env
 pm2 save
 
 if command -v curl >/dev/null 2>&1; then
   echo "Local smoke check (non-blocking): /health and /meta/version"
-  curl -fsS "http://127.0.0.1:${API_PORT:-4000}/health" | head -c 2000 || true
-  echo
-  curl -fsS "http://127.0.0.1:${API_PORT:-4000}/meta/version" | head -c 2000 || true
-  echo
+  base="http://127.0.0.1:${API_PORT:-4000}"
+  for attempt in 1 2 3 4 5; do
+    code="$(curl -sS -o /tmp/health.txt -w '%{http_code}' "${base}/health" || echo '000')"
+    echo "health attempt=${attempt} status=${code}"
+    if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+      head -c 2000 /tmp/health.txt || true
+      echo
+      break
+    fi
+    sleep 2
+  done
+
+  for attempt in 1 2 3 4 5; do
+    code="$(curl -sS -o /tmp/meta.txt -w '%{http_code}' "${base}/meta/version" || echo '000')"
+    echo "meta attempt=${attempt} status=${code}"
+    if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+      head -c 2000 /tmp/meta.txt || true
+      echo
+      break
+    fi
+    head -c 500 /tmp/meta.txt || true
+    echo
+    sleep 2
+  done
 fi
 
 KEEP="${KEEP_RELEASES:-5}"
