@@ -170,3 +170,66 @@ pm2 info dubdub-api  # Детальная информация о процесс
 - [ ] Отправка видео в Telegram работает
 - [ ] Логирование таймингов работает (проверить логи worker)
 - [ ] Обработка 429 ошибок работает (если есть возможность протестировать)
+
+## Auto deploy via GitHub Actions
+
+This repo includes a GitHub Actions workflow that builds and deploys on push to `main`
+or via manual dispatch. It creates a release bundle and runs a remote deploy script
+that performs an atomic release with `current` symlink and PM2 reload.
+
+### Required GitHub Secrets
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_PATH` (example: `/var/www/dubdub`)
+- `DEPLOY_PORT` (optional, defaults to 22)
+
+### Server prep (one-time)
+- Install Node 20+, corepack/pnpm, and PM2.
+- Ensure `DEPLOY_PATH` exists and is writable by the deploy user.
+- Put `.env` at `DEPLOY_PATH/.env` (or `DEPLOY_PATH/shared/.env`).
+- Make sure `DATABASE_URL`, `REDIS_URL`, `S3_*`, `BOT_TOKEN`, `BOT_USERNAME`,
+  `WEBAPP_URL`, `API_BASE_URL`, `MIN_WEB_BUILD_ID`, and `NEXT_PUBLIC_WEB_BUILD_ID`
+  are available in the environment or `.env`.
+
+### Release layout
+The deploy script uses:
+- `DEPLOY_PATH/releases/<timestamp>` for each release
+- `DEPLOY_PATH/current` as the active symlink
+- `DEPLOY_PATH/shared/.env` for secrets (symlinked into each release)
+
+### Rollback
+Switch `current` back to a previous release under `releases/` and reload PM2.
+
+### Files involved
+- `.github/workflows/deploy-prod.yml`
+- `scripts/deploy_remote.sh`
+- `ecosystem.config.cjs`
+
+## Autodeploy via GitHub Actions
+
+This section documents the GitHub Actions autodeploy flow to a VPS with PM2.
+
+### GitHub Secrets
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_PORT`
+- `DEPLOY_PATH`
+
+### Server prep (one-time)
+- Install Node 20+, enable corepack, install pnpm and PM2.
+- Create directories: `/var/www/dubdub/releases`, `/var/www/dubdub/shared`, `/var/www/dubdub/tmp`.
+- Create `/var/www/dubdub/shared/.env` with all runtime secrets.
+
+### Release layout
+- Releases: `/var/www/dubdub/releases/<timestamp>`
+- Active symlink: `/var/www/dubdub/current`
+- Shared env: `/var/www/dubdub/shared/.env` (symlinked into each release)
+
+### Rollback
+- Point `/var/www/dubdub/current` to a previous release directory and reload PM2.
+
+### Notes
+- `NEXT_PUBLIC_WEB_BUILD_ID` and `MIN_WEB_BUILD_ID` can be set at build time via CI.
+- Runtime env is read from `/var/www/dubdub/shared/.env`.

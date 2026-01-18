@@ -1,0 +1,99 @@
+name: Deploy Prod
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy (optional)"
+        required: false
+        default: ""
+      environment:
+        description: "Target environment"
+        required: false
+        default: "prod"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Set web build id
+        run: echo "NEXT_PUBLIC_WEB_BUILD_ID=web_${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+
+      - name: Lint (optional)
+        run: pnpm -r lint
+
+      - name: Typecheck (optional)
+        run: pnpm -r typecheck
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Build release bundle
+        run: |
+          mkdir -p release
+          cp package.json pnpm-workspace.yaml pnpm-lock.yaml release/
+          mkdir -p release/apps/api release/apps/worker release/apps/web release/packages/shared
+          cp -r apps/api/dist release/apps/api/dist
+          cp apps/api/package.json release/apps/api/package.json
+          cp -r apps/worker/dist release/apps/worker/dist
+          cp apps/worker/package.json release/apps/worker/package.json
+          cp -r apps/web/.next release/apps/web/.next
+          cp -r apps/web/public release/apps/web/public
+          cp apps/web/package.json release/apps/web/package.json
+          if ls apps/web/next.config.* 1> /dev/null 2>&1; then cp apps/web/next.config.* release/apps/web/; fi
+          cp -r packages/shared/dist release/packages/shared/dist
+          cp packages/shared/package.json release/packages/shared/package.json
+          cp -r prisma release/prisma
+          cp ecosystem.config.cjs release/ecosystem.config.cjs
+          cp scripts/deploy_remote.sh release/deploy_remote.sh
+          tar -czf release.tgz -C release .
+
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Upload release
+        run: |
+          scp -P "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes release.tgz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/release.tgz"
+
+      - name: Remote deploy
+        run: |
+          ssh -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<EOF
+          set -euo pipefail
+          rm -rf /tmp/release_unpack
+          mkdir -p /tmp/release_unpack
+          tar -xzf /tmp/release.tgz -C /tmp/release_unpack
+          bash /tmp/release_unpack/deploy_remote.sh /tmp/release.tgz "${DEPLOY_PATH}"
+EOF
+
+      - name: Post-deploy check (TODO: set API domain)
+        run: |
+          echo "TODO: set API domain for post-deploy check"
+          curl -sS -D - "https://<API_DOMAIN>/meta/version" || true
