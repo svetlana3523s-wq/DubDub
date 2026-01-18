@@ -37,6 +37,9 @@ jobs:
       - name: Enable corepack
         run: corepack enable
 
+      - name: Prepare pnpm
+        run: corepack prepare pnpm@8.14.0 --activate
+
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
