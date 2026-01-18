@@ -73,9 +73,17 @@ pnpm install --frozen-lockfile --prod --force
 
 ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
 
-pm2 reload "$CURRENT_LINK/ecosystem.config.cjs" --update-env || \
-  pm2 start "$CURRENT_LINK/ecosystem.config.cjs" --update-env
+pm2 startOrReload "$CURRENT_LINK/ecosystem.config.cjs" --update-env || \
+  (pm2 reload "$CURRENT_LINK/ecosystem.config.cjs" --update-env || pm2 start "$CURRENT_LINK/ecosystem.config.cjs" --update-env)
 pm2 save
+
+if command -v curl >/dev/null 2>&1; then
+  echo "Local smoke check (non-blocking): /health and /meta/version"
+  curl -fsS "http://127.0.0.1:${API_PORT:-4000}/health" | head -c 2000 || true
+  echo
+  curl -fsS "http://127.0.0.1:${API_PORT:-4000}/meta/version" | head -c 2000 || true
+  echo
+fi
 
 KEEP="${KEEP_RELEASES:-5}"
 if [ "$KEEP" -gt 0 ]; then
