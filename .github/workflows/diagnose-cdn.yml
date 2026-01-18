@@ -141,11 +141,10 @@ jobs:
           if ! echo "${head_ct:-}" | grep -qi 'video/mp4'; then ok=0; reason="${reason:+$reason,}content_type_not_mp4"; fi
 
           if [ "$ok" -eq 1 ]; then
-            echo "Result: PASS (CDN выглядит совместимым для Telegram URL fetch)"
+            echo "Result: PASS (CDN looks compatible for Telegram URL fetch)"
             exit 0
           fi
 
           echo "Result: FAIL reason=${reason:-unknown}"
           exit 1
-SSH
-
+          SSH
