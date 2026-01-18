@@ -27,7 +27,12 @@ tar -xzf "$TARBALL" -C "$RELEASE_DIR"
 if [ -f "$SHARED_DIR/.env" ]; then
   ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env"
 else
-  echo "Warning: $SHARED_DIR/.env not found"
+  if [ -f "$DEPLOY_PATH/.env" ]; then
+    echo "Warning: $SHARED_DIR/.env not found; falling back to $DEPLOY_PATH/.env"
+    ln -sfn "$DEPLOY_PATH/.env" "$RELEASE_DIR/.env"
+  else
+    echo "Warning: $SHARED_DIR/.env not found"
+  fi
 fi
 
 cd "$RELEASE_DIR"
@@ -36,6 +41,11 @@ if [ -f "$SHARED_DIR/.env" ]; then
   set -a
   # shellcheck disable=SC1090
   . "$SHARED_DIR/.env"
+  set +a
+elif [ -f "$DEPLOY_PATH/.env" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$DEPLOY_PATH/.env"
   set +a
 fi
 
