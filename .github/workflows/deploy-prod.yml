@@ -61,12 +61,12 @@ jobs:
         continue-on-error: true
         run: pnpm -r --if-present lint
 
+      - name: Build
+        run: pnpm -r build
+
       - name: Typecheck (optional)
         continue-on-error: true
         run: pnpm -r --if-present typecheck
-
-      - name: Build
-        run: pnpm -r build
 
       - name: Build release bundle
         run: |
@@ -87,6 +87,25 @@ jobs:
           cp ecosystem.config.cjs release/ecosystem.config.cjs
           cp scripts/deploy_remote.sh release/deploy_remote.sh
           tar -czf release.tgz -C release .
+
+      - name: Validate deploy secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH; do
+            if [ -z "${!v:-}" ]; then
+              echo "Missing required secret/env: $v"
+              missing=1
+            fi
+          done
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "Missing required secret: DEPLOY_SSH_KEY"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Add SSH key
         run: |
