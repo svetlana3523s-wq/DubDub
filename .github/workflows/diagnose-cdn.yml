@@ -1,0 +1,151 @@
+name: Diagnose CDN
+
+on:
+  workflow_dispatch:
+    inputs:
+      sessionId:
+        description: "Optional: sessionId to test (uses /renders/<sessionId>.mp4). If empty, tries to extract from recent PM2 logs."
+        required: false
+        default: ""
+
+jobs:
+  diagnose-cdn:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+    steps:
+      - name: Validate deploy secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH; do
+            if [ -z "${!v:-}" ]; then
+              echo "Missing required secret/env: $v"
+              missing=1
+            fi
+          done
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "Missing required secret: DEPLOY_SSH_KEY"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Add SSH key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Remote CDN checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "bash -s -- \"${DEPLOY_PATH}\" \"${{ inputs.sessionId }}\" \"${PROD_API_BASE_URL}\"" <<'SSH'
+          set -euo pipefail
+          DEPLOY_PATH="$1"
+          INPUT_SESSION_ID="$2"
+          PROD_API_BASE_URL="$3"
+
+          SHARED_ENV="${DEPLOY_PATH}/shared/.env"
+          ROOT_ENV="${DEPLOY_PATH}/.env"
+          if [ -f "$SHARED_ENV" ]; then
+            set -a
+            # shellcheck disable=SC1090
+            . "$SHARED_ENV"
+            set +a
+          elif [ -f "$ROOT_ENV" ]; then
+            set -a
+            # shellcheck disable=SC1090
+            . "$ROOT_ENV"
+            set +a
+          fi
+
+          CDN_BASE="${CDN_URL:-}"
+          if [ -z "$CDN_BASE" ]; then
+            echo "CDN check: CDN_URL is empty in server env (.env)."
+            echo "Result: FAIL (no CDN_URL)"
+            exit 1
+          fi
+
+          # Ensure scheme for curl
+          if ! echo "$CDN_BASE" | grep -Eq '^https?://'; then
+            CDN_BASE="https://${CDN_BASE}"
+          fi
+          CDN_BASE="${CDN_BASE%/}"
+
+          CDN_DOMAIN="$(echo "$CDN_BASE" | sed -E 's#^https?://##; s#/.*$##')"
+
+          SESSION_ID="$INPUT_SESSION_ID"
+          if [ -z "$SESSION_ID" ]; then
+            # Try to extract recent sessionId from PM2 logs (worker first)
+            SESSION_ID="$(pm2 logs dubdub-worker --nostream --lines 400 2>/dev/null | \
+              grep -Eo 'renders/[a-z0-9]+\\.mp4' | \
+              sed -E 's#renders/##; s#\\.mp4##' | \
+              head -n 1 || true)"
+          fi
+
+          if [ -z "$SESSION_ID" ]; then
+            echo "CDN check: could not find sessionId automatically."
+            echo "Provide workflow input: sessionId (from URL /s/<sessionId>/result)."
+            echo "Result: FAIL (no sessionId)"
+            exit 1
+          fi
+
+          TARGET_PATH="/renders/${SESSION_ID}.mp4"
+          URL="${CDN_BASE}${TARGET_PATH}"
+
+          echo "CDN check: domain=${CDN_DOMAIN} target=${TARGET_PATH}"
+
+          head_status="$(curl -sS -o /dev/null -D - -I "$URL" | awk 'NR==1{print $2}' || true)"
+          head_ct="$(curl -sS -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print $2}' | tail -n 1)"
+          head_len="$(curl -sS -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{print $2}' | tail -n 1)"
+          head_ar="$(curl -sS -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' | tail -n 1)"
+
+          echo "HEAD: status=${head_status:-unknown} ct=${head_ct:-missing} len=${head_len:-missing} ar=${head_ar:-missing}"
+
+          range_status="$(curl -sS -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | awk 'NR==1{print $2}' || true)"
+          range_cr="$(curl -sS -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-range"{print $2}' | tail -n 1)"
+          range_ar="$(curl -sS -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' | tail -n 1)"
+
+          echo "RANGE: status=${range_status:-unknown} cr=${range_cr:-missing} ar=${range_ar:-missing}"
+
+          tmpfile="$(mktemp)"
+          curl -sS -o "$tmpfile" -H 'Range: bytes=0-1023' "$URL" || true
+          bytes="$(wc -c < "$tmpfile" 2>/dev/null || echo 0)"
+          rm -f "$tmpfile"
+          echo "DOWNLOAD_1KB: bytes=${bytes}"
+
+          # Optional: compare API proxy (helps debug origin/key issues)
+          if [ -n "${PROD_API_BASE_URL:-}" ]; then
+            echo "API proxy HEAD: ${PROD_API_BASE_URL}/files/renders/${SESSION_ID}.mp4"
+            curl -sS -o /dev/null -D - -I "${PROD_API_BASE_URL%/}/files/renders/${SESSION_ID}.mp4" | sed -n '1,15p' || true
+          fi
+
+          ok=1
+          reason=""
+          if [ "${head_status:-}" != "200" ]; then ok=0; reason="head_status_${head_status:-unknown}"; fi
+          if [ "${range_status:-}" != "206" ]; then ok=0; reason="${reason:+$reason,}range_status_${range_status:-unknown}"; fi
+          if echo "${head_ct:-}" | grep -qi 'text/html'; then ok=0; reason="${reason:+$reason,}content_type_html"; fi
+          if ! echo "${head_ct:-}" | grep -qi 'video/mp4'; then ok=0; reason="${reason:+$reason,}content_type_not_mp4"; fi
+
+          if [ "$ok" -eq 1 ]; then
+            echo "Result: PASS (CDN выглядит совместимым для Telegram URL fetch)"
+            exit 0
+          fi
+
+          echo "Result: FAIL reason=${reason:-unknown}"
+          exit 1
+SSH
+
