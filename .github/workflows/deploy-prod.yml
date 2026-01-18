@@ -74,20 +74,35 @@ jobs:
 
       - name: Add SSH key
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
 
       - name: Upload release
         run: |
-          scp -P "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes release.tgz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/release.tgz"
+          set -euo pipefail
+          scp -i ~/.ssh/id_ed25519 -P "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes release.tgz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/release.tgz"
 
       - name: Remote deploy
         run: |
-          ssh -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "set -euo pipefail; rm -rf /tmp/release_unpack; mkdir -p /tmp/release_unpack; tar -xzf /tmp/release.tgz -C /tmp/release_unpack; bash /tmp/release_unpack/deploy_remote.sh /tmp/release.tgz \"${DEPLOY_PATH}\""
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" << 'SSH'
+          set -euo pipefail
+          TMP_DIR="$(mktemp -d)"
+          tar -xzf /tmp/release.tgz -C "$TMP_DIR"
+          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "${DEPLOY_PATH}"
+          rm -rf "$TMP_DIR"
+          SSH
 
-      - name: Post-deploy check (TODO: set API domain)
+      - name: Post-deploy check
         run: |
-          echo "TODO: set API domain for post-deploy check"
-          curl -sS -D - "https://API_DOMAIN_PLACEHOLDER/meta/version" || true
+          set -euo pipefail
+          if [ -z "${{ secrets.PROD_API_BASE_URL }}" ]; then
+            echo "PROD_API_BASE_URL is missing; skipping post-deploy check"
+            exit 0
+          fi
+          curl -fsS "${{ secrets.PROD_API_BASE_URL }}/health" | head -c 2000
+          curl -fsS "${{ secrets.PROD_API_BASE_URL }}/meta/version" | head -c 2000
