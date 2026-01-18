@@ -50,7 +50,9 @@ elif [ -f "$DEPLOY_PATH/.env" ]; then
 fi
 
 corepack enable
-pnpm install --frozen-lockfile
+# Prisma CLI is a devDependency in this repo; during deploy we need dev deps
+# for `prisma generate/migrate`, then we prune to production dependencies.
+pnpm install --frozen-lockfile --prod=false
 
 if [ -d "prisma" ]; then
   if [ -z "${DATABASE_URL:-}" ]; then
