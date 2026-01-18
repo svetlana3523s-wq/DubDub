@@ -124,11 +124,12 @@ jobs:
       - name: Remote deploy
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" << 'SSH'
+          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s -- \"${DEPLOY_PATH}\"" << 'SSH'
           set -euo pipefail
+          DEPLOY_PATH="$1"
           TMP_DIR="$(mktemp -d)"
           tar -xzf /tmp/release.tgz -C "$TMP_DIR"
-          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "${DEPLOY_PATH}"
+          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "$DEPLOY_PATH"
           rm -rf "$TMP_DIR"
           SSH
 
