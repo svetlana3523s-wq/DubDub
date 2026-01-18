@@ -60,7 +60,7 @@ async function getFileSize(s3Key: string): Promise<number> {
 }
 
 function getPublicBaseUrl(): string {
-  const baseUrl = config.publicFilesBaseUrl || config.cdnUrl;
+  const baseUrl = config.cdnUrl || config.publicFilesBaseUrl;
   return baseUrl ? baseUrl.replace(/\/+$/, "") : "";
 }
 
