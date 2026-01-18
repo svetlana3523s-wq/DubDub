@@ -10,6 +10,7 @@ import { rendersRoutes } from "./routes/renders.js";
 import { healthRoutes } from "./routes/health.js";
 import { adminRoutes } from "./routes/admin.js";
 import { filesRoutes } from "./routes/files.js";
+import { metaRoutes } from "./routes/meta.js";
 import { bot } from "./lib/bot-instance.js";
 
 const fastify = Fastify({
@@ -50,6 +51,7 @@ await fastify.register(sessionsRoutes);
 await fastify.register(rendersRoutes);
 await fastify.register(adminRoutes);
 await fastify.register(filesRoutes);
+await fastify.register(metaRoutes);
 
 // Use webhook in production or polling in development
 const isProduction = process.env.NODE_ENV === "production";
