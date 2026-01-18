@@ -78,7 +78,7 @@ jobs:
           cp -r apps/worker/dist release/apps/worker/dist
           cp apps/worker/package.json release/apps/worker/package.json
           cp -r apps/web/.next release/apps/web/.next
-          cp -r apps/web/public release/apps/web/public
+          if [ -d apps/web/public ]; then cp -r apps/web/public release/apps/web/public; fi
           cp apps/web/package.json release/apps/web/package.json
           if ls apps/web/next.config.* 1> /dev/null 2>&1; then cp apps/web/next.config.* release/apps/web/; fi
           cp -r packages/shared/dist release/packages/shared/dist
