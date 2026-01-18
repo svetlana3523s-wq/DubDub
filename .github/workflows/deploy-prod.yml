@@ -28,16 +28,16 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8.14.0
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Prepare pnpm
-        run: corepack prepare pnpm@8.14.0 --activate
+          cache: "pnpm"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
