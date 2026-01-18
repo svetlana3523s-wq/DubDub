@@ -85,13 +85,10 @@ jobs:
 
       - name: Remote deploy
         run: |
-          ssh -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<EOF
-          set -euo pipefail
-          rm -rf /tmp/release_unpack
-          mkdir -p /tmp/release_unpack
-          tar -xzf /tmp/release.tgz -C /tmp/release_unpack
-          bash /tmp/release_unpack/deploy_remote.sh /tmp/release.tgz "${DEPLOY_PATH}"
-EOF
+          ssh -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
+          "set -euo pipefail; rm -rf /tmp/release_unpack; mkdir -p /tmp/release_unpack; \
+          tar -xzf /tmp/release.tgz -C /tmp/release_unpack; \
+          bash /tmp/release_unpack/deploy_remote.sh /tmp/release.tgz \"${DEPLOY_PATH}\""
 
       - name: Post-deploy check (TODO: set API domain)
         run: |
