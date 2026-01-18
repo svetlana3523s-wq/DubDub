@@ -97,6 +97,27 @@ jobs:
           fi
 
           if [ -z "$SESSION_ID" ]; then
+            # Fallback: query DB for the latest ready render via Prisma (requires DATABASE_URL in env)
+            if [ -d "${DEPLOY_PATH}/current" ]; then
+              cd "${DEPLOY_PATH}/current" || true
+            fi
+            SESSION_ID="$(node - <<'NODE' 2>/dev/null || true
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+prisma.render
+  .findFirst({
+    where: { status: "ready", s3Key: { not: null } },
+    orderBy: { updatedAt: "desc" },
+    select: { sessionId: true },
+  })
+  .then((r) => process.stdout.write(r?.sessionId || ""))
+  .catch(() => process.stdout.write(""))
+  .finally(() => prisma.$disconnect().catch(() => {}));
+NODE
+)"
+          fi
+
+          if [ -z "$SESSION_ID" ]; then
             echo "CDN check: could not find sessionId automatically."
             echo "Provide workflow input: sessionId (from URL /s/<sessionId>/result)."
             echo "Result: FAIL (no sessionId)"
