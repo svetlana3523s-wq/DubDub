@@ -50,6 +50,8 @@ elif [ -f "$DEPLOY_PATH/.env" ]; then
 fi
 
 corepack enable
+# Avoid interactive prompts in CI/non-tty contexts
+export CI=1
 # Prisma CLI is a devDependency in this repo; during deploy we need dev deps
 # for `prisma generate/migrate`, then we prune to production dependencies.
 pnpm install --frozen-lockfile --prod=false
@@ -67,7 +69,7 @@ if [ -d "prisma" ]; then
   fi
 fi
 
-pnpm prune --prod
+pnpm install --frozen-lockfile --prod --force
 
 ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
 
