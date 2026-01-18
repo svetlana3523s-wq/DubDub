@@ -58,7 +58,7 @@ jobs:
         run: echo "NEXT_PUBLIC_WEB_BUILD_ID=web_${GITHUB_SHA::12}" >> "$GITHUB_ENV"
 
       - name: Lint (optional)
-        run: pnpm -r lint
+        run: pnpm -r lint --if-present
 
       - name: Typecheck (optional)
         run: pnpm -r typecheck
