@@ -66,6 +66,9 @@ jobs:
         continue-on-error: true
         run: pnpm -r --if-present lint
 
+      - name: Text integrity guard
+        run: node check-text-integrity.mjs
+
       - name: Build
         run: pnpm -r build
 
