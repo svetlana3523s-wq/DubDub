@@ -1,4 +1,4 @@
-export const RU = {
+﻿export const RU = {
   web: {
     result: {
       sendTimeout: "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0437\u0430\u043d\u0438\u043c\u0430\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u043d\u043e\u0433\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.",
@@ -63,93 +63,93 @@ export const RU = {
   },
   bot: {
     mainMenu: {
-      startGame: "🎮 Начать игру",
-      joinGame: "👥 Присоединиться к игре",
-      suggestEpisode: "💡 Предложить эпизод",
-      adminPanel: "👑 Админ-панель",
-      cancel: "❌ Отмена",
+      startGame: "\u{1F3AE} Начать игру",
+      joinGame: "\u{1F465} Присоединиться к игре",
+      suggestEpisode: "\u{1F4A1} Предложить эпизод",
+      adminPanel: "\u{1F6E0} Админ-панель",
+      cancel: "\u{274C} Отмена",
     },
     start: {
       welcome:
-        "🎮 Добро пожаловать в DubDub! Это игра, где вы озвучиваете сцены из кино и мемов.\n\n" +
+        "\u{1F3AE} Добро пожаловать в DubDub! Это игра, где вы озвучиваете сцены из кино и мемов.\n\n" +
         "Выберите действие в меню ниже и следуйте подсказкам.\n\n" +
-        "📌 Меню находится внизу экрана.",
+        "\u{1F4CC} Меню находится внизу экрана.",
       openGameLink:
-        "🎮 Открываю игру...\n\n" +
-        "Нажмите кнопку меню «🎮 Играть», чтобы открыть приложение.",
+        "\u{1F3AE} Открываю игру...\n\n" +
+        "Нажмите кнопку меню «\u{1F3AE} Играть», чтобы открыть приложение.",
       joinInvite: (players: number, maxPlayers: number, joinLink: string) =>
-        "📢 Вас пригласили в игру!\n\n" +
-        `Игроков: ${players}/${maxPlayers}\n\n` +
-        `🔗 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
+        "\u{1F4E3} Вас пригласили в игру!\n\n" +
+        `\u{1F465} Игроков: ${players}/${maxPlayers}\n\n` +
+        `Открыть игру: ${joinLink}`,
       joinNotFound: (code: string) =>
-        `⚠ Игра с кодом ${code} не найдена или уже закрыта.\n\n` +
+        `\u{26A0}\u{FE0F} Игра с кодом ${code} не найдена или уже закрыта.\n\n` +
         "Попросите друга прислать новый код.",
       newUserNotify: (userName: string, userLink: string) =>
-        `🎉 Новый пользователь!\n\n${userName} (${userLink})`,
+        `\u{1F389} Новый пользователь!\n\n${userName} (${userLink})`,
     },
     join: {
-      prompt: "👤 Введи код от друга:",
+      prompt: "\u{1F464} Введите код от друга:",
       notFound: (code: string) =>
-        `⚠ Сессия с кодом "${code}" не найдена.\n\n` +
+        `\u{26A0}\u{FE0F} Сессия с кодом \"${code}\" не найдена.\n\n` +
         "Проверьте код и попробуйте ещё раз.",
       completed: (status: string) =>
-        "⚠ Эта игра уже завершена.\n\n" +
+        "\u{26A0}\u{FE0F} Эта игра уже завершена.\n\n" +
         `Статус: ${status}\n\n` +
         "Создайте новую игру или присоединитесь к активной.",
       alreadyJoined:
-        "⚠ Вы уже в этой игре!\n\n" +
+        "\u{26A0}\u{FE0F} Вы уже в этой игре!\n\n" +
         "Нажмите кнопку ниже, чтобы открыть игру:",
       full: (maxPlayers: number) =>
-        `⚠ Игра уже полная (${maxPlayers}/${maxPlayers} игроков).`,
+        `\u{26A0}\u{FE0F} Игра уже полная (${maxPlayers}/${maxPlayers} игроков).`,
       closed: (status: string) =>
-        "⚠ Игра уже завершена.\n\n" +
+        "\u{26A0}\u{FE0F} Игра уже завершена.\n\n" +
         `Статус: ${status}\n\n` +
         "Создайте новую игру или присоединитесь к активной.",
       recording:
-        "⚠ Игра уже началась. Можно присоединиться только к играм в лобби.",
+        "\u{26A0}\u{FE0F} Игра уже началась. Можно присоединиться только к играм в лобби.",
       found: (players: number, maxPlayers: number, category: string, joinLink: string) =>
-        "✅ Найдена игра!\n\n" +
+        "\u{2705} Найдена игра!\n\n" +
         `Игроков: ${players}/${maxPlayers}\n` +
         `Категория: ${category}\n\n` +
-        `🔗 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
-      openGame: "🎮 Открыть игру",
+        `\u{1F517} Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
+      openGame: "\u{1F3AE} Открыть игру",
     },
     startGame: {
       openLink: (appLink: string) =>
-        "🎮 Нажми на ссылку чтобы открыть игру:\n\n" +
+        "\u{1F3AE} Нажми на ссылку чтобы открыть игру:\n\n" +
         `${appLink}`,
     },
     suggestEpisode: {
       info:
-        "💡 Предложить эпизод\n\n" +
+        "\u{1F4A1} Предложить эпизод\n\n" +
         "Чтобы предложить эпизод, отправьте видео или ссылку и тайминги реплик.\n\n" +
-        "💬 https://t.me/skameeckaa",
+        "\u{1F4AC} https://t.me/skameeckaa",
     },
     help: {
       base:
-        "🎮 DubDub — игра, где вы озвучиваете сцены из кино и мемов.\n\n" +
+        "\u{1F3AE} DubDub — игра, где вы озвучиваете сцены из кино и мемов.\n\n" +
         "1. Выберите категорию и режим\n" +
         "2. Запишите свои реплики по таймингам\n" +
         "3. Дождитесь рендера и получите видео\n" +
         "4. Делитесь результатом с друзьями!\n\n",
       adminBlock:
-        "👑 Админ-панель:\n" +
+        "\u{1F6E0} Админ-панель:\n" +
         "/scenes — список сцен\n" +
         "/edit_cues — редактировать тайминги\n" +
         "/stats — статистика\n" +
         "Чтобы добавить сцену — пришлите видео.\n\n",
-      openButton: "🎮 Открыть DubDub",
-      adminButton: "👑 Админ-панель",
-      cta: "Нажмите кнопку ниже, чтобы открыть меню 👇",
+      openButton: "\u{1F3AE} Открыть DubDub",
+      adminButton: "\u{1F6E0} Админ-панель",
+      cta: "Нажмите кнопку ниже, чтобы открыть меню \u{1F447}",
     },
     admin: {
       openingPanel: "Открываю админ-панель...",
-      panelButton: "👑 Админ-панель",
+      panelButton: "\u{1F6E0} Админ-панель",
     },
     scenes: {
       noneWithHint: "Сцен нет. Пришлите видео, чтобы добавить сцену.",
       none: "Сцен нет.",
-      listTitle: (count: number) => `📋 Сцены (${count}):`,
+      listTitle: (count: number) => `\u{1F4CB} Сцены (${count}):`,
       listItem: (
         index: number,
         title: string,
@@ -158,7 +158,7 @@ export const RU = {
         rolesCount: number,
         sceneId: string
       ) =>
-        `${index}. ${title}\n   ${categoryLabel}\n   ⏱ ${durationSec}s, ${rolesCount} ролей\n   🆔 ${sceneId}`,
+        `${index}. ${title}\n   ${categoryLabel}\n   \u{23F1} ${durationSec}s, ${rolesCount} ролей\n   \u{1F194} ${sceneId}`,
     },
     stats: {
       summary: (
@@ -169,21 +169,21 @@ export const RU = {
         conversionRate: number,
         scenesCount: number
       ) =>
-        "📊 Статистика DubDub\n\n" +
-        `👥 Пользователей: ${totalUsers}\n` +
-        `📈 Всего сессий: ${totalSessions}\n` +
-        `📆 Сегодня: ${todaySessions}\n` +
-        `✅ Завершено: ${completedSessions} (${conversionRate}%)\n` +
-        `🎬 Сцен: ${scenesCount}`,
+        "\u{1F4CA} Статистика DubDub\n\n" +
+        `\u{1F465} Пользователей: ${totalUsers}\n` +
+        `\u{1F4C8} Всего сессий: ${totalSessions}\n` +
+        `\u{1F4C5} Сегодня: ${todaySessions}\n` +
+        `\u{2705} Завершено: ${completedSessions} (${conversionRate}%)\n` +
+        `\u{1F3AC} Сцен: ${scenesCount}`,
     },
     cancelFlow: {
-      cancelled: "❌ Действие отменено",
+      cancelled: "\u{274C} Действие отменено",
       mainMenu: "Возвращаемся в меню",
     },
     editCues: {
       chooseScene: (list: string) =>
-        `📝 Выберите сцену для редактирования:\n\n${list}\n\nОтправьте ID сцены:`,
-      sceneNotFound: (sceneId: string) => `❌ Сцена "${sceneId}" не найдена`,
+        `\u{1F4CC} Выберите сцену для редактирования:\n\n${list}\n\nОтправьте ID сцены:`,
+      sceneNotFound: (sceneId: string) => `\u{274C} Сцена \"${sceneId}\" не найдена`,
       editingPrompt: (
         title: string,
         durationSec: number,
@@ -191,109 +191,109 @@ export const RU = {
         totalFrames: number,
         cueStr: string
       ) =>
-        `📝 Редактируем: *${title}*\n\n` +
-        `⏱ Длительность: ${durationSec}s\n` +
-        `🎥 FPS: ${fps}\n` +
-        `📽 Всего кадров: ${totalFrames}\n` +
-        `⏱ Текущие тайминги (в кадрах): \`${cueStr}\`\n\n` +
+        `\u{1F4CC} Редактируем: *${title}*\n\n` +
+        `\u{23F1} Длительность: ${durationSec}s\n` +
+        `\u{1F3A5} FPS: ${fps}\n` +
+        `\u{1F39E} Всего кадров: ${totalFrames}\n` +
+        `\u{23F1} Текущие тайминги (в кадрах): \`${cueStr}\`\n\n` +
         "Отправьте новые тайминги в формате:\n" +
         "`0-125, 150-275`",
       invalidFormat:
-        "⚠ Неверный формат. Используйте диапазоны (кадры): `0-125, 150-275`\n" +
+        "\u{26A0}\u{FE0F} Неверный формат. Используйте диапазоны (кадры): `0-125, 150-275`\n" +
         "Отправьте ещё раз:",
       outOfRange: (maxEndFrame: number, totalFrames: number) =>
-        `⚠ Конец ${maxEndFrame} выходит за пределы сцены (${totalFrames} кадров).\n` +
+        `\u{26A0}\u{FE0F} Конец ${maxEndFrame} выходит за пределы сцены (${totalFrames} кадров).\n` +
         "Отправьте ещё раз:",
       updated: (title: string, cuesLength: number, cueInfo: string) =>
-        "✅ Тайминги обновлены!\n\n" +
-        `🎬 Сцена: ${title}\n` +
-        `📝 Реплик: ${cuesLength}\n\n` +
+        "\u{2705} Тайминги обновлены!\n\n" +
+        `\u{1F3AC} Сцена: ${title}\n` +
+        `\u{1F4DD} Реплик: ${cuesLength}\n\n` +
         "Новые тайминги:\n" +
         `${cueInfo}`,
-      updateError: "❌ Не удалось обновить тайминги. Попробуйте ещё раз.",
+      updateError: "\u{274C} Не удалось обновить тайминги. Попробуйте ещё раз.",
     },
     uploadUrl: {
-      emptyMessage: "❌ Ошибка: пустая ссылка",
+      emptyMessage: "\u{274C} Ошибка: пустая ссылка",
       usage:
-        "📥 Скачивание сцены по ссылке\n\n" +
+        "\u{1F4E5} Скачивание сцены по ссылке\n\n" +
         "Использование: /upload_url <URL>\n\n" +
         "Пример:\n" +
         "/upload_url https://example.com/video.mp4\n\n" +
         "Мы скачаем файл по ссылке и подготовим сцену.",
-      invalidUrl: "❌ Неверный URL. Используйте http:// или https://",
-      missingUrl: "❌ Ошибка: не указан URL",
-      downloading: "⏳ Скачиваем файл по ссылке...",
+      invalidUrl: "\u{274C} Неверный URL. Используйте http:// или https://",
+      missingUrl: "\u{274C} Ошибка: не указан URL",
+      downloading: "\u{23F3} Скачиваем файл по ссылке...",
       fileDownloaded: (sizeMb: string) =>
-        `📥 Файл скачан (${sizeMb} MB). Обрабатываем...`,
+        `\u{1F4E5} Файл скачан (${sizeMb} MB). Обрабатываем...`,
       videoProcessed: (
         fileSizeMb: string,
         duration: string,
         fps: string,
         totalFrames: number
       ) =>
-        "✅ Видео обработано!\n\n" +
-        `📦 Размер: ${fileSizeMb} MB\n` +
-        `⏱ Длительность: ${duration} сек\n` +
-        `🎥 FPS: ${fps}\n` +
-        `📽 Всего кадров: ${totalFrames}\n\n` +
+        "\u{2705} Видео обработано!\n\n" +
+        `\u{1F4E6} Размер: ${fileSizeMb} MB\n` +
+        `\u{23F1} Длительность: ${duration} сек\n` +
+        `\u{1F3A5} FPS: ${fps}\n` +
+        `\u{1F39E} Всего кадров: ${totalFrames}\n\n` +
         "Отправьте тайминги реплик:",
-      errorBase: "❌ Не удалось скачать файл по ссылке.",
-      errorInvalidUrl: "⚠ Неверный URL.",
-      errorNotFound: "⚠ Файл не найден по ссылке.",
-      errorForbidden: "⚠ Доступ к файлу запрещён.",
+      errorBase: "\u{274C} Не удалось скачать файл по ссылке.",
+      errorInvalidUrl: "\u{26A0}\u{FE0F} Неверный URL.",
+      errorNotFound: "\u{26A0}\u{FE0F} Файл не найден по ссылке.",
+      errorForbidden: "\u{26A0}\u{FE0F} Доступ к файлу запрещён.",
       errorDetails: (details: string) => `Причина: ${details}`,
       linkDetected: (text: string) =>
-        "🔗 В сообщении есть ссылка!\n\n" +
+        "\u{1F517} В сообщении есть ссылка!\n\n" +
         "Хотите скачать файл по ссылке?\n\n" +
         `Используйте команду: /upload_url ${text}\n\n` +
         "Или нажмите кнопку ниже:",
-      linkButton: "📎 Скачать по ссылке",
+      linkButton: "\u{1F4CE} Скачать по ссылке",
     },
     video: {
       tooLargeForTelegram: (sizeMb: string) =>
-        "⚠ Видео слишком большое для Telegram (" +
+        "\u{26A0}\u{FE0F} Видео слишком большое для Telegram (" +
         `${sizeMb} MB).\n\n` +
         "Telegram ограничивает размер файлов. Попробуйте отправить видео до 50 MB.",
-      processing: "⏳ Обрабатываем видео...",
+      processing: "\u{23F3} Обрабатываем видео...",
       tooLargeToDownload: (sizeMb: string) =>
-        "⚠ Видео слишком большое для загрузки в Telegram.\n\n" +
-        `📦 Размер: ${sizeMb} MB\n\n` +
-        "💡 Советы:\n" +
+        "\u{26A0}\u{FE0F} Видео слишком большое для загрузки в Telegram.\n\n" +
+        `\u{1F4E6} Размер: ${sizeMb} MB\n\n` +
+        "\u{1F4A1} Советы:\n" +
         "1. Обрежьте видео вручную\n" +
         "2. Сожмите до 20-30 MB\n" +
         "3. Отправьте ссылку на файл",
       received: (duration: string, fps: number, totalFrames: number) =>
-        "✅ Видео получено!\n" +
-        `⏱ Длительность: ${duration} сек\n` +
-        `🎥 FPS: ${fps}\n` +
-        `📽 Всего кадров: ${totalFrames}\n\n` +
+        "\u{2705} Видео получено!\n" +
+        `\u{23F1} Длительность: ${duration} сек\n` +
+        `\u{1F3A5} FPS: ${fps}\n` +
+        `\u{1F39E} Всего кадров: ${totalFrames}\n\n` +
         "Отправьте тайминги реплик:",
-      processErrorBase: "❌ Не удалось обработать видео.",
+      processErrorBase: "\u{274C} Не удалось обработать видео.",
       processErrorTooBig: (sizeMb: string) =>
-        `⚠ Файл слишком большой (${sizeMb} MB).\n` +
+        `\u{26A0}\u{FE0F} Файл слишком большой (${sizeMb} MB).\n` +
         "Попробуйте до 20-30 MB.",
       processErrorFfprobe:
-        "⚠ Не удалось прочитать видео. Убедитесь, что это MP4.",
+        "\u{26A0}\u{FE0F} Не удалось прочитать видео. Убедитесь, что это MP4.",
       processErrorDetails: (details: string) => `Причина: ${details}`,
     },
     pendingScene: {
       titleConfirm: (title: string) =>
-        `📝 Подтвердите: "${title}"\n\nВыберите категорию:`,
-      categoryMovies: "🎬 Кино/Сериалы",
-      categoryMemes: "😂 Мемы",
-      categoryPolitics: "🏛️ Политика",
-      invalidCategory: "⚠ Выберите категорию из кнопок",
+        `\u{1F4CC} Подтвердите: \"${title}\"\n\nВыберите категорию:`,
+      categoryMovies: "\u{1F3AC} Кино/Сериалы",
+      categoryMemes: "\u{1F602} Мемы",
+      categoryPolitics: "\u{1F3DB}\u{FE0F} Политика",
+      invalidCategory: "\u{26A0}\u{FE0F} Выберите категорию из кнопок",
       cuesPrompt: (categoryLabel: string, totalFrames: number, fps: number) =>
-        `🎬 Категория: ${categoryLabel}\n\n` +
+        `\u{1F3AC} Категория: ${categoryLabel}\n\n` +
         "Пришлите тайминги реплик в формате:\n\n" +
         "• `0-125, 150-275` (без ролей)\n" +
         "• `Роль 1 - 280 - 367`\n" +
         "• `Роль 2 - 787 - 922`\n\n" +
-        `📽 Всего кадров: ${totalFrames}\n` +
-        `🎥 FPS: ${fps}\n\n` +
+        `\u{1F39E} Всего кадров: ${totalFrames}\n` +
+        `\u{1F3A5} FPS: ${fps}\n\n` +
         "Укажите роли по порядку от 1 до N.",
       cuesInvalid:
-        "⚠ Неверный формат таймингов.\n\n" +
+        "\u{26A0}\u{FE0F} Неверный формат таймингов.\n\n" +
         "Примеры:\n" +
         "• `0-125, 150-275` (без ролей)\n" +
         "• `Роль 1 - 280 - 367` (с ролями)\n" +
@@ -301,9 +301,9 @@ export const RU = {
         "Укажите роли по порядку от 1 до N.\n\n" +
         "Отправьте ещё раз:",
       cuesOutOfRange: (maxEndFrame: number, totalFrames: number) =>
-        `⚠ Конец ${maxEndFrame} выходит за пределы сцены (${totalFrames} кадров).\n` +
+        `\u{26A0}\u{FE0F} Конец ${maxEndFrame} выходит за пределы сцены (${totalFrames} кадров).\n` +
         "Отправьте ещё раз:",
-      uploading: "⏳ Загружаем сцену в базу...",
+      uploading: "\u{23F3} Загружаем сцену в базу...",
       added: (
         title: string,
         sceneId: string,
@@ -312,29 +312,28 @@ export const RU = {
         rolesCount: number,
         cueInfo: string
       ) =>
-        "✅ Сцена добавлена!\n\n" +
-        `📝 Название: ${title}\n` +
-        `🆔 ID: ${sceneId}\n` +
-        `⏱ Длительность: ${duration}s\n` +
-        `🎥 FPS: ${fps}\n` +
-        `📝 Ролей: ${rolesCount}\n\n` +
+        "\u{2705} Сцена добавлена!\n\n" +
+        `\u{1F4CC} Название: ${title}\n` +
+        `\u{1F194} ID: ${sceneId}\n` +
+        `\u{23F1} Длительность: ${duration}s\n` +
+        `\u{1F3A5} FPS: ${fps}\n` +
+        `\u{1F4CC} Ролей: ${rolesCount}\n\n` +
         "Тайминги:\n" +
         `${cueInfo}`,
-      uploadError: "❌ Не удалось добавить сцену. Попробуйте ещё раз.",
+      uploadError: "\u{274C} Не удалось добавить сцену. Попробуйте ещё раз.",
     },
     sendToCreator: {
       caption: (botUsername: string, sessionId: string) =>
-        "💽 Ваш дубляж готов!\n\n" +
+        "\u{1F4BD} Ваш дубляж готов!\n\n" +
         `Поделиться с друзьями: t.me/${botUsername}?startapp=${sessionId}`,
-      shareButton: "📤 Поделиться",
+      shareButton: "\u{1F4E4} Поделиться",
       shareQuery: (botUsername: string, sessionId: string) =>
         `Готово! t.me/${botUsername}?startapp=${sessionId}`,
     },
     errors: {
       generic: "Произошла ошибка. Попробуйте позже.",
       genericShort: "Произошла ошибка",
-      noAccess: "⛔ Нет доступа",
+      noAccess: "\u{26D4} Нет доступа",
     },
-  },
   },
 } as const;
