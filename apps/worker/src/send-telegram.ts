@@ -64,6 +64,10 @@ function getPublicBaseUrl(): string {
   return baseUrl ? baseUrl.replace(/\/+$/, "") : "";
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function headWithTimeout(url: string, headers?: Record<string, string>): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CDN_HEAD_TIMEOUT_MS);
@@ -78,37 +82,49 @@ async function isCdnUrlCompatible(
   url: string,
   sessionId: string
 ): Promise<{ ok: boolean; reason?: string }> {
-  try {
-    console.log(`[SEND-TELEGRAM-CDN] attempt url=${url} sessionId=${sessionId}`);
-    const head = await headWithTimeout(url);
-    const headContentType = head.headers.get("content-type") || "";
-    const headContentLength = head.headers.get("content-length") || "";
-    const headAcceptRanges = head.headers.get("accept-ranges") || "";
-    console.log(
-      `[SEND-TELEGRAM-CDN] head status=${head.status} ct=${headContentType || "missing"} len=${headContentLength || "missing"} ar=${headAcceptRanges || "missing"}`
-    );
-    if (head.status !== 200) {
-      return { ok: false, reason: `HEAD status ${head.status}` };
-    }
-    if (!headContentType.includes("video/mp4")) {
-      return { ok: false, reason: `content-type ${headContentType || "missing"}` };
-    }
+  const maxAttempts = 2;
+  let lastError: string | undefined;
 
-    const rangeHead = await headWithTimeout(url, { Range: "bytes=0-1023" });
-    const rangeContentRange = rangeHead.headers.get("content-range") || "";
-    const rangeAcceptRanges = rangeHead.headers.get("accept-ranges") || "";
-    console.log(
-      `[SEND-TELEGRAM-CDN] range status=${rangeHead.status} cr=${rangeContentRange || "missing"} ar=${rangeAcceptRanges || "missing"}`
-    );
-    if (rangeHead.status !== 206) {
-      return { ok: false, reason: `Range status ${rangeHead.status}` };
-    }
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      console.log(`[SEND-TELEGRAM-CDN] attempt url=${url} sessionId=${sessionId}`);
+      const head = await headWithTimeout(url);
+      const headContentType = head.headers.get("content-type") || "";
+      const headContentLength = head.headers.get("content-length") || "";
+      const headAcceptRanges = head.headers.get("accept-ranges") || "";
+      console.log(
+        `[SEND-TELEGRAM-CDN] head status=${head.status} ct=${headContentType || "missing"} len=${headContentLength || "missing"} ar=${headAcceptRanges || "missing"}`
+      );
+      if (head.status !== 200) {
+        return { ok: false, reason: `HEAD status ${head.status}` };
+      }
+      if (!headContentType.includes("video/mp4")) {
+        return { ok: false, reason: `content-type ${headContentType || "missing"}` };
+      }
 
-    return { ok: true };
-  } catch (err: any) {
-    return { ok: false, reason: err?.message || "CDN HEAD failed" };
+      const rangeHead = await headWithTimeout(url, { Range: "bytes=0-1023" });
+      const rangeContentRange = rangeHead.headers.get("content-range") || "";
+      const rangeAcceptRanges = rangeHead.headers.get("accept-ranges") || "";
+      console.log(
+        `[SEND-TELEGRAM-CDN] range status=${rangeHead.status} cr=${rangeContentRange || "missing"} ar=${rangeAcceptRanges || "missing"}`
+      );
+      if (rangeHead.status !== 206) {
+        return { ok: false, reason: `Range status ${rangeHead.status}` };
+      }
+
+      return { ok: true };
+    } catch (err: any) {
+      lastError = err?.message || "CDN HEAD failed";
+      console.log(`[SEND-TELEGRAM-CDN] attempt_failed attempt=${attempt} error=${lastError}`);
+      if (attempt < maxAttempts) {
+        await sleep(500);
+      }
+    }
   }
+
+  return { ok: false, reason: lastError || "CDN HEAD failed" };
 }
+
 
 /**
  * Send video via upload (downloads to temp file, then uploads to Telegram)
@@ -158,14 +174,14 @@ async function sendViaUpload(
         caption,
         supports_streaming: true,
         reply_markup: {
-          keyboard: [
-            [{ text: "🎭 Начать игру" }],
-            [{ text: "👥 Присоединиться к игре" }],
-            [{ text: "💡 Предложить эпизод" }],
-          ],
-          resize_keyboard: true,
-          is_persistent: true,
-        },
+              keyboard: [
+                [{ text: "?? ?????? ????" }],
+                [{ text: "?? ?????????????? ? ????" }],
+                [{ text: "?? ?????????? ??????" }],
+              ],
+              resize_keyboard: true,
+              is_persistent: true,
+            },
       }
     );
     
@@ -271,9 +287,9 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
             supports_streaming: true,
             reply_markup: {
               keyboard: [
-                [{ text: "à??- ?ø‘Øø‘'‘? ñ?‘?‘?" }],
-                [{ text: "à?'? ?‘?ñ‘??ç?ñ?ñ‘'‘?‘?‘? ó ñ?‘?ç" }],
-                [{ text: "à?'ö ?‘?ç?>?ñ‘'‘? ‘?õñú??" }],
+                [{ text: "?? ?????? ????" }],
+                [{ text: "?? ?????????????? ? ????" }],
+                [{ text: "?? ?????????? ??????" }],
               ],
               resize_keyboard: true,
               is_persistent: true,
