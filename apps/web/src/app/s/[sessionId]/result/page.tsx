@@ -51,6 +51,98 @@ export default function ResultPage({ params }: PageProps) {
   const sendStatusPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const sendStatusPollAttemptRef = useRef<number>(0);
   const sendStatusPollStartTimeRef = useRef<number>(0);
+  const sendStatusPollInProgressRef = useRef<boolean>(false);
+
+  const stopSendStatusPolling = useCallback(() => {
+    if (sendStatusPollTimeoutRef.current) {
+      clearTimeout(sendStatusPollTimeoutRef.current);
+      sendStatusPollTimeoutRef.current = null;
+    }
+    sendStatusPollInProgressRef.current = false;
+  }, []);
+
+  const startSendStatusPolling = useCallback(
+    (initialDelayMs = 3000) => {
+      if (!initData) return;
+      if (sendStatusPollInProgressRef.current) return;
+
+      sendStatusPollInProgressRef.current = true;
+      setSending(true);
+      setSendError(null);
+      setRetryAfterSeconds(null);
+      setCountdown(null);
+
+      sendStatusPollAttemptRef.current = 0;
+      sendStatusPollStartTimeRef.current = Date.now();
+
+      // Backoff intervals: 3s, 3s, 5s, 8s, 13s, max 15s
+      const backoffIntervals = [3000, 3000, 5000, 8000, 13000, 15000];
+      const MAX_POLL_DURATION = 180000; // 180 seconds
+
+      const scheduleNext = () => {
+        if (!sendStatusPollInProgressRef.current) return;
+
+        const elapsed = Date.now() - sendStatusPollStartTimeRef.current;
+        if (elapsed >= MAX_POLL_DURATION) {
+          stopSendStatusPolling();
+          setSending(false);
+          setSendError("?‘'õ‘?ø?óø úø?ñ?øç‘' ‘?>ñ‘?ó?? ????? ?‘?ç?ç?ñ. ??õ‘??+‘?ü‘'ç õ?úç.");
+          return;
+        }
+
+        const attemptIndex = Math.min(
+          sendStatusPollAttemptRef.current,
+          backoffIntervals.length - 1
+        );
+        const delay = backoffIntervals[attemptIndex];
+        sendStatusPollAttemptRef.current++;
+
+        sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, delay);
+      };
+
+      const pollSendStatus = async () => {
+        try {
+          const statusResult = await api.getSendStatus(initData, sessionId);
+
+          if (statusResult.status === "rate_limited") {
+            const retryAfter = statusResult.retryAfterSeconds || 60;
+            setRetryAfterSeconds(retryAfter);
+            setCountdown(retryAfter);
+            setSendError(null);
+          } else if (statusResult.status === "sent") {
+            stopSendStatusPolling();
+            setSent(true);
+            setSending(false);
+            setSendError(null);
+            setRetryAfterSeconds(null);
+            setCountdown(null);
+            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+            return;
+          } else if (statusResult.status === "failed" || statusResult.status === "too_large") {
+            stopSendStatusPolling();
+            setSending(false);
+            setSendError(
+              statusResult.error || "?ç ‘??ø>?‘?‘? ?‘'õ‘?ø?ñ‘'‘? ?ñ?ç?"
+            );
+            setRetryAfterSeconds(null);
+            setCountdown(null);
+            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+            return;
+          } else {
+            setRetryAfterSeconds(null);
+            setCountdown(null);
+          }
+        } catch (err) {
+          console.error("Poll send status failed:", err);
+        }
+
+        scheduleNext();
+      };
+
+      sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, initialDelayMs);
+    },
+    [initData, sessionId, stopSendStatusPolling]
+  );
 
   // Execute confirmed replay - only redirect if render is ready (users saw the result)
   const executeConfirmedReplay = useCallback(async () => {
@@ -180,12 +272,64 @@ export default function ResultPage({ params }: PageProps) {
     return () => {
       clearInterval(interval);
       // Cleanup send status polling on unmount
-      if (sendStatusPollTimeoutRef.current) {
-        clearTimeout(sendStatusPollTimeoutRef.current);
-        sendStatusPollTimeoutRef.current = null;
+      stopSendStatusPolling();
+    };
+  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus, stopSendStatusPolling]);
+
+  useEffect(() => {
+    if (!isReady || !initData) return;
+
+    let cancelled = false;
+
+    const initSendStatus = async () => {
+      try {
+        const statusResult = await api.getSendStatus(initData, sessionId);
+        if (cancelled) return;
+
+        if (statusResult.status === "sent") {
+          stopSendStatusPolling();
+          setSent(true);
+          setSending(false);
+          setSendError(null);
+          setRetryAfterSeconds(null);
+          setCountdown(null);
+          return;
+        }
+
+        if (statusResult.status === "failed" || statusResult.status === "too_large") {
+          stopSendStatusPolling();
+          setSending(false);
+          setSendError(
+            statusResult.error || "?ç ‘??ø>?‘?‘? ?‘'õ‘?ø?ñ‘'‘? ?ñ?ç?"
+          );
+          setRetryAfterSeconds(null);
+          setCountdown(null);
+          return;
+        }
+
+        if (
+          statusResult.status === "queued" ||
+          statusResult.status === "sending" ||
+          statusResult.status === "rate_limited"
+        ) {
+          if (statusResult.status === "rate_limited") {
+            const retryAfter = statusResult.retryAfterSeconds || 60;
+            setRetryAfterSeconds(retryAfter);
+            setCountdown(retryAfter);
+          }
+          startSendStatusPolling(3000);
+        }
+      } catch {
+        // ignore init polling errors
       }
     };
-  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus]);
+
+    initSendStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isReady, initData, sessionId, startSendStatusPolling, stopSendStatusPolling]);
 
   const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
     if (!initData || replaying) return;
@@ -260,134 +404,71 @@ export default function ResultPage({ params }: PageProps) {
 
   const handleSendToTelegram = async () => {
     if (!initData || sending || sent) return;
-    
+
     setSending(true);
     setSendError(null);
     setRetryAfterSeconds(null);
     setCountdown(null);
-    
+
     try {
       const result = await api.sendVideoToTelegram(initData, sessionId);
-      
-      if (result.status === "queued") {
-        // Job queued - start polling for status with backoff
-        setSending(true);
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-        
-        // Clear any existing timeout
-        if (sendStatusPollTimeoutRef.current) {
-          clearTimeout(sendStatusPollTimeoutRef.current);
+
+      if (result.status === "queued" || result.status === "sending" || result.status === "rate_limited") {
+        if (result.status === "rate_limited") {
+          const retryAfter = 60;
+          setRetryAfterSeconds(retryAfter);
+          setCountdown(retryAfter);
         }
-        
-        // Reset polling state
-        sendStatusPollAttemptRef.current = 0;
-        sendStatusPollStartTimeRef.current = Date.now();
-        
-        // Backoff intervals: 3s, 3s, 5s, 8s, 13s, потом 15s (макс)
-        const backoffIntervals = [3000, 3000, 5000, 8000, 13000, 15000];
-        const MAX_POLL_DURATION = 180000; // 180 seconds
-        
-        const pollSendStatus = async () => {
-          try {
-            const statusResult = await api.getSendStatus(initData, sessionId);
-            
-            // Handle rate_limited status (show neutral message with timer, continue polling)
-            if (statusResult.status === "rate_limited") {
-              // Use retryAfterSeconds from API response
-              const retryAfter = statusResult.retryAfterSeconds || 60;
-              setRetryAfterSeconds(retryAfter);
-              // Update countdown if it's different (in case retry_after changed)
-              if (countdown === null || countdown !== retryAfter) {
-                setCountdown(retryAfter);
-              }
-              setSendError(null); // Don't show as error - it's a rate limit, not a failure
-              // Continue polling - don't stop
-            } else if (statusResult.status === "sent") {
-              // SUCCESS: Stop polling, unlock UI, show success state
-              if (sendStatusPollTimeoutRef.current) {
-                clearTimeout(sendStatusPollTimeoutRef.current);
-                sendStatusPollTimeoutRef.current = null;
-              }
-              
-              setSent(true);
-              setSending(false); // Unlock UI
-              setSendError(null);
-              setRetryAfterSeconds(null);
-              setCountdown(null);
-              window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-              return; // Stop polling
-            } else if (statusResult.status === "failed" || statusResult.status === "too_large") {
-              // ERROR: Stop polling, show error
-              if (sendStatusPollTimeoutRef.current) {
-                clearTimeout(sendStatusPollTimeoutRef.current);
-                sendStatusPollTimeoutRef.current = null;
-              }
-              
-              setSending(false); // Unlock UI even on error
-              setSendError(statusResult.error || "Не удалось отправить видео");
-              setRetryAfterSeconds(null);
-              setCountdown(null);
-              window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
-              return; // Stop polling
-            }
-            
-            // Check timeout
-            const elapsed = Date.now() - sendStatusPollStartTimeRef.current;
-            if (elapsed >= MAX_POLL_DURATION) {
-              if (sendStatusPollTimeoutRef.current) {
-                clearTimeout(sendStatusPollTimeoutRef.current);
-                sendStatusPollTimeoutRef.current = null;
-              }
-              setSending(false);
-              setSendError("Отправка занимает слишком много времени. Попробуйте позже.");
-              return;
-            }
-            
-            // Continue polling with backoff (queued or sending)
-            const attemptIndex = Math.min(sendStatusPollAttemptRef.current, backoffIntervals.length - 1);
-            const delay = backoffIntervals[attemptIndex];
-            sendStatusPollAttemptRef.current++;
-            
-            sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, delay);
-          } catch (err) {
-            console.error("Poll send status failed:", err);
-            
-            // Check timeout even on error
-            const elapsed = Date.now() - sendStatusPollStartTimeRef.current;
-            if (elapsed >= MAX_POLL_DURATION) {
-              if (sendStatusPollTimeoutRef.current) {
-                clearTimeout(sendStatusPollTimeoutRef.current);
-                sendStatusPollTimeoutRef.current = null;
-              }
-              setSending(false);
-              setSendError("Отправка занимает слишком много времени. Попробуйте позже.");
-              return;
-            }
-            
-            // Continue polling with backoff even on error
-            const attemptIndex = Math.min(sendStatusPollAttemptRef.current, backoffIntervals.length - 1);
-            const delay = backoffIntervals[attemptIndex];
-            sendStatusPollAttemptRef.current++;
-            sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, delay);
-          }
-        };
-        
-        // Start polling with first interval (3s)
-        const firstDelay = backoffIntervals[0];
-        sendStatusPollTimeoutRef.current = setTimeout(pollSendStatus, firstDelay);
-      } else if (result.status === "sent") {
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        startSendStatusPolling(3000);
+        return;
+      }
+
+      if (result.status === "sent") {
+        stopSendStatusPolling();
         setSent(true);
         setSending(false);
+        setSendError(null);
+        setRetryAfterSeconds(null);
+        setCountdown(null);
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-      } else {
-        setSending(false);
-        setSendError(result.error || result.message || "Не удалось отправить");
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+        return;
       }
+
+      setSending(false);
+      setSendError(result.error || result.message || "�� ������� ���������.");
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
     } catch (err: any) {
       console.error("Send failed:", err);
+      const errMessage = String(err?.message || "");
+      const errStatus = err?.status;
+      const errCode = err?.code;
+      const normalizedMessage = errMessage.toLowerCase();
+
+      const isRateLimited =
+        errStatus === 429 ||
+        errCode === "RATE_LIMITED" ||
+        normalizedMessage.includes("too many requests") ||
+        normalizedMessage.includes("rate limited");
+
+      const isAlreadyQueued =
+        errStatus === 409 ||
+        normalizedMessage.includes("already") ||
+        normalizedMessage.includes("queued") ||
+        normalizedMessage.includes("sending");
+
+      if (isRateLimited || isAlreadyQueued) {
+        if (isRateLimited) {
+          const retryAfter = 60;
+          setRetryAfterSeconds(retryAfter);
+          setCountdown(retryAfter);
+        }
+        startSendStatusPolling(3000);
+        return;
+      }
+
       setSending(false);
-      setSendError(err.message || "Ошибка отправки");
+      setSendError(errMessage || "������ ��������.");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
     }
   };
@@ -643,3 +724,4 @@ export default function ResultPage({ params }: PageProps) {
     </div>
   );
 }
+
