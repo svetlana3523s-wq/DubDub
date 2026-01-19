@@ -86,7 +86,9 @@ jobs:
           CDN_BASE="${CDN_BASE%/}"
 
           CDN_DOMAIN="$(echo "$CDN_BASE" | sed -E 's#^https?://##; s#/.*$##')"
-          RESOLVE_IP="$(dig +short @8.8.8.8 "${CDN_DOMAIN}" A | head -n 1 | sed 's/\\.$//' || true)"
+          CNAME_TARGET="$(dig +short @8.8.8.8 "${CDN_DOMAIN}" CNAME | head -n 1 | sed 's/\\.$//' || true)"
+          RESOLVE_NAME="${CNAME_TARGET:-$CDN_DOMAIN}"
+          RESOLVE_IP="$(dig +short @8.8.8.8 "${RESOLVE_NAME}" A | head -n 1 | sed 's/\\.$//' || true)"
           CURL_RESOLVE_OPT=""
           if [ -n "$RESOLVE_IP" ]; then
             CURL_RESOLVE_OPT="--resolve ${CDN_DOMAIN}:443:${RESOLVE_IP}"
