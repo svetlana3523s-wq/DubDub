@@ -85,7 +85,7 @@ export default function ResultPage({ params }: PageProps) {
         if (elapsed >= MAX_POLL_DURATION) {
           stopSendStatusPolling();
           setSending(false);
-          setSendError("\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0437\u0430\u043d\u0438\u043c\u0430\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u043d\u043e\u0433\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.");
+          setSendError("Отправка занимает слишком много времени. Попробуйте позже.");
           return;
         }
 
@@ -120,7 +120,7 @@ export default function ResultPage({ params }: PageProps) {
           } else if (statusResult.status === "failed" || statusResult.status === "too_large") {
             stopSendStatusPolling();
             setSending(false);
-            setSendError(statusResult.error || "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432\u0438\u0434\u0435\u043e");
+            setSendError(statusResult.error || "Не удалось отправить видео");
             setRetryAfterSeconds(null);
             setCountdown(null);
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -296,7 +296,7 @@ export default function ResultPage({ params }: PageProps) {
         if (statusResult.status === "failed" || statusResult.status === "too_large") {
           stopSendStatusPolling();
           setSending(false);
-          setSendError(statusResult.error || "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432\u0438\u0434\u0435\u043e");
+          setSendError(statusResult.error || "Не удалось отправить видео");
           setRetryAfterSeconds(null);
           setCountdown(null);
           return;
@@ -431,7 +431,7 @@ export default function ResultPage({ params }: PageProps) {
       }
 
       setSending(false);
-      setSendError(result.error || result.message || "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c");
+      setSendError(result.error || result.message || "Не удалось отправить");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
     } catch (err: any) {
       console.error("Send failed:", err);
@@ -463,7 +463,7 @@ export default function ResultPage({ params }: PageProps) {
       }
 
       setSending(false);
-      setSendError(errMessage || "\u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438");
+      setSendError(errMessage || "Ошибка отправки");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
     }
   };
@@ -481,8 +481,8 @@ export default function ResultPage({ params }: PageProps) {
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
           <div className="text-5xl">😢</div>
-          <h2 className="text-xl font-bold">\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0432\u0438\u0434\u0435\u043e</h2>
-          <p className="text-tg-hint">\u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437</p>
+          <h2 className="text-xl font-bold">Не удалось создать видео</h2>
+          <p className="text-tg-hint">Попробуйте ещё раз</p>
         </div>
       </div>
     );
@@ -499,8 +499,8 @@ export default function ResultPage({ params }: PageProps) {
             </div>
           </div>
           <div>
-            <h2 className="text-xl font-bold mb-2">\u0420\u0435\u043d\u0434\u0435\u0440\u0438\u043c \u0432\u0438\u0434\u0435\u043e</h2>
-            <p className="text-tg-hint">\u041f\u043e\u0447\u0442\u0438 \u0433\u043e\u0442\u043e\u0432\u043e...</p>
+            <h2 className="text-xl font-bold mb-2">Рендерим видео</h2>
+            <p className="text-tg-hint">Почти готово...</p>
           </div>
         </div>
       </div>
@@ -513,14 +513,14 @@ export default function ResultPage({ params }: PageProps) {
         {/* Header */}
         <div className="text-center animate-slide-up">
           <div className="text-4xl mb-3">🎉</div>
-          <h1 className="text-2xl font-bold mb-1">\u0413\u043e\u0442\u043e\u0432\u043e!</h1>
-          <p className="text-tg-hint">\u0412\u0430\u0448 \u0434\u0443\u0431\u043b\u044f\u0436 \u0441\u043e\u0431\u0440\u0430\u043d</p>
+          <h1 className="text-2xl font-bold mb-1">Готово!</h1>
+          <p className="text-tg-hint">Ваш дубляж собран</p>
         </div>
 
         {/* Task (only in tasks mode) */}
         {session && session.session.gameMode === "tasks" && session.session.task && (
           <div className="card text-center animate-fade-in">
-            <div className="text-sm text-tg-hint mb-1">\u1f4dd \u0417\u0430\u0434\u0430\u043d\u0438\u0435</div>
+            <div className="text-sm text-tg-hint mb-1">Ὅd Задание</div>
             <div className="font-medium">{session.session.task}</div>
           </div>
         )}
@@ -553,9 +553,9 @@ export default function ResultPage({ params }: PageProps) {
           <div className="card bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
             <div className="text-center">
               <div className="text-2xl mb-2">⏳</div>
-              <p className="font-medium">\u0416\u0434\u0451\u043c \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f \u043e\u0442 \u043f\u0430\u0440\u0442\u043d\u0451\u0440\u0430...</p>
+              <p className="font-medium">Ждём подтверждения от партнёра...</p>
               <p className="text-sm text-tg-hint mt-1">
-                \u0414\u0440\u0443\u0433\u043e\u0439 \u0438\u0433\u0440\u043e\u043a \u0434\u043e\u043b\u0436\u0435\u043d \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u0437\u0430\u043f\u0443\u0441\u043a \u043d\u043e\u0432\u043e\u0439 \u0438\u0433\u0440\u044b
+                Другой игрок должен подтвердить запуск новой игры
               </p>
             </div>
           </div>
@@ -576,29 +576,29 @@ export default function ResultPage({ params }: PageProps) {
             } disabled:opacity-70`}
           >
             {sent ? (
-              <>\u2705 \u041e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0430\u0442!</>
+              <>✅ Отправлено в чат!</>
             ) : sending ? (
               <>
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 {retryAfterSeconds !== null && countdown !== null ? (
-                  <>\u041e\u0436\u0438\u0434\u0430\u0435\u043c, \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u043c \u0447\u0435\u0440\u0435\u0437 {countdown} \u0441\u0435\u043a</>
+                  <>Ожидаем, повторим через {countdown} сек</>
                 ) : sendError ? (
-                  <>\u041f\u043e\u0432\u0442\u043e\u0440\u043d\u0430\u044f \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430...</>
+                  <>Повторная отправка...</>
                 ) : (
-                  <>\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u043c...</>
+                  <>Отправляем...</>
                 )}
               </>
             ) : sendError ? (
-              <>\u1f504 \u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0443</>
+              <>ὐ4 Повторить отправку</>
             ) : (
-              <>\u1f4e5 \u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0432 Telegram</>
+              <>὎5 Сохранить в Telegram</>
             )}
           </button>
           
           {/* Rate limit message (neutral, not an error) - shown separately from button */}
           {retryAfterSeconds !== null && countdown !== null && countdown > 0 && !sent && (
             <div className="text-center text-sm text-yellow-400">
-              \u23f3 Telegram \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0438\u043b \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u044c, \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u043c \u0447\u0435\u0440\u0435\u0437 ~{countdown} \u0441\u0435\u043a
+              ⏳ Telegram ограничил скорость, повторим через ~{countdown} сек
             </div>
           )}
           
@@ -611,10 +611,10 @@ export default function ResultPage({ params }: PageProps) {
 
           <button
             type="button"
-            onClick={() => window.alert(`ID \u0438\u0433\u0440\u044b: ${sessionId}`)}
+            onClick={() => window.alert(`ID игры: ${sessionId}`)}
             className="w-full btn-secondary"
           >
-            \u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c ID \u0438\u0433\u0440\u044b
+            Показать ID игры
           </button>
 
           {/* Replay buttons - disabled when waiting */}
@@ -630,7 +630,7 @@ export default function ResultPage({ params }: PageProps) {
                   ...
                 </>
               ) : (
-                <>\u1f504 \u0415\u0449\u0435 \u0440\u0430\u0437</>
+                <>ὐ4 Еще раз</>
               )}
             </button>
             <button
@@ -644,7 +644,7 @@ export default function ResultPage({ params }: PageProps) {
                   ...
                 </>
               ) : (
-                <>\u1f3b2 \u041d\u043e\u0432\u0430\u044f \u0441\u0446\u0435\u043d\u0430</>
+                <>Ἳ2 Новая сцена</>
               )}
             </button>
           </div>
@@ -657,10 +657,10 @@ export default function ResultPage({ params }: PageProps) {
               <div className="text-center">
                 <div className="text-4xl mb-3">⚠️</div>
                 <h3 className="text-lg font-bold mb-2">
-                  {showNewSceneConfirm === "newScene" ? "\u041d\u043e\u0432\u0430\u044f \u0441\u0446\u0435\u043d\u0430" : "\u0415\u0449\u0435 \u0440\u0430\u0437"}
+                  {showNewSceneConfirm === "newScene" ? "Новая сцена" : "Еще раз"}
                 </h3>
                 <p className="text-sm text-tg-hint">
-                  \u0422\u0435\u043a\u0443\u0449\u0435\u0435 \u0432\u0438\u0434\u0435\u043e \u043d\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f. \u0412\u044b \u0443\u0432\u0435\u0440\u0435\u043d\u044b, \u0447\u0442\u043e \u0445\u043e\u0442\u0438\u0442\u0435 \u043d\u0430\u0447\u0430\u0442\u044c \u043d\u043e\u0432\u0443\u044e \u0438\u0433\u0440\u0443?
+                  Текущее видео не сохранится. Вы уверены, что хотите начать новую игру?
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -668,13 +668,13 @@ export default function ResultPage({ params }: PageProps) {
                   onClick={() => setShowNewSceneConfirm(null)}
                   className="btn-secondary"
                 >
-                  \u041e\u0442\u043c\u0435\u043d\u0430
+                  Отмена
                 </button>
                 <button
                   onClick={() => handleReplay(showNewSceneConfirm, true)}
                   className="btn-primary"
                 >
-                  \u041e\u041a
+                  ОК
                 </button>
               </div>
             </div>
@@ -688,10 +688,10 @@ export default function ResultPage({ params }: PageProps) {
               <div className="text-center">
                 <div className="text-4xl mb-3">🎮</div>
                 <h3 className="text-lg font-bold mb-2">
-                  {replayStatus.mode === "newScene" ? "\u041d\u043e\u0432\u0430\u044f \u0441\u0446\u0435\u043d\u0430" : "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0438\u0433\u0440\u0443"}
+                  {replayStatus.mode === "newScene" ? "Новая сцена" : "Повторить игру"}
                 </h3>
                 <p className="text-sm text-tg-hint">
-                  <span className="font-medium text-white">{replayStatus.requestedByName}</span> \u0445\u043e\u0447\u0435\u0442 {replayStatus.mode === "newScene" ? "\u043d\u0430\u0447\u0430\u0442\u044c \u043d\u043e\u0432\u0443\u044e \u0441\u0446\u0435\u043d\u0443" : "\u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0442\u0435\u043a\u0443\u0449\u0443\u044e \u0441\u0446\u0435\u043d\u0443"}. \u0412\u044b \u0441\u043e\u0433\u043b\u0430\u0441\u043d\u044b?
+                  <span className="font-medium text-white">{replayStatus.requestedByName}</span> хочет {replayStatus.mode === "newScene" ? "начать новую сцену" : "повторить текущую сцену"}. Вы согласны?
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -700,7 +700,7 @@ export default function ResultPage({ params }: PageProps) {
                   disabled={confirmingReplay}
                   className="btn-secondary disabled:opacity-70"
                 >
-                  {confirmingReplay ? "..." : "\u041d\u0435\u0442"}
+                  {confirmingReplay ? "..." : "Нет"}
                 </button>
                 <button
                   onClick={() => handleConfirmReplay(true)}
@@ -709,7 +709,7 @@ export default function ResultPage({ params }: PageProps) {
                 >
                   {confirmingReplay ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                  ) : "\u0414\u0430, \u043f\u043e\u0435\u0445\u0430\u043b\u0438!"}
+                  ) : "Да, поехали!"}
                 </button>
               </div>
             </div>
