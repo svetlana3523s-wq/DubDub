@@ -13,6 +13,7 @@ import os from "os";
 
 // Categories imported from config
 import { SCENE_CATEGORIES, CATEGORY_LABELS, type SceneCategory } from "./config/categories.js";
+import { RU } from "@dubdub/shared";
 
 // Состояние диалога для добавления сцен
 interface PendingScene {
@@ -239,18 +240,18 @@ export function createBot(): Telegraf {
   const getMainMenuKeyboard = (userId?: number) => {
     const baseKeyboard = [
       [
-        { text: "🎭 Начать игру" },
-        { text: "👥 Присоединиться к игре" },
+        { text: RU.bot.mainMenu.startGame },
+        { text: RU.bot.mainMenu.joinGame },
       ],
       [
-        { text: "💡 Предложить эпизод" },
+        { text: RU.bot.mainMenu.suggestEpisode },
       ],
     ] as Array<Array<{ text: string }>>;
 
     // Add admin panel button for admins
     if (userId && isAdmin(userId)) {
       baseKeyboard.push([
-        { text: "👑 Админ-панель" },
+        { text: RU.bot.mainMenu.adminPanel },
       ]);
     }
 
@@ -270,21 +271,7 @@ export function createBot(): Telegraf {
 
     console.log("[Bot] /start command received", { userId, startPayload });
 
-    const welcomeText = `🎤 Злобная озвучка - это игра, в которой вы озвучиваете эпизоды из кино, сериалов, мемов и прочих роликов.
-
-🎮 Выберите количество игроков - можно сыграть одному и озвучить все реплики самостоятельно или же пригласить друга и сыграть вдвоем.
-
-🎬 Выберите категорию "Кино и сериалы", "Мемы" или "Политика" - вам случайным образом попадется эпизод из выбранного набора. Для того, чтобы озвучить другой эпизод - закончите озвучку и начните игру заново.
-
-❗️ Далее режим - можно озвучивать свободно или же озвучивать по случайно выпавшему заданию.
-
-▶️ Просмотрите эпизод придумайте свою версию озвучки и запишите ее. Обращайте внимание на длительность вашей роли и подгоняйте свои реплики, чтобы вписаться в тайминги!
-
-✅ Наслаждайтесь результатом, да прибудет с вами креатив и искрометный юмор!
-
-❤️ Каждый игрок может добавить свой эпизод в игру! Нажмите кнопку "Предложить эпизод" и следуйте инструкции.
-
-👇 Используйте меню внизу для навигации.`;
+    const welcomeText = RU.bot.start.welcome;
 
     // Send response immediately with persistent keyboard
     try {
@@ -296,8 +283,7 @@ export function createBot(): Telegraf {
         console.log("[Bot] Direct session link, sessionId:", sessionId);
         
         await ctx.reply(
-          `🎬 Открываю игру...\n\n` +
-          `Нажмите кнопку меню "🎭 Играть" чтобы открыть приложение.`,
+          RU.bot.start.openGameLink,
           { reply_markup: getMainMenuKeyboard(userId) }
         );
       } else if (startPayload && startPayload.startsWith("join_")) {
@@ -325,16 +311,17 @@ export function createBot(): Telegraf {
           console.log("[Bot] Found session, sending link:", session.id);
           
           await ctx.reply(
-            `🎬 Вас пригласили в игру!\n\n` +
-            `Игроков: ${session.participants.length}/${session.maxPlayers}\n\n` +
-            `👉 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
+            RU.bot.start.joinInvite(
+              session.participants.length,
+              session.maxPlayers,
+              joinLink
+            ),
             { reply_markup: getMainMenuKeyboard(userId) }
           );
         } else {
           // Session not found - show error
           await ctx.reply(
-            `❌ Игра с кодом ${sessionCode} не найдена или уже закрыта.\n\n` +
-            `Попросите друга прислать новый код.`,
+            RU.bot.start.joinNotFound(sessionCode),
             { reply_markup: getMainMenuKeyboard(userId) }
           );
         }
@@ -362,11 +349,11 @@ export function createBot(): Telegraf {
     if (!startPayload && userId && config.notifyChannelId) {
       // Use setTimeout to ensure this runs after response is sent
       setTimeout(() => {
-        const userName = ctx.from?.first_name || "Аноним";
+        const userName = ctx.from?.first_name || RU.bot.start.anonymousName;
         const userLink = ctx.from?.username ? `@${ctx.from.username}` : `ID: ${userId}`;
         bot.telegram.sendMessage(
           config.notifyChannelId,
-          `👤 Новый пользователь!\n\n${userName} (${userLink})`
+          RU.bot.start.newUserNotify(userName, userLink)
         ).catch((err) => {
           // Silently ignore - channel notification is not critical
           console.error("Failed to notify channel:", err.message);
@@ -376,17 +363,17 @@ export function createBot(): Telegraf {
   });
 
   // Handle "Join game" button (from text menu)
-  bot.hears("👥 Присоединиться к игре", async (ctx) => {
+  bot.hears(RU.bot.mainMenu.joinGame, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     
     console.log("[Bot] Join game button clicked", { userId });
 
     await botState.setPendingJoin(userId);
-    await ctx.reply("🔑 Введи код от друга:", {
+    await ctx.reply(RU.bot.join.prompt, {
       reply_markup: {
         keyboard: [
-          [{ text: "❌ Отмена" }],
+          [{ text: RU.bot.mainMenu.cancel }],
         ],
         resize_keyboard: true,
         one_time_keyboard: false,
@@ -404,10 +391,10 @@ export function createBot(): Telegraf {
       console.log("[Bot] join_game inline button clicked", { userId });
 
       await botState.setPendingJoin(userId);
-      await ctx.reply("🔑 Введи код от друга:", {
+      await ctx.reply(RU.bot.join.prompt, {
         reply_markup: {
           keyboard: [
-            [{ text: "❌ Отмена" }],
+            [{ text: RU.bot.mainMenu.cancel }],
           ],
           resize_keyboard: true,
           one_time_keyboard: false,
@@ -415,7 +402,7 @@ export function createBot(): Telegraf {
       });
     } catch (err) {
       console.error("[Bot] Error in join_game handler:", err);
-      await ctx.answerCbQuery("Произошла ошибка").catch(() => {});
+      await ctx.answerCbQuery(RU.bot.errors.generic).catch(() => {});
     }
   });
 
@@ -425,9 +412,9 @@ export function createBot(): Telegraf {
     if (!userId) return;
 
     await botState.setPendingJoin(userId);
-    await ctx.reply("🔑 Введи код от друга:", {
+    await ctx.reply(RU.bot.join.prompt, {
       reply_markup: {
-        keyboard: [[{ text: "❌ Отмена" }]],
+        keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
         resize_keyboard: true,
         one_time_keyboard: false,
       },
@@ -436,42 +423,30 @@ export function createBot(): Telegraf {
 
   // Handle "Start game" button (from text menu)
   // NOTE: Using text link instead of inline web_app button - iOS bug workaround [[memory:13197292]]
-  bot.hears("🎭 Начать игру", async (ctx) => {
+  bot.hears(RU.bot.mainMenu.startGame, async (ctx) => {
     const botUsername = config.botUsername || "zlomem_bot";
     // Use ?startapp= to open Mini App correctly on all platforms
     const appLink = `https://t.me/${botUsername}/app`;
     
-    await ctx.reply(
-      `🎮 Нажми на ссылку чтобы открыть игру:\n\n${appLink}`,
-      {
-        reply_markup: getMainMenuKeyboard(ctx.from?.id),
-      }
-    );
+    await ctx.reply(RU.bot.startGame.openLink(appLink), {
+      reply_markup: getMainMenuKeyboard(ctx.from?.id),
+    });
   });
 
   // Handle "Suggest episode" button (from text menu)
-  bot.hears("💡 Предложить эпизод", async (ctx) => {
-    await ctx.reply(
-      `💡 Предложить эпизод\n\n` +
-      `Для того, чтобы предложить эпизод, скиньте видео или ссылку на желаемый фрагмент ` +
-      `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
-      `👉 https://t.me/skameeckaa`,
-      {
-        reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
-      }
-    );
+  bot.hears(RU.bot.mainMenu.suggestEpisode, async (ctx) => {
+    await ctx.reply(RU.bot.suggestEpisode.info, {
+      reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
+    });
   });
 
   // Handle "Suggest episode" inline button (legacy support)
   bot.action("suggest_episode", async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(
-      `💡 Предложить эпизод\n\n` +
-      `Для того, чтобы предложить эпизод, скиньте видео или ссылку на желаемый фрагмент ` +
-      `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
-      `👉 https://t.me/skameeckaa`,
+      RU.bot.suggestEpisode.info,
       {
-        reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
+        reply_markup: getMainMenuKeyboard(ctx.from?.id),
       }
     );
   });
@@ -480,25 +455,17 @@ export function createBot(): Telegraf {
   bot.help(async (ctx) => {
     const isUserAdmin = isAdmin(ctx.from?.id ?? 0);
     
-    let helpText = "🎬 DubDub — игра для озвучки видео\n\n" +
-      "1. Создай сессию и пригласи друзей\n" +
-      "2. Каждый игрок записывает реплику\n" +
-      "3. Следующий игрок слышит только часть предыдущей записи\n" +
-      "4. В конце получаете смешное видео!\n\n";
+    let helpText = RU.bot.help.base;
 
     if (isUserAdmin) {
-      helpText += "👑 Админ-команды:\n" +
-        "/scenes — список сцен\n" +
-        "/edit_cues — редактировать тайминги\n" +
-        "/stats — статистика\n" +
-        "Отправь видео — добавить новую сцену\n\n";
+      helpText += RU.bot.help.adminBlock;
     }
 
     const keyboard = {
       inline_keyboard: [
         [
           {
-            text: "🎭 Открыть DubDub",
+            text: RU.bot.help.openButton,
             web_app: { url: config.webappUrl },
           },
         ],
@@ -509,13 +476,13 @@ export function createBot(): Telegraf {
     if (isUserAdmin) {
       keyboard.inline_keyboard.push([
         {
-          text: "👑 Админ-панель",
+          text: RU.bot.help.adminButton,
           web_app: { url: `${config.webappUrl}/admin/scenes` },
         },
       ]);
     }
 
-    await ctx.reply(helpText + "Нажми кнопку ниже, чтобы начать 👇", {
+    await ctx.reply(helpText + RU.bot.help.cta, {
       reply_markup: keyboard,
     });
   });
@@ -523,7 +490,7 @@ export function createBot(): Telegraf {
   // /scenes - список сцен (только админ)
   bot.command("scenes", async (ctx) => {
     if (!isAdmin(ctx.from?.id ?? 0)) {
-      return ctx.reply("⛔ Нет доступа");
+      return ctx.reply(RU.bot.errors.noAccess);
     }
 
     const scenes = await prisma.scene.findMany({
@@ -532,21 +499,21 @@ export function createBot(): Telegraf {
     });
 
     if (scenes.length === 0) {
-      return ctx.reply("Сцен пока нет. Отправь видео, чтобы добавить.");
+      return ctx.reply(RU.bot.scenes.noneWithHint);
     }
 
     const list = scenes.map((s, i) => {
       const catLabel = CATEGORY_LABELS[s.category as SceneCategory] || s.category;
-      return `${i + 1}. ${s.title}\n   ${catLabel}\n   📹 ${s.durationSec}s, ${s.rolesCount} реплик\n   🆔 ${s.id}`;
+      return RU.bot.scenes.listItem(i + 1, s.title, catLabel, s.durationSec, s.rolesCount, s.id);
     }).join("\n\n");
 
-    await ctx.reply(`📋 Сцены (${scenes.length}):\n\n${list}`);
+    await ctx.reply(`${RU.bot.scenes.listTitle(scenes.length)}\n\n${list}`);
   });
 
   // /stats - статистика (только админ)
   bot.command("stats", async (ctx) => {
     if (!isAdmin(ctx.from?.id ?? 0)) {
-      return ctx.reply("⛔ Нет доступа");
+      return ctx.reply(RU.bot.errors.noAccess);
     }
 
     const todayStart = new Date();
@@ -565,12 +532,14 @@ export function createBot(): Telegraf {
       : 0;
 
     await ctx.reply(
-      `📊 Статистика DubDub\n\n` +
-      `👥 Игроков: ${totalUsers}\n` +
-      `🎬 Всего сессий: ${totalSessions}\n` +
-      `📅 Сегодня: ${todaySessions}\n` +
-      `✅ Завершено: ${completedSessions} (${conversionRate}%)\n` +
-      `🎥 Сцен: ${scenesCount}`
+      RU.bot.stats.summary(
+        totalUsers,
+        totalSessions,
+        todaySessions,
+        completedSessions,
+        conversionRate,
+        scenesCount
+      )
     );
   });
 
@@ -588,12 +557,12 @@ export function createBot(): Telegraf {
       await botState.clearAll(userId);
       
       if (hadPending) {
-        await ctx.reply("❌ Операция отменена", {
+        await ctx.reply(RU.bot.cancelFlow.cancelled, {
           reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
         });
       } else {
         // Даже если нет активных операций, показываем главное меню
-        await ctx.reply("Главное меню", {
+        await ctx.reply(RU.bot.cancelFlow.mainMenu, {
           reply_markup: getMainMenuKeyboard(ctx.from?.id),
         });
       }
@@ -601,20 +570,20 @@ export function createBot(): Telegraf {
   });
 
   // Handle "Admin panel" button
-  bot.hears("👑 Админ-панель", async (ctx) => {
+  bot.hears(RU.bot.mainMenu.adminPanel, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.reply("⛔ Нет доступа", {
+      return ctx.reply(RU.bot.errors.noAccess, {
         reply_markup: getMainMenuKeyboard(userId),
       });
     }
 
-    await ctx.reply("Открываю админ-панель...", {
+    await ctx.reply(RU.bot.admin.openingPanel, {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: "👑 Админ-панель",
+              text: RU.bot.admin.panelButton,
               web_app: { url: `${config.webappUrl}/admin/scenes` },
             },
           ],
@@ -627,7 +596,7 @@ export function createBot(): Telegraf {
   bot.command("edit_cues", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.reply("⛔ Нет доступа");
+      return ctx.reply(RU.bot.errors.noAccess);
     }
 
     // Получаем ID сцены из аргумента или показываем список
@@ -641,13 +610,13 @@ export function createBot(): Telegraf {
       });
 
       if (scenes.length === 0) {
-        return ctx.reply("Сцен пока нет.");
+        return ctx.reply(RU.bot.scenes.none);
       }
 
       const list = scenes.map((s, i) => {
         const cues = JSON.parse(s.cueJson) as Array<{ roleIndex: number; startSec: number; durationSec: number }>;
         const cueStr = cues.map((c, j) => `${c.startSec}-${c.startSec + c.durationSec}`).join(", ");
-        return `${i + 1}. *${s.title}*\n   Тайминги: \`${cueStr}\`\n   ID: \`${s.id}\``;
+        return RU.bot.editCues.listItem(i + 1, s.title, cueStr, s.id);
       }).join("\n\n");
 
       await botState.setPendingEdit(userId, {
@@ -657,11 +626,11 @@ export function createBot(): Telegraf {
       });
 
       await ctx.reply(
-        `🎬 Выбери сцену для редактирования:\n\n${list}\n\nОтправь ID сцены:`,
+        RU.bot.editCues.chooseScene(list),
         { 
           parse_mode: "Markdown",
           reply_markup: {
-            keyboard: [[{ text: "❌ Отмена" }]],
+            keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
             resize_keyboard: true,
             one_time_keyboard: true,
           },
@@ -680,7 +649,7 @@ export function createBot(): Telegraf {
     const scene = await prisma.scene.findUnique({ where: { id: sceneId } });
 
     if (!scene) {
-      await ctx.reply(`❌ Сцена "${sceneId}" не найдена`);
+      await ctx.reply(RU.bot.editCues.sceneNotFound(sceneId));
       return;
     }
 
@@ -713,17 +682,17 @@ export function createBot(): Telegraf {
     });
 
     await ctx.reply(
-      `🎬 Редактирование: *${scene.title}*\n\n` +
-      `⏱ Длительность: ${scene.durationSec}s\n` +
-      `🎞 FPS: ${fps}\n` +
-      `📊 Всего кадров: ${totalFrames}\n` +
-      `📍 Текущие тайминги (в кадрах): \`${cueStr}\`\n\n` +
-      `Введи новые тайминги В КАДРАХ:\n` +
-      `\`0-125, 150-275\``,
+      RU.bot.editCues.editingPrompt(
+        scene.title,
+        scene.durationSec,
+        fps,
+        totalFrames,
+        cueStr
+      ),
       { 
         parse_mode: "Markdown",
         reply_markup: {
-          keyboard: [[{ text: "❌ Отмена" }]],
+          keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
           resize_keyboard: true,
           one_time_keyboard: true,
         },
@@ -735,30 +704,24 @@ export function createBot(): Telegraf {
   bot.command("upload_url", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.reply("⛔ Нет доступа");
+      return ctx.reply(RU.bot.errors.noAccess);
     }
 
     const messageText = ctx.message.text;
     if (!messageText) {
-      await ctx.reply("❌ Ошибка: пустое сообщение");
+      await ctx.reply(RU.bot.uploadUrl.emptyMessage);
       return;
     }
 
     const args = messageText.split(" ").slice(1);
     if (args.length === 0) {
-      await ctx.reply(
-        `🔗 Загрузка видео по ссылке\n\n` +
-        `Использование: /upload_url <URL>\n\n` +
-        `Пример:\n` +
-        `/upload_url https://example.com/video.mp4\n\n` +
-        `Или просто отправь ссылку боту, и он предложит загрузить.`
-      );
+      await ctx.reply(RU.bot.uploadUrl.usage);
       return;
     }
 
     const fileUrl = args[0];
     if (!fileUrl || !isValidUrl(fileUrl)) {
-      await ctx.reply("❌ Неверный URL. Используй http:// или https://");
+      await ctx.reply(RU.bot.uploadUrl.invalidUrl);
       return;
     }
 
@@ -769,13 +732,13 @@ export function createBot(): Telegraf {
   bot.action(/^upload_url:(.+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.answerCbQuery("⛔ Нет доступа");
+      return ctx.answerCbQuery(RU.bot.errors.noAccess);
     }
 
     await ctx.answerCbQuery();
     const matchResult = ctx.match;
     if (!matchResult || !matchResult[1]) {
-      await ctx.reply("❌ Ошибка: не удалось получить URL");
+      await ctx.reply(RU.bot.uploadUrl.missingUrl);
       return;
     }
 
@@ -787,7 +750,7 @@ export function createBot(): Telegraf {
   async function handleVideoUrl(ctx: Context, userId: number, fileUrl: string) {
     let tmpPath: string | null = null;
     try {
-      await ctx.reply("⏳ Скачиваю видео по ссылке...");
+      await ctx.reply(RU.bot.uploadUrl.downloading);
 
       // Скачиваем файл по URL
       const result = await downloadFileFromUrl(fileUrl);
@@ -801,7 +764,7 @@ export function createBot(): Telegraf {
 
       console.log(`[Bot] File downloaded successfully: ${fileSizeMb.toFixed(2)} MB, path: ${tmpPath}`);
       
-      await ctx.reply(`📥 Файл скачан (${fileSizeMb.toFixed(2)} MB). Анализирую видео...`);
+      await ctx.reply(RU.bot.uploadUrl.fileDownloaded(fileSizeMb.toFixed(2)));
 
       try {
         // Получаем информацию о видео
@@ -825,15 +788,15 @@ export function createBot(): Telegraf {
         });
 
         await ctx.reply(
-          `✅ Видео обработано!\n\n` +
-          `📦 Размер: ${fileSizeMb.toFixed(2)} MB\n` +
-          `⏱ Длительность: ${duration.toFixed(1)} сек\n` +
-          `🎞 FPS: ${fps.toFixed(2)}\n` +
-          `📊 Всего кадров: ${totalFrames}\n\n` +
-          `Введи название сцены:`,
+          RU.bot.uploadUrl.videoProcessed(
+            fileSizeMb.toFixed(2),
+            duration.toFixed(1),
+            fps.toFixed(2),
+            totalFrames
+          ),
           {
             reply_markup: {
-              keyboard: [[{ text: "❌ Отмена" }]],
+              keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
               resize_keyboard: true,
               one_time_keyboard: false,
             },
@@ -843,21 +806,16 @@ export function createBot(): Telegraf {
         console.error("[Bot] Video info extraction error:", infoErr);
         const errorMsg = infoErr.message || String(infoErr);
         
-        let userMsg = "❌ Не удалось обработать видео.\n\n";
+        let userMsg = `${RU.bot.uploadUrl.errorBase}\n\n`;
         
         if (errorMsg.includes("ffprobe failed")) {
-          userMsg += `⚠️ Файл не является валидным видео или поврежден.\n\n`;
-          userMsg += `Проверь:\n`;
-          userMsg += `• Файл в формате MP4, AVI, MOV и т.д.\n`;
-          userMsg += `• Файл не поврежден\n`;
-          userMsg += `• Файл содержит видео поток\n`;
+          userMsg += `${RU.bot.video.processErrorFfprobe}\n`;
         } else if (errorMsg.includes("File not found")) {
-          userMsg += `⚠️ Файл не найден после скачивания.`;
+          userMsg += RU.bot.uploadUrl.errorNotFound;
         } else if (errorMsg.includes("Invalid video duration")) {
-          userMsg += `⚠️ Не удалось определить длительность видео.\n`;
-          userMsg += `Возможно, файл не является валидным видео.`;
+          userMsg += RU.bot.video.processErrorFfprobe;
         } else {
-          userMsg += `Детали: ${errorMsg.substring(0, 200)}`;
+          userMsg += RU.bot.uploadUrl.errorDetails(errorMsg.substring(0, 200));
         }
         
         await ctx.reply(userMsg);
@@ -872,19 +830,19 @@ export function createBot(): Telegraf {
       }
       
       const errorMsg = err.message || String(err);
-      let userMsg = "❌ Ошибка загрузки видео по ссылке.";
+      let userMsg = RU.bot.uploadUrl.errorBase;
       
       if (errorMsg.includes("Invalid URL")) {
-        userMsg += "\n\n⚠️ Неверный формат URL.";
+        userMsg += `\n\n${RU.bot.uploadUrl.errorInvalidUrl}`;
       } else if (errorMsg.includes("404") || errorMsg.includes("Not Found")) {
-        userMsg += "\n\n⚠️ Файл не найден по этой ссылке.";
+        userMsg += `\n\n${RU.bot.uploadUrl.errorNotFound}`;
       } else if (errorMsg.includes("403") || errorMsg.includes("Forbidden")) {
-        userMsg += "\n\n⚠️ Нет доступа к файлу по этой ссылке.";
+        userMsg += `\n\n${RU.bot.uploadUrl.errorForbidden}`;
       } else if (errorMsg.includes("ffprobe") || errorMsg.includes("Invalid video")) {
         // Уже обработано выше
         return;
       } else {
-        userMsg += `\n\nДетали: ${errorMsg.substring(0, 200)}`;
+        userMsg += `\n\n${RU.bot.uploadUrl.errorDetails(errorMsg.substring(0, 200))}`;
       }
       
       await ctx.reply(userMsg);
@@ -904,15 +862,13 @@ export function createBot(): Telegraf {
     const fileSizeMb = (video.file_size || 0) / (1024 * 1024);
     if (fileSizeMb > 50) {
       await ctx.reply(
-        `❌ Видео слишком большое (${fileSizeMb.toFixed(1)} MB).\n\n` +
-        `Telegram ограничивает размер файлов для прямого скачивания.\n` +
-        `Попробуй сжать видео или используй файл до 50 MB.`
+        RU.bot.video.tooLargeForTelegram(fileSizeMb.toFixed(1))
       );
       return;
     }
     
     try {
-      await ctx.reply("⏳ Обрабатываю видео...");
+      await ctx.reply(RU.bot.video.processing);
 
       // Скачиваем и получаем информацию
       let tmpPath: string;
@@ -928,12 +884,7 @@ export function createBot(): Telegraf {
         // Если ошибка "file is too big", попробуем через файл напрямую
         if (downloadErr.response?.error_code === 400 && downloadErr.description?.includes("too big")) {
           await ctx.reply(
-            `❌ Видео слишком большое для скачивания через Telegram.\n\n` +
-            `📦 Размер: ${fileSizeMb.toFixed(1)} MB\n\n` +
-            `💡 Решения:\n` +
-            `1. Сжать видео перед отправкой\n` +
-            `2. Использовать видео до 20-30 MB\n` +
-            `3. Загрузить напрямую на сервер через SCP/FTP`
+            RU.bot.video.tooLargeToDownload(fileSizeMb.toFixed(1))
           );
           return;
         }
@@ -958,14 +909,10 @@ export function createBot(): Telegraf {
         });
 
         await ctx.reply(
-          `📹 Видео получено!\n` +
-          `⏱ Длительность: ${duration.toFixed(1)} сек\n` +
-          `🎞 FPS: ${fps}\n` +
-          `📊 Всего кадров: ${totalFrames}\n\n` +
-          `Введи название сцены:`,
+          RU.bot.video.received(duration.toFixed(1), fps, totalFrames),
           {
             reply_markup: {
-              keyboard: [[{ text: "❌ Отмена" }]],
+              keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
               resize_keyboard: true,
               one_time_keyboard: false,
             },
@@ -979,15 +926,13 @@ export function createBot(): Telegraf {
       console.error("Video processing error:", err);
       const errorMsg = err.message || String(err);
       
-      let userMsg = "❌ Ошибка обработки видео.";
+      let userMsg = RU.bot.video.processErrorBase;
       if (errorMsg.includes("too big") || errorMsg.includes("file is too big")) {
-        userMsg += `\n\n📦 Файл слишком большой (${fileSizeMb.toFixed(1)} MB).`;
-        userMsg += `\nПопробуй сжать видео или используй файл до 20-30 MB.`;
+        userMsg += `\n\n${RU.bot.video.processErrorTooBig(fileSizeMb.toFixed(1))}`;
       } else if (errorMsg.includes("ffprobe")) {
-        userMsg += `\n\n⚠️ Не удалось определить параметры видео.`;
-        userMsg += `\nПроверь, что видео в формате MP4 и не повреждено.`;
+        userMsg += `\n\n${RU.bot.video.processErrorFfprobe}`;
       } else {
-        userMsg += `\n\nДетали: ${errorMsg.substring(0, 100)}`;
+        userMsg += `\n\n${RU.bot.video.processErrorDetails(errorMsg.substring(0, 100))}`;
       }
       
       await ctx.reply(userMsg);
@@ -1002,7 +947,7 @@ export function createBot(): Telegraf {
     if (!userId) return;
 
     // Отмена
-    if (text === "❌ Отмена" || text.toLowerCase() === "отмена") {
+    if (text === RU.bot.mainMenu.cancel || text.toLowerCase() === RU.bot.mainMenu.cancelPlain) {
       const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
         botState.getPendingScene(userId),
         botState.getPendingEdit(userId),
@@ -1016,7 +961,7 @@ export function createBot(): Telegraf {
       
       // Всегда возвращаем главное меню после отмены
       await ctx.reply(
-        hadPending ? "❌ Операция отменена" : "Главное меню",
+        hadPending ? RU.bot.cancelFlow.cancelled : RU.bot.cancelFlow.mainMenu,
         {
           reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
         }
@@ -1032,19 +977,13 @@ export function createBot(): Telegraf {
     ]);
     
     if (userId && isAdmin(userId) && isValidUrl(text) && !hasPendingScene && !hasPendingEdit && !hasPendingJoin) {
-      await ctx.reply(
-        `🔗 Найдена ссылка на файл!\n\n` +
-        `Хочешь загрузить видео по этой ссылке?\n\n` +
-        `Используй команду: /upload_url ${text}\n\n` +
-        `Или нажми кнопку ниже:`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "✅ Загрузить по ссылке", callback_data: `upload_url:${encodeURIComponent(text)}` }],
-            ],
-          },
-        }
-      );
+      await ctx.reply(RU.bot.uploadUrl.linkDetected(text), {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: RU.bot.uploadUrl.linkButton, callback_data: `upload_url:${encodeURIComponent(text)}` }],
+          ],
+        },
+      });
       return;
     }
 
@@ -1118,15 +1057,12 @@ export function createBot(): Telegraf {
 
         if (completedSession) {
           await ctx.reply(
-            `❌ Эта игра уже завершена.\n\n` +
-            `Статус: ${completedSession.status}\n\n` +
-            `Создай новую игру или присоединись к активной.`,
+            RU.bot.join.completed(completedSession.status),
             { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
           );
         } else {
           await ctx.reply(
-            `❌ Сессия с кодом "${sessionCode}" не найдена.\n\n` +
-            `Проверьте код и попробуйте ещё раз.`,
+            RU.bot.join.notFound(sessionCode),
             { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
           );
         }
@@ -1137,14 +1073,13 @@ export function createBot(): Telegraf {
       const alreadyJoined = session.participants.some(p => p.tgUserId === String(userId));
       if (alreadyJoined) {
         await ctx.reply(
-          `✅ Вы уже в этой игре!\n\n` +
-          `Нажмите кнопку ниже, чтобы открыть игру:`,
+          RU.bot.join.alreadyJoined,
           {
             reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: "🎮 Открыть игру",
+                    text: RU.bot.join.openGame,
                     web_app: { url: `${config.webappUrl}/s/${session.id}` },
                   },
                 ],
@@ -1158,7 +1093,7 @@ export function createBot(): Telegraf {
       // Проверяем, есть ли место
       if (session.participants.length >= session.maxPlayers) {
         await ctx.reply(
-          `❌ Игра уже полная (${session.maxPlayers}/${session.maxPlayers} игроков).`,
+          RU.bot.join.full(session.maxPlayers),
           { reply_markup: { remove_keyboard: true } }
         );
         return;
@@ -1168,9 +1103,8 @@ export function createBot(): Telegraf {
       // Но лучше разрешить только для "lobby"
       if (session.status !== "lobby" && session.status !== "recording") {
         await ctx.reply(
-          `❌ Игра уже завершена (статус: ${session.status}).\n\n` +
-          `Создай новую игру или присоединись к активной.`,
-            { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
+          RU.bot.join.closed(session.status),
+          { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
         );
         return;
       }
@@ -1179,8 +1113,8 @@ export function createBot(): Telegraf {
       // Но для "recording" лучше не разрешать присоединение (игра уже идет)
       if (session.status === "recording") {
         await ctx.reply(
-          `❌ Игра уже началась. Можно присоединиться только к играм в лобби.`,
-            { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
+          RU.bot.join.recording,
+          { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
         );
         return;
       }
@@ -1189,10 +1123,12 @@ export function createBot(): Telegraf {
       // Inline web_app buttons имеют баг на iOS - открывают WebView вместо Mini App
       const joinLink = `https://t.me/${config.botUsername}?startapp=s_${session.id}`;
       await ctx.reply(
-        `✅ Найдена игра!\n\n` +
-        `Игроков: ${session.participants.length}/${session.maxPlayers}\n` +
-        `Категория: ${CATEGORY_LABELS[session.category as SceneCategory] || session.category}\n\n` +
-        `👉 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
+        RU.bot.join.found(
+          session.participants.length,
+          session.maxPlayers,
+          CATEGORY_LABELS[session.category as SceneCategory] || session.category,
+          joinLink
+        ),
         { 
           reply_markup: getMainMenuKeyboard(ctx.from?.id),
           // Telegram auto-converts the link to a clickable button
@@ -1221,15 +1157,14 @@ export function createBot(): Telegraf {
       await botState.setPendingScene(userId, pending);
 
       await ctx.reply(
-        `👍 Название: "${pending.title}"\n\n` +
-        `Выбери категорию:`,
+        RU.bot.pendingScene.titleConfirm(pending.title),
         {
           reply_markup: {
             keyboard: [
-              [{ text: "🎬 Кино/сериалы" }],
-              [{ text: "😂 Мемы" }],
-              [{ text: "🏛️ Политика" }],
-              [{ text: "❌ Отмена" }],
+              [{ text: RU.bot.pendingScene.categoryMovies }],
+              [{ text: RU.bot.pendingScene.categoryMemes }],
+              [{ text: RU.bot.pendingScene.categoryPolitics }],
+              [{ text: RU.bot.mainMenu.cancel }],
             ],
             resize_keyboard: true,
             one_time_keyboard: true,
@@ -1245,15 +1180,25 @@ export function createBot(): Telegraf {
       console.log(`[Bot] Pending before category selection:`, { step: pending.step, title: pending.title });
       
       let category: SceneCategory;
-      if (text.includes("Кино") || text.includes("сериал") || text.includes("🎬")) {
+      if (
+        text.includes(RU.bot.pendingScene.matchMovies) ||
+        text.includes(RU.bot.pendingScene.matchSeries) ||
+        text.includes(RU.bot.pendingScene.matchMoviesEmoji)
+      ) {
         category = "movies";
-      } else if (text.includes("Мем") || text.includes("😂")) {
+      } else if (
+        text.includes(RU.bot.pendingScene.matchMemes) ||
+        text.includes(RU.bot.pendingScene.matchMemesEmoji)
+      ) {
         category = "memes";
-      } else if (text.includes("Полит") || text.includes("🏛️")) {
+      } else if (
+        text.includes(RU.bot.pendingScene.matchPolitics) ||
+        text.includes(RU.bot.pendingScene.matchPoliticsEmoji)
+      ) {
         category = "politics";
       } else {
         console.log(`[Bot] Invalid category text:`, text);
-        await ctx.reply("❌ Выбери категорию из кнопок");
+        await ctx.reply(RU.bot.pendingScene.invalidCategory);
         return;
       }
 
@@ -1264,19 +1209,15 @@ export function createBot(): Telegraf {
       console.log(`[Bot] Category selected, pending saved:`, { step: pending.step, category: pending.category, userId });
 
       await ctx.reply(
-        `👍 Категория: ${CATEGORY_LABELS[category]}\n\n` +
-        `Теперь введи тайминги реплик В КАДРАХ.\n\n` +
-        `📝 Поддерживаемые форматы:\n` +
-        `• \`0-125, 150-275\` (обычный)\n` +
-        `• \`Игрок 1 — 280 - 367\`\n` +
-        `• \`Игрок 2 — 787 - 922\`\n\n` +
-        `📊 Всего кадров: ${pending.totalFrames}\n` +
-        `🎞 FPS: ${pending.fps}\n\n` +
-        `Можно указать все реплики одной строкой или по одной на строку.`,
+        RU.bot.pendingScene.cuesPrompt(
+          CATEGORY_LABELS[category],
+          pending.totalFrames,
+          pending.fps
+        ),
         { 
           parse_mode: "Markdown",
           reply_markup: {
-            keyboard: [[{ text: "❌ Отмена" }]],
+            keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
             resize_keyboard: true,
             one_time_keyboard: false, // Постоянная клавиатура
           },
@@ -1300,17 +1241,11 @@ export function createBot(): Telegraf {
       if (!cues || cues.length === 0) {
         console.log(`[Bot] Failed to parse cues for user ${userId}, text:`, text);
         await ctx.reply(
-          "❌ Неверный формат таймингов.\n\n" +
-          "📝 Используй один из форматов:\n" +
-          "• `0-125, 150-275` (обычный)\n" +
-          "• `Игрок 1 — 280 - 367` (с префиксом)\n" +
-          "• `Игрок 2 — 787 - 922`\n\n" +
-          "Можно указать все реплики одной строкой или по одной на строку.\n\n" +
-          "Попробуй ещё раз:",
+          RU.bot.pendingScene.cuesInvalid,
           { 
             parse_mode: "Markdown",
             reply_markup: {
-              keyboard: [[{ text: "❌ Отмена" }]],
+              keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
               resize_keyboard: true,
               one_time_keyboard: false,
             },
@@ -1325,13 +1260,12 @@ export function createBot(): Telegraf {
       const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
       if (maxEndFrame > pending.totalFrames + pending.fps) {
         await ctx.reply(
-          `❌ Кадр ${maxEndFrame} выходит за пределы видео (${pending.totalFrames} кадров).\n` +
-          `Попробуй ещё раз:`
+          RU.bot.pendingScene.cuesOutOfRange(maxEndFrame, pending.totalFrames)
         );
         return;
       }
 
-      await ctx.reply("⏳ Загружаю видео в хранилище...");
+      await ctx.reply(RU.bot.pendingScene.uploading);
 
       try {
         // Скачиваем видео (либо из Telegram, либо по URL)
@@ -1388,17 +1322,24 @@ export function createBot(): Telegraf {
         const cueInfo = cues.map((c, i) => {
           const startSec = (c.startFrame / fps).toFixed(2);
           const endSec = (c.endFrame / fps).toFixed(2);
-          return `  Игрок ${i + 1}: кадры ${c.startFrame}-${c.endFrame} (${startSec}s — ${endSec}s)`;
+          return RU.bot.pendingScene.cueLine(
+            i + 1,
+            c.startFrame,
+            c.endFrame,
+            startSec,
+            endSec
+          );
         }).join("\n");
 
         await ctx.reply(
-          `✅ Сцена добавлена!\n\n` +
-          `📝 Название: ${pending.title}\n` +
-          `🆔 ID: ${sceneId}\n` +
-          `⏱ Длительность: ${pending.duration}s\n` +
-          `🎞 FPS: ${fps}\n` +
-          `🎭 Реплик: ${cues.length}\n\n` +
-          `Тайминги:\n${cueInfo}`,
+          RU.bot.pendingScene.added(
+            pending.title || "",
+            sceneId,
+            pending.duration || 0,
+            fps,
+            cues.length,
+            cueInfo
+          ),
           { reply_markup: { remove_keyboard: true } }
         );
 
@@ -1406,7 +1347,7 @@ export function createBot(): Telegraf {
         console.error("Scene upload error:", err);
         await botState.deletePendingScene(userId);
         await ctx.reply(
-          "❌ Ошибка загрузки. Попробуй ещё раз.",
+          RU.bot.pendingScene.uploadError,
           { reply_markup: { remove_keyboard: true } }
         );
       }
@@ -1428,8 +1369,7 @@ export function createBot(): Telegraf {
 
       if (!cues) {
         await ctx.reply(
-          "❌ Неверный формат. Используй ЦЕЛЫЕ числа (кадры): `0-125, 150-275`\n" +
-          "Попробуй ещё раз:",
+          RU.bot.editCues.invalidFormat,
           { parse_mode: "Markdown" }
         );
         return;
@@ -1439,8 +1379,7 @@ export function createBot(): Telegraf {
       const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
       if (maxEndFrame > pendingEdit.scene.totalFrames + pendingEdit.scene.fps) {
         await ctx.reply(
-          `❌ Кадр ${maxEndFrame} выходит за пределы видео (${pendingEdit.scene.totalFrames} кадров).\n` +
-          `Попробуй ещё раз:`
+          RU.bot.editCues.outOfRange(maxEndFrame, pendingEdit.scene.totalFrames)
         );
         return;
       }
@@ -1471,14 +1410,17 @@ export function createBot(): Telegraf {
         const cueInfo = cues.map((c, i) => {
           const startSec = (c.startFrame / fps).toFixed(2);
           const endSec = (c.endFrame / fps).toFixed(2);
-          return `  Игрок ${i + 1}: кадры ${c.startFrame}-${c.endFrame} (${startSec}s — ${endSec}s)`;
+          return RU.bot.editCues.cueLine(
+            i + 1,
+            c.startFrame,
+            c.endFrame,
+            startSec,
+            endSec
+          );
         }).join("\n");
 
         await ctx.reply(
-          `✅ Тайминги обновлены!\n\n` +
-          `📝 Сцена: ${pendingEdit.scene.title}\n` +
-          `🎭 Реплик: ${cues.length}\n\n` +
-          `Новые тайминги:\n${cueInfo}`,
+          RU.bot.editCues.updated(pendingEdit.scene.title, cues.length, cueInfo),
           { reply_markup: { remove_keyboard: true } }
         );
 
@@ -1486,7 +1428,7 @@ export function createBot(): Telegraf {
         console.error("Cue update error:", err);
         await botState.deletePendingEdit(userId);
         await ctx.reply(
-          "❌ Ошибка обновления. Попробуй ещё раз.",
+          RU.bot.editCues.updateError,
           { reply_markup: { remove_keyboard: true } }
         );
       }
@@ -1496,7 +1438,7 @@ export function createBot(): Telegraf {
   // Error handling
   bot.catch((err, ctx) => {
     console.error("Bot error:", err);
-    ctx.reply("Произошла ошибка. Попробуйте позже.").catch(() => {});
+    ctx.reply(RU.bot.errors.generic).catch(() => {});
   });
 
   return bot;
@@ -1513,14 +1455,13 @@ export async function sendVideoToCreator(
       tgUserId,
       { url: videoUrl },
       {
-        caption: "🎬 Ваш дубляж готов!\n\n" +
-          `Поделитесь с друзьями: t.me/${config.botUsername}?startapp=${sessionId}`,
+        caption: RU.bot.sendToCreator.caption(config.botUsername, sessionId),
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: "📤 Поделиться",
-                switch_inline_query: `Смотри наш дубляж! t.me/${config.botUsername}?startapp=${sessionId}`,
+                text: RU.bot.sendToCreator.shareButton,
+                switch_inline_query: RU.bot.sendToCreator.shareQuery(config.botUsername, sessionId),
               },
             ],
           ],

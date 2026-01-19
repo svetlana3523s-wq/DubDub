@@ -68,6 +68,7 @@
       suggestEpisode: "\u{1F4A1} Предложить эпизод",
       adminPanel: "\u{1F6E0} Админ-панель",
       cancel: "\u{274C} Отмена",
+      cancelPlain: "отмена",
     },
     start: {
       welcome:
@@ -84,6 +85,7 @@
       joinNotFound: (code: string) =>
         `\u{26A0}\u{FE0F} Игра с кодом ${code} не найдена или уже закрыта.\n\n` +
         "Попросите друга прислать новый код.",
+      anonymousName: "Аноним",
       newUserNotify: (userName: string, userLink: string) =>
         `\u{1F389} Новый пользователь!\n\n${userName} (${userLink})`,
     },
@@ -183,7 +185,11 @@
     editCues: {
       chooseScene: (list: string) =>
         `\u{1F4CC} Выберите сцену для редактирования:\n\n${list}\n\nОтправьте ID сцены:`,
+      listItem: (index: number, title: string, cueStr: string, sceneId: string) =>
+        `${index}. *${title}*\n   Тайминги: \`${cueStr}\`\n   ID: \`${sceneId}\``,
       sceneNotFound: (sceneId: string) => `\u{274C} Сцена \"${sceneId}\" не найдена`,
+      cueLine: (roleIndex: number, startFrame: number, endFrame: number, startSec: string, endSec: string) =>
+        `  Игрок ${roleIndex}: кадры ${startFrame}-${endFrame} (${startSec}s — ${endSec}s)`,
       editingPrompt: (
         title: string,
         durationSec: number,
@@ -282,6 +288,13 @@
       categoryMovies: "\u{1F3AC} Кино/Сериалы",
       categoryMemes: "\u{1F602} Мемы",
       categoryPolitics: "\u{1F3DB}\u{FE0F} Политика",
+      matchMovies: "Кино",
+      matchSeries: "сериал",
+      matchMemes: "Мем",
+      matchPolitics: "Полит",
+      matchMoviesEmoji: "\u{1F3AC}",
+      matchMemesEmoji: "\u{1F602}",
+      matchPoliticsEmoji: "\u{1F3DB}\u{FE0F}",
       invalidCategory: "\u{26A0}\u{FE0F} Выберите категорию из кнопок",
       cuesPrompt: (categoryLabel: string, totalFrames: number, fps: number) =>
         `\u{1F3AC} Категория: ${categoryLabel}\n\n` +
@@ -304,6 +317,8 @@
         `\u{26A0}\u{FE0F} Конец ${maxEndFrame} выходит за пределы сцены (${totalFrames} кадров).\n` +
         "Отправьте ещё раз:",
       uploading: "\u{23F3} Загружаем сцену в базу...",
+      cueLine: (roleIndex: number, startFrame: number, endFrame: number, startSec: string, endSec: string) =>
+        `  Игрок ${roleIndex}: кадры ${startFrame}-${endFrame} (${startSec}s — ${endSec}s)`,
       added: (
         title: string,
         sceneId: string,
