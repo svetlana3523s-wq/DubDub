@@ -480,7 +480,7 @@ export default function ResultPage({ params }: PageProps) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
-          <div className="text-5xl">😢</div>
+          <div className="text-5xl">{"\u{1F622}"}</div>
           <h2 className="text-xl font-bold">Не удалось создать видео</h2>
           <p className="text-tg-hint">Попробуйте ещё раз</p>
         </div>
@@ -495,7 +495,7 @@ export default function ResultPage({ params }: PageProps) {
           <div className="relative w-20 h-20 mx-auto">
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
-              🎥
+              {"\u{1F3A5}"}
             </div>
           </div>
           <div>
@@ -512,7 +512,7 @@ export default function ResultPage({ params }: PageProps) {
       <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full space-y-6">
         {/* Header */}
         <div className="text-center animate-slide-up">
-          <div className="text-4xl mb-3">🎉</div>
+          <div className="text-4xl mb-3">{"\u{1F389}"}</div>
           <h1 className="text-2xl font-bold mb-1">Готово!</h1>
           <p className="text-tg-hint">Ваш дубляж собран</p>
         </div>
@@ -520,7 +520,7 @@ export default function ResultPage({ params }: PageProps) {
         {/* Task (only in tasks mode) */}
         {session && session.session.gameMode === "tasks" && session.session.task && (
           <div className="card text-center animate-fade-in">
-            <div className="text-sm text-tg-hint mb-1">Ὅd Задание</div>
+            <div className="text-sm text-tg-hint mb-1">{"\u{1F4DD}"} Задание</div>
             <div className="font-medium">{session.session.task}</div>
           </div>
         )}
@@ -552,7 +552,7 @@ export default function ResultPage({ params }: PageProps) {
         {waitingForConfirmation && replayStatus.isRequester && (
           <div className="card bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
             <div className="text-center">
-              <div className="text-2xl mb-2">⏳</div>
+              <div className="text-2xl mb-2">{"\u{23F3}"}</div>
               <p className="font-medium">Ждём подтверждения от партнёра...</p>
               <p className="text-sm text-tg-hint mt-1">
                 Другой игрок должен подтвердить запуск новой игры
@@ -576,7 +576,7 @@ export default function ResultPage({ params }: PageProps) {
             } disabled:opacity-70`}
           >
             {sent ? (
-              <>✅ Отправлено в чат!</>
+              <>{"\u{2705}"} Отправлено в чат!</>
             ) : sending ? (
               <>
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -589,23 +589,23 @@ export default function ResultPage({ params }: PageProps) {
                 )}
               </>
             ) : sendError ? (
-              <>ὐ4 Повторить отправку</>
+              <>{"\u{1F504}"} Повторить отправку</>
             ) : (
-              <>὎5 Сохранить в Telegram</>
+              <>{"\u{1F4E5}"} Сохранить в Telegram</>
             )}
           </button>
           
           {/* Rate limit message (neutral, not an error) - shown separately from button */}
           {retryAfterSeconds !== null && countdown !== null && countdown > 0 && !sent && (
             <div className="text-center text-sm text-yellow-400">
-              ⏳ Telegram ограничил скорость, повторим через ~{countdown} сек
+              {"\u{23F3}"} Telegram ограничил скорость, повторим через ~{countdown} сек
             </div>
           )}
           
           {/* Error message (only for real errors, not rate_limited) */}
           {sendError && !sent && retryAfterSeconds === null && (
             <div className="text-center text-sm text-red-400">
-              ❌ {sendError}
+              {"\u{274C}"} {sendError}
             </div>
           )}
 
@@ -630,7 +630,7 @@ export default function ResultPage({ params }: PageProps) {
                   ...
                 </>
               ) : (
-                <>ὐ4 Еще раз</>
+                <>{"\u{1F504}"} Еще раз</>
               )}
             </button>
             <button
@@ -644,7 +644,7 @@ export default function ResultPage({ params }: PageProps) {
                   ...
                 </>
               ) : (
-                <>Ἳ2 Новая сцена</>
+                <>{"\u{1F3B2}"} Новая сцена</>
               )}
             </button>
           </div>
@@ -655,7 +655,7 @@ export default function ResultPage({ params }: PageProps) {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
             <div className="card max-w-sm w-full space-y-4 animate-slide-up">
               <div className="text-center">
-                <div className="text-4xl mb-3">⚠️</div>
+                <div className="text-4xl mb-3">{"\u{26A0}\u{FE0F}"}</div>
                 <h3 className="text-lg font-bold mb-2">
                   {showNewSceneConfirm === "newScene" ? "Новая сцена" : "Еще раз"}
                 </h3>
@@ -686,7 +686,7 @@ export default function ResultPage({ params }: PageProps) {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
             <div className="card max-w-sm w-full space-y-4 animate-slide-up">
               <div className="text-center">
-                <div className="text-4xl mb-3">🎮</div>
+                <div className="text-4xl mb-3">{"\u{1F3AE}"}</div>
                 <h3 className="text-lg font-bold mb-2">
                   {replayStatus.mode === "newScene" ? "Новая сцена" : "Повторить игру"}
                 </h3>
