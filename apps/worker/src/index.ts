@@ -1,4 +1,4 @@
-import { Worker, Job } from "bullmq";
+import { Worker, Job, Queue } from "bullmq";
 import * as IORedis from "ioredis";
 import { PrismaClient } from "@prisma/client";
 import { Telegraf } from "telegraf";
@@ -15,6 +15,19 @@ const bot = new Telegraf(config.botToken);
 const Redis = (IORedis as any).default || IORedis;
 const redis = new Redis(config.redisUrl, {
   maxRetriesPerRequest: null,
+});
+
+const sendTelegramQueue = new Queue<SendTelegramJobData>("send_to_telegram", {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 4,
+    backoff: {
+      type: "exponential",
+      delay: 60000,
+    },
+    removeOnComplete: 100,
+    removeOnFail: 50,
+  },
 });
 
 interface RenderJobData {
@@ -118,23 +131,101 @@ async function processRenderJob(job: Job<RenderJobData>): Promise<void> {
 
     console.log(`[${sessionId}] Render completed successfully`);
 
-    // Send video to notify channel
+    const renderRecord = await prisma.render.findUnique({
+      where: { sessionId },
+    });
+
+    if (renderRecord?.s3Key) {
+      for (const participant of session.participants) {
+        const existingRenderSend = await prisma.renderSend.findUnique({
+          where: {
+            renderId_telegramUserId: {
+              renderId: renderRecord.id,
+              telegramUserId: participant.tgUserId,
+            },
+          },
+        });
+
+        if (existingRenderSend) {
+          console.log(
+            `[${sessionId}] Auto-send skipped for user ${participant.tgUserId} (status=${existingRenderSend.status})`
+          );
+          continue;
+        }
+
+        const jobId = `send:${renderRecord.id}:${participant.tgUserId}`;
+        const existingJob = await sendTelegramQueue.getJob(jobId);
+        if (existingJob) {
+          console.log(`[${sessionId}] Auto-send job already exists: ${jobId}`);
+          continue;
+        }
+
+        await prisma.renderSend.upsert({
+          where: {
+            renderId_telegramUserId: {
+              renderId: renderRecord.id,
+              telegramUserId: participant.tgUserId,
+            },
+          },
+          update: {
+            status: "queued",
+            error: null,
+            attempts: 0,
+            retryAfterSeconds: null,
+          },
+          create: {
+            renderId: renderRecord.id,
+            telegramUserId: participant.tgUserId,
+            status: "queued",
+            attempts: 0,
+          },
+        });
+
+        await sendTelegramQueue.add(
+          jobId,
+          {
+            sessionId,
+            telegramUserId: participant.tgUserId,
+            s3Key: renderRecord.s3Key,
+          },
+          { jobId }
+        );
+
+        console.log(`[${sessionId}] Auto-send queued for user ${participant.tgUserId}`);
+      }
+    } else {
+      console.error(`[${sessionId}] Auto-send skipped: render record or s3Key missing`);
+    }
+
+    // Send text-only notification to admin channel
     if (config.notifyChannelId) {
       try {
-        const videoUrl = `${config.apiBaseUrl}/files/renders/${sessionId}.mp4`;
-        const categoryLabel = session.category === "movies" ? "🎬 Кино" : 
-                              session.category === "memes" ? "😂 Мемы" : "🏛️ Политика";
-        const modeLabel = session.gameMode === "tasks" ? `📝 ${session.task}` : "🎭 Импровизация";
+        const categoryLabel =
+          session.category === "movies"
+            ? "\u0424\u0438\u043b\u044c\u043c\u044b"
+            : session.category === "memes"
+              ? "\u041c\u0435\u043c\u044b"
+              : "\u041f\u043e\u043b\u0438\u0442\u0438\u043a\u0430";
+        const modeLabel =
+          session.gameMode === "tasks"
+            ? `\u0417\u0430\u0434\u0430\u043d\u0438\u0435: ${session.task}`
+            : "\u0420\u0435\u0436\u0438\u043c: \u0438\u043c\u043f\u0440\u043e\u0432\u0438\u0437\u0430\u0446\u0438\u044f";
         const players = session.participants.map((p: (typeof session.participants)[number]) => p.displayName).join(", ");
-        
-        await bot.telegram.sendVideo(
-          config.notifyChannelId,
-          { url: videoUrl },
-          {
-            caption: `🎬 Новый дубляж!\n\n${categoryLabel} • ${modeLabel}\n👥 ${players}`,
-            supports_streaming: true,
-          }
-        );
+        const resultUrl = `https://app.tvotototo.ru/s/${sessionId}/result`;
+        const fileUrl = `https://tvotototo.ru/files/renders/${sessionId}.mp4`;
+        const message = [
+          "\u0418\u0433\u0440\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430",
+          "",
+          `\u0421\u0435\u0441\u0441\u0438\u044f: ${sessionId}`,
+          `\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f: ${categoryLabel}`,
+          modeLabel,
+          `\u0418\u0433\u0440\u043e\u043a\u0438: ${players || "\u2014"}`,
+          "",
+          `\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442: ${resultUrl}`,
+          `MP4: ${fileUrl}`,
+        ].join("\n");
+
+        await bot.telegram.sendMessage(config.notifyChannelId, message);
         console.log(`[${sessionId}] Sent to notify channel`);
       } catch (err) {
         console.error(`[${sessionId}] Failed to send to channel:`, err);

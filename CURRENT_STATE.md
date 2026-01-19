@@ -17,8 +17,10 @@
 - Web build-time env: `NEXT_PUBLIC_WEB_BUILD_ID` (CI sets `web_${GITHUB_SHA::12}`).
 
 ## Send-to-Telegram (current rules)
+- Auto-send on render ready (worker): queue jobs for all participants, idempotent `send:${renderId}:${telegramUserId}`.
+- UI: no send button; auto‑polling starts on result page and shows status text only.
 - API:
-  - `POST /files/renders/:sessionId/send-to-telegram` (auth) enqueues BullMQ job and writes `RenderSend`.
+  - `POST /files/renders/:sessionId/send-to-telegram` (auth) still enqueues BullMQ job and writes `RenderSend`.
   - `GET /files/renders/:sessionId/send-status` (auth) for polling.
 - Worker decision (apps/worker/src/send-telegram.ts):
   - If size > 50MB => `too_large`.
@@ -26,6 +28,7 @@
     HEAD 200, `content-type` includes `video/mp4`, Range HEAD returns 206.
   - Otherwise fallback to upload (S3 stream -> temp file -> Telegram upload -> delete).
   - 429 => `rate_limited` with `retryAfterSeconds`, delayed retry.
+- Admin channel: text-only “Игра завершена” + links (no video).
 
 ## Current Top Issue
 - Encoding regression (“кракозябры”) in user-facing text (Telegram bot + web UI + worker keyboard labels).

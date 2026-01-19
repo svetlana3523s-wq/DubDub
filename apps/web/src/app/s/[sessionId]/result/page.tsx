@@ -118,9 +118,13 @@ export default function ResultPage({ params }: PageProps) {
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
             return;
           } else if (statusResult.status === "failed" || statusResult.status === "too_large") {
+            const errorMessage =
+              statusResult.status === "too_large"
+                ? "Видео слишком большое для отправки в Telegram."
+                : "Не удалось отправить видео. Попробуйте позже.";
             stopSendStatusPolling();
             setSending(false);
-            setSendError(statusResult.error || "Не удалось отправить видео");
+            setSendError(errorMessage);
             setRetryAfterSeconds(null);
             setCountdown(null);
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -202,7 +206,7 @@ export default function ResultPage({ params }: PageProps) {
   }, [countdown, retryAfterSeconds]);
 
   useEffect(() => {
-    if (!isReady || !initData) return;
+    if (!isReady || !initData || render?.status !== "ready") return;
 
     const fetchData = async () => {
       try {
@@ -294,9 +298,13 @@ export default function ResultPage({ params }: PageProps) {
         }
 
         if (statusResult.status === "failed" || statusResult.status === "too_large") {
+          const errorMessage =
+            statusResult.status === "too_large"
+              ? "Видео слишком большое для отправки в Telegram."
+              : "Не удалось отправить видео. Попробуйте позже.";
           stopSendStatusPolling();
           setSending(false);
-          setSendError(statusResult.error || "Не удалось отправить видео");
+          setSendError(errorMessage);
           setRetryAfterSeconds(null);
           setCountdown(null);
           return;
@@ -313,6 +321,8 @@ export default function ResultPage({ params }: PageProps) {
             setCountdown(retryAfter);
           }
           startSendStatusPolling(3000);
+        } else if (statusResult.status === "unknown" && render?.status === "ready") {
+          startSendStatusPolling(3000);
         }
       } catch {
         // ignore init polling errors
@@ -324,7 +334,7 @@ export default function ResultPage({ params }: PageProps) {
     return () => {
       cancelled = true;
     };
-  }, [isReady, initData, sessionId, startSendStatusPolling, stopSendStatusPolling]);
+  }, [isReady, initData, render?.status, sessionId, startSendStatusPolling, stopSendStatusPolling]);
 
   const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
     if (!initData || replaying) return;
@@ -397,76 +407,6 @@ export default function ResultPage({ params }: PageProps) {
     }
   };
 
-  const handleSendToTelegram = async () => {
-    if (!initData || sending || sent) return;
-    
-    setSending(true);
-    setSendError(null);
-    setRetryAfterSeconds(null);
-    setCountdown(null);
-    
-    try {
-      const result = await api.sendVideoToTelegram(initData, sessionId);
-      
-      if (result.status === "queued" || result.status === "sending" || result.status === "rate_limited") {
-        if (result.status === "rate_limited") {
-          const retryAfter = 60;
-          setRetryAfterSeconds(retryAfter);
-          setCountdown(retryAfter);
-        }
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-        startSendStatusPolling(3000);
-        return;
-      }
-
-      if (result.status === "sent") {
-        stopSendStatusPolling();
-        setSent(true);
-        setSending(false);
-        setSendError(null);
-        setRetryAfterSeconds(null);
-        setCountdown(null);
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-        return;
-      }
-
-      setSending(false);
-      setSendError(result.error || result.message || "Не удалось отправить");
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
-    } catch (err: any) {
-      console.error("Send failed:", err);
-      const errMessage = String(err?.message || "");
-      const errStatus = err?.status;
-      const errCode = err?.code;
-      const normalizedMessage = errMessage.toLowerCase();
-
-      const isRateLimited =
-        errStatus === 429 ||
-        errCode === "RATE_LIMITED" ||
-        normalizedMessage.includes("too many requests") ||
-        normalizedMessage.includes("rate limited");
-
-      const isAlreadyQueued =
-        errStatus === 409 ||
-        normalizedMessage.includes("already") ||
-        normalizedMessage.includes("queued") ||
-        normalizedMessage.includes("sending");
-
-      if (isRateLimited || isAlreadyQueued) {
-        if (isRateLimited) {
-          const retryAfter = 60;
-          setRetryAfterSeconds(retryAfter);
-          setCountdown(retryAfter);
-        }
-        startSendStatusPolling(3000);
-        return;
-      }
-
-      setSending(false);
-      setSendError(errMessage || "Ошибка отправки");
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
-    }
-  };
 
   if (loading || !isReady) {
     return (
@@ -563,51 +503,23 @@ export default function ResultPage({ params }: PageProps) {
 
         {/* Actions */}
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-          {/* Send to Telegram - prominent */}
-          <button
-            onClick={handleSendToTelegram}
-            disabled={sending || sent}
-            className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-colors ${
-              sent 
-                ? "bg-green-500 text-white" 
-                : sendError
-                  ? "bg-red-500 hover:bg-red-600 text-white" 
-                  : "btn-primary"
-            } disabled:opacity-70`}
-          >
+          {/* Delivery status */}
+          <div className="card text-center">
             {sent ? (
-              <>{"\u{2705}"} Отправлено в чат!</>
-            ) : sending ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {retryAfterSeconds !== null && countdown !== null ? (
-                  <>Ожидаем, повторим через {countdown} сек</>
-                ) : sendError ? (
-                  <>Повторная отправка...</>
-                ) : (
-                  <>Отправляем...</>
-                )}
-              </>
+              <p className="text-green-500">
+                {"\u0412\u0438\u0434\u0435\u043e \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0430\u0442. \u0421\u043a\u043e\u0440\u043e \u043f\u0440\u0438\u0434\u0435\u0442."}
+              </p>
+            ) : retryAfterSeconds !== null && countdown !== null ? (
+              <p className="text-yellow-400">
+                {`\u0422\u0435\u043b\u0435\u0433\u0440\u0430\u043c \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0438\u043b \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u044c, \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u043c \u0447\u0435\u0440\u0435\u0437 ${countdown} \u0441\u0435\u043a.`}
+              </p>
             ) : sendError ? (
-              <>{"\u{1F504}"} Повторить отправку</>
+              <p className="text-red-400">{sendError}</p>
             ) : (
-              <>{"\u{1F4E5}"} Сохранить в Telegram</>
+              <p>{"\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u043c \u0432\u0438\u0434\u0435\u043e \u0432 \u0447\u0430\u0442\u2026"}</p>
             )}
-          </button>
-          
-          {/* Rate limit message (neutral, not an error) - shown separately from button */}
-          {retryAfterSeconds !== null && countdown !== null && countdown > 0 && !sent && (
-            <div className="text-center text-sm text-yellow-400">
-              {"\u{23F3}"} Telegram ограничил скорость, повторим через ~{countdown} сек
-            </div>
-          )}
-          
-          {/* Error message (only for real errors, not rate_limited) */}
-          {sendError && !sent && retryAfterSeconds === null && (
-            <div className="text-center text-sm text-red-400">
-              {"\u{274C}"} {sendError}
-            </div>
-          )}
+          </div>
+
 
           <button
             type="button"
