@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { RU } from "@dubdub/shared";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
 
 interface PageProps {
@@ -85,7 +86,7 @@ export default function ResultPage({ params }: PageProps) {
         if (elapsed >= MAX_POLL_DURATION) {
           stopSendStatusPolling();
           setSending(false);
-          setSendError("Отправка занимает слишком много времени. Попробуйте позже.");
+          setSendError(RU.web.result.sendTimeout);
           return;
         }
 
@@ -120,8 +121,8 @@ export default function ResultPage({ params }: PageProps) {
           } else if (statusResult.status === "failed" || statusResult.status === "too_large") {
             const errorMessage =
               statusResult.status === "too_large"
-                ? "Видео слишком большое для отправки в Telegram."
-                : "Не удалось отправить видео. Попробуйте позже.";
+                ? RU.web.result.sendStatusTooLarge
+                : RU.web.result.sendStatusFailed;
             stopSendStatusPolling();
             setSending(false);
             setSendError(errorMessage);
@@ -299,9 +300,9 @@ export default function ResultPage({ params }: PageProps) {
 
         if (statusResult.status === "failed" || statusResult.status === "too_large") {
           const errorMessage =
-            statusResult.status === "too_large"
-              ? "Видео слишком большое для отправки в Telegram."
-              : "Не удалось отправить видео. Попробуйте позже.";
+              statusResult.status === "too_large"
+                ? RU.web.result.sendStatusTooLarge
+                : RU.web.result.sendStatusFailed;
           stopSendStatusPolling();
           setSending(false);
           setSendError(errorMessage);
@@ -420,9 +421,9 @@ export default function ResultPage({ params }: PageProps) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
-          <div className="text-5xl">{"\u{1F622}"}</div>
-          <h2 className="text-xl font-bold">Не удалось создать видео</h2>
-          <p className="text-tg-hint">Попробуйте ещё раз</p>
+          <div className="text-5xl">{RU.web.result.renderFailEmoji()}</div>
+          <h2 className="text-xl font-bold">{RU.web.result.renderFailedTitle}</h2>
+          <p className="text-tg-hint">{RU.web.result.renderFailedSubtitle}</p>
         </div>
       </div>
     );
@@ -435,12 +436,12 @@ export default function ResultPage({ params }: PageProps) {
           <div className="relative w-20 h-20 mx-auto">
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
-              {"\u{1F3A5}"}
+              {RU.web.result.renderEmoji()}
             </div>
           </div>
           <div>
-            <h2 className="text-xl font-bold mb-2">Рендерим видео</h2>
-            <p className="text-tg-hint">Почти готово...</p>
+            <h2 className="text-xl font-bold mb-2">{RU.web.result.renderInProgressTitle}</h2>
+            <p className="text-tg-hint">{RU.web.result.renderInProgressSubtitle}</p>
           </div>
         </div>
       </div>
@@ -452,15 +453,15 @@ export default function ResultPage({ params }: PageProps) {
       <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full space-y-6">
         {/* Header */}
         <div className="text-center animate-slide-up">
-          <div className="text-4xl mb-3">{"\u{1F389}"}</div>
-          <h1 className="text-2xl font-bold mb-1">Готово!</h1>
-          <p className="text-tg-hint">Ваш дубляж собран</p>
+          <div className="text-4xl mb-3">{RU.web.result.readyEmoji()}</div>
+          <h1 className="text-2xl font-bold mb-1">{RU.web.result.readyTitle}</h1>
+          <p className="text-tg-hint">{RU.web.result.readySubtitle}</p>
         </div>
 
         {/* Task (only in tasks mode) */}
         {session && session.session.gameMode === "tasks" && session.session.task && (
           <div className="card text-center animate-fade-in">
-            <div className="text-sm text-tg-hint mb-1">{"\u{1F4DD}"} Задание</div>
+            <div className="text-sm text-tg-hint mb-1">{RU.web.result.taskLabel()}</div>
             <div className="font-medium">{session.session.task}</div>
           </div>
         )}
@@ -492,11 +493,9 @@ export default function ResultPage({ params }: PageProps) {
         {waitingForConfirmation && replayStatus.isRequester && (
           <div className="card bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
             <div className="text-center">
-              <div className="text-2xl mb-2">{"\u{23F3}"}</div>
-              <p className="font-medium">Ждём подтверждения от партнёра...</p>
-              <p className="text-sm text-tg-hint mt-1">
-                Другой игрок должен подтвердить запуск новой игры
-              </p>
+              <div className="text-2xl mb-2">{RU.web.result.waitingConfirmTitle()}</div>
+              <p className="font-medium">{RU.web.result.waitingConfirmBody}</p>
+              <p className="text-sm text-tg-hint mt-1">{RU.web.result.waitingConfirmHint}</p>
             </div>
           </div>
         )}
@@ -507,26 +506,26 @@ export default function ResultPage({ params }: PageProps) {
           <div className="card text-center">
             {sent ? (
               <p className="text-green-500">
-                {"\u0412\u0438\u0434\u0435\u043e \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0447\u0430\u0442. \u0421\u043a\u043e\u0440\u043e \u043f\u0440\u0438\u0434\u0435\u0442."}
+                {RU.web.result.sendStatusSent}
               </p>
             ) : retryAfterSeconds !== null && countdown !== null ? (
               <p className="text-yellow-400">
-                {`\u0422\u0435\u043b\u0435\u0433\u0440\u0430\u043c \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0438\u043b \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u044c, \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u043c \u0447\u0435\u0440\u0435\u0437 ${countdown} \u0441\u0435\u043a.`}
+                {RU.web.result.sendStatusRateLimited(countdown)}
               </p>
             ) : sendError ? (
               <p className="text-red-400">{sendError}</p>
             ) : (
-              <p>{"\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u043c \u0432\u0438\u0434\u0435\u043e \u0432 \u0447\u0430\u0442\u2026"}</p>
+              <p>{RU.web.result.sendStatusSending}</p>
             )}
           </div>
 
 
-          <button
+                    <button
             type="button"
-            onClick={() => window.alert(`ID игры: ${sessionId}`)}
+            onClick={() => window.alert(RU.web.result.gameId(sessionId))}
             className="w-full btn-secondary"
           >
-            Показать ID игры
+            {RU.web.result.showGameId}
           </button>
 
           {/* Replay buttons - disabled when waiting */}
@@ -539,10 +538,10 @@ export default function ResultPage({ params }: PageProps) {
               {replaying === "sameScene" ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
-                  ...
+                  {RU.web.result.replayConfirmLoading}
                 </>
               ) : (
-                <>{"\u{1F504}"} Еще раз</>
+                <>{RU.web.result.replaySame()}</>
               )}
             </button>
             <button
@@ -553,10 +552,10 @@ export default function ResultPage({ params }: PageProps) {
               {replaying === "newScene" ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
-                  ...
+                  {RU.web.result.replayConfirmLoading}
                 </>
               ) : (
-                <>{"\u{1F3B2}"} Новая сцена</>
+                <>{RU.web.result.replayNew()}</>
               )}
             </button>
           </div>
@@ -567,27 +566,23 @@ export default function ResultPage({ params }: PageProps) {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
             <div className="card max-w-sm w-full space-y-4 animate-slide-up">
               <div className="text-center">
-                <div className="text-4xl mb-3">{"\u{26A0}\u{FE0F}"}</div>
+                <div className="text-4xl mb-3">{RU.web.result.warningEmoji()}</div>
                 <h3 className="text-lg font-bold mb-2">
-                  {showNewSceneConfirm === "newScene" ? "Новая сцена" : "Еще раз"}
+                  {showNewSceneConfirm === "newScene"
+                    ? RU.web.result.confirmTitleNew
+                    : RU.web.result.confirmTitleSame}
                 </h3>
-                <p className="text-sm text-tg-hint">
-                  Текущее видео не сохранится. Вы уверены, что хотите начать новую игру?
-                </p>
+                <p className="text-sm text-tg-hint">{RU.web.result.confirmBody}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setShowNewSceneConfirm(null)}
                   className="btn-secondary"
-                >
-                  Отмена
-                </button>
+                >{RU.web.result.confirmCancel}</button>
                 <button
                   onClick={() => handleReplay(showNewSceneConfirm, true)}
                   className="btn-primary"
-                >
-                  ОК
-                </button>
+                >{RU.web.result.confirmOk}</button>
               </div>
             </div>
           </div>
@@ -598,12 +593,17 @@ export default function ResultPage({ params }: PageProps) {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
             <div className="card max-w-sm w-full space-y-4 animate-slide-up">
               <div className="text-center">
-                <div className="text-4xl mb-3">{"\u{1F3AE}"}</div>
+                <div className="text-4xl mb-3">{RU.web.result.replayEmoji()}</div>
                 <h3 className="text-lg font-bold mb-2">
-                  {replayStatus.mode === "newScene" ? "Новая сцена" : "Повторить игру"}
+                  {replayStatus.mode === "newScene"
+                    ? RU.web.result.replayRequestTitleNew
+                    : RU.web.result.replayRequestTitleSame}
                 </h3>
                 <p className="text-sm text-tg-hint">
-                  <span className="font-medium text-white">{replayStatus.requestedByName}</span> хочет {replayStatus.mode === "newScene" ? "начать новую сцену" : "повторить текущую сцену"}. Вы согласны?
+                  {RU.web.result.replayRequestBody(
+                    replayStatus.requestedByName || "",
+                    replayStatus.mode === "newScene" ? "newScene" : "sameScene"
+                  )}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -611,18 +611,14 @@ export default function ResultPage({ params }: PageProps) {
                   onClick={() => handleConfirmReplay(false)}
                   disabled={confirmingReplay}
                   className="btn-secondary disabled:opacity-70"
-                >
-                  {confirmingReplay ? "..." : "Нет"}
-                </button>
+                >{confirmingReplay ? RU.web.result.replayConfirmLoading : RU.web.result.replayConfirmNo}</button>
                 <button
                   onClick={() => handleConfirmReplay(true)}
                   disabled={confirmingReplay}
                   className="btn-primary disabled:opacity-70"
-                >
-                  {confirmingReplay ? (
+                >{confirmingReplay ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                  ) : "Да, поехали!"}
-                </button>
+                  ) : RU.web.result.replayConfirmYes}</button>
               </div>
             </div>
           </div>
