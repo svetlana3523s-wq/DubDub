@@ -465,7 +465,7 @@ export function createBot(): Telegraf {
       inline_keyboard: [
         [
           {
-            text: RU.bot.help.openButton,
+            text: `${RU.bot.help.openButton}`,
             web_app: { url: config.webappUrl },
           },
         ],
@@ -476,7 +476,7 @@ export function createBot(): Telegraf {
     if (isUserAdmin) {
       keyboard.inline_keyboard.push([
         {
-          text: RU.bot.help.adminButton,
+          text: `${RU.bot.help.adminButton}`,
           web_app: { url: `${config.webappUrl}/admin/scenes` },
         },
       ]);
