@@ -98,10 +98,14 @@ jobs:
 
           if [ -z "$SESSION_ID" ]; then
             # Fallback: query DB for the latest ready render via Prisma (requires DATABASE_URL in env)
-            if [ -d "${DEPLOY_PATH}/current" ]; then
+            if [ -d "${DEPLOY_PATH}/current/apps/api" ]; then
+              cd "${DEPLOY_PATH}/current/apps/api" || true
+            elif [ -d "${DEPLOY_PATH}/current/apps/worker" ]; then
+              cd "${DEPLOY_PATH}/current/apps/worker" || true
+            elif [ -d "${DEPLOY_PATH}/current" ]; then
               cd "${DEPLOY_PATH}/current" || true
             fi
-            SESSION_ID="$(node -e 'const { PrismaClient } = require(\"@prisma/client\"); const prisma = new PrismaClient(); prisma.render.findFirst({ where: { status: \"ready\", s3Key: { not: null } }, orderBy: { updatedAt: \"desc\" }, select: { sessionId: true } }).then((r) => process.stdout.write(r?.sessionId || \"\")).catch(() => process.stdout.write(\"\")).finally(() => prisma.$disconnect().catch(() => {}));' 2>/dev/null || true)"
+            SESSION_ID="$(node -e 'const { PrismaClient } = require(\"@prisma/client\"); const prisma = new PrismaClient(); prisma.render.findFirst({ where: { status: \"ready\", s3Key: { startsWith: \"renders/\" } }, orderBy: { updatedAt: \"desc\" }, select: { sessionId: true } }).then((r) => process.stdout.write(r?.sessionId || \"\")).catch(() => process.stdout.write(\"\")).finally(() => prisma.$disconnect().catch(() => {}));' 2>/dev/null || true)"
           fi
 
           if [ -z "$SESSION_ID" ]; then
