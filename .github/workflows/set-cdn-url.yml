@@ -1,0 +1,78 @@
+name: Set CDN URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      cdnUrl:
+        description: "Public CDN URL (https://... no trailing slash)"
+        required: true
+        default: ""
+
+jobs:
+  set-cdn-url:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - name: Validate deploy secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH; do
+            if [ -z "${!v:-}" ]; then
+              echo "Missing required secret/env: $v"
+              missing=1
+            fi
+          done
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "Missing required secret: DEPLOY_SSH_KEY"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Add SSH key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Update CDN_URL in server env
+        shell: bash
+        run: |
+          set -euo pipefail
+          CDN_URL_INPUT="${{ inputs.cdnUrl }}"
+          if [ -z "$CDN_URL_INPUT" ]; then
+            echo "cdnUrl input is empty"
+            exit 1
+          fi
+          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "bash -s -- \"${DEPLOY_PATH}\" \"${CDN_URL_INPUT}\"" <<'SSH'
+          set -euo pipefail
+          DEPLOY_PATH="$1"
+          CDN_URL_INPUT="$2"
+          SHARED_ENV="${DEPLOY_PATH}/shared/.env"
+          ROOT_ENV="${DEPLOY_PATH}/.env"
+          if [ -f "$SHARED_ENV" ]; then
+            ENV_FILE="$SHARED_ENV"
+          else
+            ENV_FILE="$ROOT_ENV"
+          fi
+          mkdir -p "$(dirname "$ENV_FILE")"
+          touch "$ENV_FILE"
+          if grep -qE '^CDN_URL=' "$ENV_FILE"; then
+            sed -i "s#^CDN_URL=.*#CDN_URL=${CDN_URL_INPUT}#g" "$ENV_FILE"
+          else
+            printf "\nCDN_URL=%s\n" "$CDN_URL_INPUT" >> "$ENV_FILE"
+          fi
+          echo "CDN_URL updated in ${ENV_FILE}"
+          SSH
