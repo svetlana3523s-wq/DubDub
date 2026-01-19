@@ -533,6 +533,14 @@ export default function ResultPage({ params }: PageProps) {
             </div>
           )}
 
+          <button
+            type="button"
+            onClick={() => window.alert(`ID игры: ${sessionId}`)}
+            className="w-full btn-secondary"
+          >
+            Показать ID игры
+          </button>
+
           {/* Replay buttons - disabled when waiting */}
           <div className="grid grid-cols-2 gap-3">
             <button
