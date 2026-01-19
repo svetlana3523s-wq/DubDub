@@ -14,11 +14,11 @@ import os from "os";
 // Categories imported from config
 import { SCENE_CATEGORIES, CATEGORY_LABELS, type SceneCategory } from "./config/categories.js";
 
-// ╨б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡ ╨┤╨╕╨░╨╗╨╛╨│╨░ ╨┤╨╗╤П ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П ╤Б╤Ж╨╡╨╜
+// Состояние диалога для добавления сцен
 interface PendingScene {
   userId: number;
-  fileId?: string; // Telegram file_id (╨╡╤Б╨╗╨╕ ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╨╛ ╤З╨╡╤А╨╡╨╖ Telegram)
-  fileUrl?: string; // ╨Я╤А╤П╨╝╨░╤П ╤Б╤Б╤Л╨╗╨║╨░ ╨╜╨░ ╤Д╨░╨╣╨╗ (╨╡╤Б╨╗╨╕ ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╨╛ ╨┐╨╛ URL)
+  fileId?: string; // Telegram file_id (если загружено через Telegram)
+  fileUrl?: string; // Прямая ссылка на файл (если загружено по URL)
   duration: number;
   fps: number;
   totalFrames: number;
@@ -27,7 +27,7 @@ interface PendingScene {
   category?: SceneCategory;
 }
 
-// ╨б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡ ╨┤╨╕╨░╨╗╨╛╨│╨░ ╨┤╨╗╤П ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╤П ╤Б╤Ж╨╡╨╜
+// Состояние диалога для редактирования сцен
 interface PendingEdit {
   userId: number;
   sceneId: string;
@@ -53,14 +53,14 @@ async function downloadTelegramFile(
   bot: Telegraf,
   fileId: string
 ): Promise<{ buffer: Buffer; path: string }> {
-  // ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ╨╕╨╜╤Д╨╛╤А╨╝╨░╤Ж╨╕╤О ╨╛ ╤Д╨░╨╣╨╗╨╡
+  // Получаем информацию о файле
   const file = await bot.telegram.getFile(fileId);
   
-  // ╨б╤В╤А╨╛╨╕╨╝ URL ╨┤╨╗╤П ╤Б╨║╨░╤З╨╕╨▓╨░╨╜╨╕╤П (╨┤╨╗╤П ╨▒╨╛╨╗╤М╤И╨╕╤Е ╤Д╨░╨╣╨╗╨╛╨▓ ╨╜╤Г╨╢╨╜╨╛ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╤М ╤В╨╛╨║╨╡╨╜ ╨▒╨╛╤В╨░)
+  // Строим URL для скачивания (для больших файлов нужно использовать токен бота)
   const botToken = config.botToken;
   const fileUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
   
-  // ╨б╨║╨░╤З╨╕╨▓╨░╨╡╨╝ ╤Д╨░╨╣╨╗
+  // Скачиваем файл
   const response = await fetch(fileUrl);
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
@@ -77,18 +77,18 @@ async function downloadTelegramFile(
 }
 
 /**
- * ╨б╨║╨░╤З╨╕╨▓╨░╨╡╤В ╤Д╨░╨╣╨╗ ╨┐╨╛ ╨┐╤А╤П╨╝╨╛╨╣ ╤Б╤Б╤Л╨╗╨║╨╡ (URL)
- * ╨Я╨╛╨┤╨┤╨╡╤А╨╢╨╕╨▓╨░╨╡╤В ╤Д╨░╨╣╨╗╤Л ╨╗╤О╨▒╨╛╨│╨╛ ╤А╨░╨╖╨╝╨╡╤А╨░
+ * Скачивает файл по прямой ссылке (URL)
+ * Поддерживает файлы любого размера
  */
 async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; path: string }> {
   
-  // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╤Н╤В╨╛ ╨▓╨░╨╗╨╕╨┤╨╜╤Л╨╣ URL
+  // Проверяем, что это валидный URL
   try {
     const url = new URL(fileUrl);
     
-    // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╤Н╤В╨╛ ╨╜╨╡ ╤Б╤Б╤Л╨╗╨║╨░ ╨╜╨░ ╤Б╤В╤А╨░╨╜╨╕╤Ж╤Г (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А, ╨п╨╜╨┤╨╡╨║╤Б.╨Ф╨╕╤Б╨║)
+    // Проверяем, что это не ссылка на страницу (например, Яндекс.Диск)
     if (url.hostname.includes('yandex.ru') || url.hostname.includes('disk.yandex')) {
-      throw new Error("Yandex.Disk link detected. Please provide direct download link. For Yandex.Disk: right-click on file тЖТ 'Get link' тЖТ copy direct link, or use /d/ link.");
+      throw new Error("Yandex.Disk link detected. Please provide direct download link. For Yandex.Disk: right-click on file → 'Get link' → copy direct link, or use /d/ link.");
     }
     
     if (url.hostname.includes('drive.google.com')) {
@@ -101,7 +101,7 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
     throw new Error("Invalid URL");
   }
   
-  // ╨б╨║╨░╤З╨╕╨▓╨░╨╡╨╝ ╤Д╨░╨╣╨╗
+  // Скачиваем файл
   const response = await fetch(fileUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -113,12 +113,12 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
     throw new Error(`Failed to download file from URL: ${response.status} ${response.statusText}`);
   }
   
-  // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝ Content-Type (╨┤╨╛╨╗╨╢╨╡╨╜ ╨▒╤Л╤В╤М video ╨╕╨╗╨╕ octet-stream)
+  // Проверяем Content-Type (должен быть video или octet-stream)
   const contentType = response.headers.get('content-type') || '';
   const contentLength = response.headers.get('content-length');
   
   
-  // ╨Х╤Б╨╗╨╕ ╤Н╤В╨╛ HTML - ╨╖╨╜╨░╤З╨╕╤В ╤Б╨║╨░╤З╨░╨╗╨░╤Б╤М ╤Б╤В╤А╨░╨╜╨╕╤Ж╨░, ╨░ ╨╜╨╡ ╤Д╨░╨╣╨╗
+  // Если это HTML - значит скачалась страница, а не файл
   if (contentType.includes('text/html')) {
     const buffer = Buffer.from(await response.arrayBuffer());
     const htmlPreview = buffer.toString('utf-8', 0, Math.min(500, buffer.length));
@@ -130,15 +130,15 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
     console.warn(`[Bot] Warning: Unexpected content-type: ${contentType}`);
   }
   
-  // ╨б╨║╨░╤З╨╕╨▓╨░╨╡╨╝ ╤Д╨░╨╣╨╗
+  // Скачиваем файл
   const buffer = Buffer.from(await response.arrayBuffer());
   
-  // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝ ╨╝╨╕╨╜╨╕╨╝╨░╨╗╤М╨╜╤Л╨╣ ╤А╨░╨╖╨╝╨╡╤А (╨▓╨╕╨┤╨╡╨╛ ╨┤╨╛╨╗╨╢╨╜╨╛ ╨▒╤Л╤В╤М ╤Е╨╛╤В╤П ╨▒╤Л ╨╜╨╡╤Б╨║╨╛╨╗╤М╨║╨╛ KB)
+  // Проверяем минимальный размер (видео должно быть хотя бы несколько KB)
   if (buffer.length < 1024) {
     throw new Error(`Downloaded file is too small (${buffer.length} bytes). This might be an error page or redirect. Please check the link.`);
   }
   
-  // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╤Н╤В╨╛ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╤В╨╡╨╗╤М╨╜╨╛ ╨▒╨╕╨╜╨░╤А╨╜╤Л╨╣ ╤Д╨░╨╣╨╗ (╨╜╨╡ HTML)
+  // Проверяем, что это действительно бинарный файл (не HTML)
   const fileStart = buffer.toString('utf-8', 0, Math.min(100, buffer.length));
   if (fileStart.toLowerCase().includes('<!doctype') || fileStart.toLowerCase().includes('<html')) {
     throw new Error("The link points to an HTML page, not a video file. Please provide a direct download link to the video file.");
@@ -154,7 +154,7 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
 }
 
 /**
- * ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╤В, ╤П╨▓╨╗╤П╨╡╤В╤Б╤П ╨╗╨╕ ╤В╨╡╨║╤Б╤В ╨▓╨░╨╗╨╕╨┤╨╜╤Л╨╝ URL
+ * Проверяет, является ли текст валидным URL
  */
 function isValidUrl(text: string): boolean {
   try {
@@ -167,10 +167,10 @@ function isValidUrl(text: string): boolean {
 
 /**
  * Parse cues in FRAMES format
- * ╨Я╨╛╨┤╨┤╨╡╤А╨╢╨╕╨▓╨░╨╡╤В ╤Д╨╛╤А╨╝╨░╤В╤Л:
- * - "0-125, 150-275" (╨║╨░╨┤╤А╤Л ╤З╨╡╤А╨╡╨╖ ╨╖╨░╨┐╤П╤В╤Г╤О)
- * - "╨Ш╨│╤А╨╛╨║ 1 тАФ 280 - 367" (╤Д╨╛╤А╨╝╨░╤В ╤Б ╨┐╤А╨╡╤Д╨╕╨║╤Б╨╛╨╝)
- * - "0 125, 150 275" (╨║╨░╨┤╤А╤Л ╤З╨╡╤А╨╡╨╖ ╨┐╤А╨╛╨▒╨╡╨╗)
+ * Поддерживает форматы:
+ * - "0-125, 150-275" (кадры через запятую)
+ * - "Игрок 1 — 280 - 367" (формат с префиксом)
+ * - "0 125, 150 275" (кадры через пробел)
  */
 function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: number }> | null {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
@@ -178,9 +178,9 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
 
   for (const line of lines) {
     
-    // ╨д╨╛╤А╨╝╨░╤В 1: "╨Ш╨│╤А╨╛╨║ N тАФ startFrame - endFrame" ╨╕╨╗╨╕ "╨Ш╨│╤А╨╛╨║ N тАФ startFrame - endFrame"
-    // ╨Я╨╛╨┤╨┤╨╡╤А╨╢╨╕╨▓╨░╨╡╨╝ ╤А╨░╨╖╨╜╤Л╨╡ ╤В╨╕╨┐╤Л ╨┤╨╡╤Д╨╕╤Б╨╛╨▓: тАФ (em-dash), тАУ (en-dash), - (hyphen)
-    let match = line.match(/(?:╨Ш╨│╤А╨╛╨║|Player|╨а╨╛╨╗╤М|╨а╨╡╨┐╨╗╨╕╨║╨░|╨а╨╛╨╗╨╕╨║)\s*\d+\s*[тАФтАУ\-]\s*(\d+)\s*[тАФтАУ\-]\s*(\d+)/i);
+    // Формат 1: "Игрок N — startFrame - endFrame" или "Игрок N — startFrame - endFrame"
+    // Поддерживаем разные типы дефисов: — (em-dash), – (en-dash), - (hyphen)
+    let match = line.match(/(?:Игрок|Player|Роль|Реплика|Ролик)\s*\d+\s*[—–\-]\s*(\d+)\s*[—–\-]\s*(\d+)/i);
     if (match) {
       const startFrame = parseInt(match[1]!, 10);
       const endFrame = parseInt(match[2]!, 10);
@@ -190,8 +190,8 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       continue;
     }
 
-    // ╨д╨╛╤А╨╝╨░╤В 2: ╨Я╤А╨╛╤Б╤В╨╛ "startFrame - endFrame" ╨╕╨╗╨╕ "startFrame-endFrame" (╨▒╨╡╨╖ ╨┐╤А╨╡╤Д╨╕╨║╤Б╨░ "╨Ш╨│╤А╨╛╨║")
-    match = line.match(/^(\d+)\s*[тАФтАУ\-]\s*(\d+)$/);
+    // Формат 2: Просто "startFrame - endFrame" или "startFrame-endFrame" (без префикса "Игрок")
+    match = line.match(/^(\d+)\s*[—–\-]\s*(\d+)$/);
     if (match) {
       const startFrame = parseInt(match[1]!, 10);
       const endFrame = parseInt(match[2]!, 10);
@@ -201,7 +201,7 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       continue;
     }
 
-    // ╨д╨╛╤А╨╝╨░╤В 3: "0-125" ╨╕╨╗╨╕ "0-125, 150-275" (╨╛╨▒╤Л╤З╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В ╤З╨╡╤А╨╡╨╖ ╨╖╨░╨┐╤П╤В╤Г╤О)
+    // Формат 3: "0-125" или "0-125, 150-275" (обычный формат через запятую)
     const parts = line.split(/[,\s]+/).filter(Boolean);
     for (const part of parts) {
       const match2 = part.match(/^(\d+)-(\d+)$/);
@@ -214,7 +214,7 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       }
     }
 
-    // ╨д╨╛╤А╨╝╨░╤В 4: "0 125" (╨║╨░╨┤╤А╤Л ╤З╨╡╤А╨╡╨╖ ╨┐╤А╨╛╨▒╨╡╨╗, ╨▒╨╡╨╖ ╨┤╨╡╤Д╨╕╤Б╨░)
+    // Формат 4: "0 125" (кадры через пробел, без дефиса)
     const spaceMatch = line.match(/^(\d+)\s+(\d+)$/);
     if (spaceMatch) {
       const startFrame = parseInt(spaceMatch[1]!, 10);
@@ -225,7 +225,7 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
     }
   }
 
-  // ╨б╨╛╤А╤В╨╕╤А╨╛╨▓╨░╤В╤М ╨┐╨╛ startFrame
+  // Сортировать по startFrame
   cues.sort((a, b) => a.startFrame - b.startFrame);
 
   return cues.length > 0 ? cues : null;
@@ -234,30 +234,30 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
 export function createBot(): Telegraf {
   const bot = new Telegraf(config.botToken);
 
-  // Main menu keyboard - ╨▓╤Б╨╡╨│╨┤╨░ ╨╛╤В╨╛╨▒╤А╨░╨╢╨░╨╡╤В╤Б╤П ╨▓╨╜╨╕╨╖╤Г
+  // Main menu keyboard - всегда отображается внизу
   // For admins, will include admin panel button
   const getMainMenuKeyboard = (userId?: number) => {
     const baseKeyboard = [
       [
-        { text: "ЁЯОн ╨Э╨░╤З╨░╤В╤М ╨╕╨│╤А╤Г" },
-        { text: "ЁЯСе ╨Я╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П ╨║ ╨╕╨│╤А╨╡" },
+        { text: "🎭 Начать игру" },
+        { text: "👥 Присоединиться к игре" },
       ],
       [
-        { text: "ЁЯТб ╨Я╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤" },
+        { text: "💡 Предложить эпизод" },
       ],
     ] as Array<Array<{ text: string }>>;
 
     // Add admin panel button for admins
     if (userId && isAdmin(userId)) {
       baseKeyboard.push([
-        { text: "ЁЯСС ╨Р╨┤╨╝╨╕╨╜-╨┐╨░╨╜╨╡╨╗╤М" },
+        { text: "👑 Админ-панель" },
       ]);
     }
 
     return {
       keyboard: baseKeyboard,
       resize_keyboard: true,
-      persistent: true, // ╨Я╨╛╤Б╤В╨╛╤П╨╜╨╜╨░╤П ╨║╨╗╨░╨▓╨╕╨░╤В╤Г╤А╨░
+      persistent: true, // Постоянная клавиатура
     };
   };
 
@@ -270,21 +270,21 @@ export function createBot(): Telegraf {
 
     console.log("[Bot] /start command received", { userId, startPayload });
 
-    const welcomeText = `ЁЯОд ╨Ч╨╗╨╛╨▒╨╜╨░╤П ╨╛╨╖╨▓╤Г╤З╨║╨░ - ╤Н╤В╨╛ ╨╕╨│╤А╨░, ╨▓ ╨║╨╛╤В╨╛╤А╨╛╨╣ ╨▓╤Л ╨╛╨╖╨▓╤Г╤З╨╕╨▓╨░╨╡╤В╨╡ ╤Н╨┐╨╕╨╖╨╛╨┤╤Л ╨╕╨╖ ╨║╨╕╨╜╨╛, ╤Б╨╡╤А╨╕╨░╨╗╨╛╨▓, ╨╝╨╡╨╝╨╛╨▓ ╨╕ ╨┐╤А╨╛╤З╨╕╤Е ╤А╨╛╨╗╨╕╨║╨╛╨▓.
+    const welcomeText = `🎤 Злобная озвучка - это игра, в которой вы озвучиваете эпизоды из кино, сериалов, мемов и прочих роликов.
 
-ЁЯОо ╨Т╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨╕╨│╤А╨╛╨║╨╛╨▓ - ╨╝╨╛╨╢╨╜╨╛ ╤Б╤Л╨│╤А╨░╤В╤М ╨╛╨┤╨╜╨╛╨╝╤Г ╨╕ ╨╛╨╖╨▓╤Г╤З╨╕╤В╤М ╨▓╤Б╨╡ ╤А╨╡╨┐╨╗╨╕╨║╨╕ ╤Б╨░╨╝╨╛╤Б╤В╨╛╤П╤В╨╡╨╗╤М╨╜╨╛ ╨╕╨╗╨╕ ╨╢╨╡ ╨┐╤А╨╕╨│╨╗╨░╤Б╨╕╤В╤М ╨┤╤А╤Г╨│╨░ ╨╕ ╤Б╤Л╨│╤А╨░╤В╤М ╨▓╨┤╨▓╨╛╨╡╨╝.
+🎮 Выберите количество игроков - можно сыграть одному и озвучить все реплики самостоятельно или же пригласить друга и сыграть вдвоем.
 
-ЁЯОм ╨Т╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤О "╨Ъ╨╕╨╜╨╛ ╨╕ ╤Б╨╡╤А╨╕╨░╨╗╤Л", "╨Ь╨╡╨╝╤Л" ╨╕╨╗╨╕ "╨Я╨╛╨╗╨╕╤В╨╕╨║╨░" - ╨▓╨░╨╝ ╤Б╨╗╤Г╤З╨░╨╣╨╜╤Л╨╝ ╨╛╨▒╤А╨░╨╖╨╛╨╝ ╨┐╨╛╨┐╨░╨┤╨╡╤В╤Б╤П ╤Н╨┐╨╕╨╖╨╛╨┤ ╨╕╨╖ ╨▓╤Л╨▒╤А╨░╨╜╨╜╨╛╨│╨╛ ╨╜╨░╨▒╨╛╤А╨░. ╨Ф╨╗╤П ╤В╨╛╨│╨╛, ╤З╤В╨╛╨▒╤Л ╨╛╨╖╨▓╤Г╤З╨╕╤В╤М ╨┤╤А╤Г╨│╨╛╨╣ ╤Н╨┐╨╕╨╖╨╛╨┤ - ╨╖╨░╨║╨╛╨╜╤З╨╕╤В╨╡ ╨╛╨╖╨▓╤Г╤З╨║╤Г ╨╕ ╨╜╨░╤З╨╜╨╕╤В╨╡ ╨╕╨│╤А╤Г ╨╖╨░╨╜╨╛╨▓╨╛.
+🎬 Выберите категорию "Кино и сериалы", "Мемы" или "Политика" - вам случайным образом попадется эпизод из выбранного набора. Для того, чтобы озвучить другой эпизод - закончите озвучку и начните игру заново.
 
-тЭЧя╕П ╨Ф╨░╨╗╨╡╨╡ ╤А╨╡╨╢╨╕╨╝ - ╨╝╨╛╨╢╨╜╨╛ ╨╛╨╖╨▓╤Г╤З╨╕╨▓╨░╤В╤М ╤Б╨▓╨╛╨▒╨╛╨┤╨╜╨╛ ╨╕╨╗╨╕ ╨╢╨╡ ╨╛╨╖╨▓╤Г╤З╨╕╨▓╨░╤В╤М ╨┐╨╛ ╤Б╨╗╤Г╤З╨░╨╣╨╜╨╛ ╨▓╤Л╨┐╨░╨▓╤И╨╡╨╝╤Г ╨╖╨░╨┤╨░╨╜╨╕╤О.
+❗️ Далее режим - можно озвучивать свободно или же озвучивать по случайно выпавшему заданию.
 
-тЦ╢я╕П ╨Я╤А╨╛╤Б╨╝╨╛╤В╤А╨╕╤В╨╡ ╤Н╨┐╨╕╨╖╨╛╨┤ ╨┐╤А╨╕╨┤╤Г╨╝╨░╨╣╤В╨╡ ╤Б╨▓╨╛╤О ╨▓╨╡╤А╤Б╨╕╤О ╨╛╨╖╨▓╤Г╤З╨║╨╕ ╨╕ ╨╖╨░╨┐╨╕╤И╨╕╤В╨╡ ╨╡╨╡. ╨Ю╨▒╤А╨░╤Й╨░╨╣╤В╨╡ ╨▓╨╜╨╕╨╝╨░╨╜╨╕╨╡ ╨╜╨░ ╨┤╨╗╨╕╤В╨╡╨╗╤М╨╜╨╛╤Б╤В╤М ╨▓╨░╤И╨╡╨╣ ╤А╨╛╨╗╨╕ ╨╕ ╨┐╨╛╨┤╨│╨╛╨╜╤П╨╣╤В╨╡ ╤Б╨▓╨╛╨╕ ╤А╨╡╨┐╨╗╨╕╨║╨╕, ╤З╤В╨╛╨▒╤Л ╨▓╨┐╨╕╤Б╨░╤В╤М╤Б╤П ╨▓ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕!
+▶️ Просмотрите эпизод придумайте свою версию озвучки и запишите ее. Обращайте внимание на длительность вашей роли и подгоняйте свои реплики, чтобы вписаться в тайминги!
 
-тЬЕ ╨Э╨░╤Б╨╗╨░╨╢╨┤╨░╨╣╤В╨╡╤Б╤М ╤А╨╡╨╖╤Г╨╗╤М╤В╨░╤В╨╛╨╝, ╨┤╨░ ╨┐╤А╨╕╨▒╤Г╨┤╨╡╤В ╤Б ╨▓╨░╨╝╨╕ ╨║╤А╨╡╨░╤В╨╕╨▓ ╨╕ ╨╕╤Б╨║╤А╨╛╨╝╨╡╤В╨╜╤Л╨╣ ╤О╨╝╨╛╤А!
+✅ Наслаждайтесь результатом, да прибудет с вами креатив и искрометный юмор!
 
-тЭдя╕П ╨Ъ╨░╨╢╨┤╤Л╨╣ ╨╕╨│╤А╨╛╨║ ╨╝╨╛╨╢╨╡╤В ╨┤╨╛╨▒╨░╨▓╨╕╤В╤М ╤Б╨▓╨╛╨╣ ╤Н╨┐╨╕╨╖╨╛╨┤ ╨▓ ╨╕╨│╤А╤Г! ╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г "╨Я╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤" ╨╕ ╤Б╨╗╨╡╨┤╤Г╨╣╤В╨╡ ╨╕╨╜╤Б╤В╤А╤Г╨║╤Ж╨╕╨╕.
+❤️ Каждый игрок может добавить свой эпизод в игру! Нажмите кнопку "Предложить эпизод" и следуйте инструкции.
 
-ЁЯСЗ ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣╤В╨╡ ╨╝╨╡╨╜╤О ╨▓╨╜╨╕╨╖╤Г ╨┤╨╗╤П ╨╜╨░╨▓╨╕╨│╨░╤Ж╨╕╨╕.`;
+👇 Используйте меню внизу для навигации.`;
 
     // Send response immediately with persistent keyboard
     try {
@@ -296,8 +296,8 @@ export function createBot(): Telegraf {
         console.log("[Bot] Direct session link, sessionId:", sessionId);
         
         await ctx.reply(
-          `ЁЯОм ╨Ю╤В╨║╤А╤Л╨▓╨░╤О ╨╕╨│╤А╤Г...\n\n` +
-          `╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г ╨╝╨╡╨╜╤О "ЁЯОн ╨Ш╨│╤А╨░╤В╤М" ╤З╤В╨╛╨▒╤Л ╨╛╤В╨║╤А╤Л╤В╤М ╨┐╤А╨╕╨╗╨╛╨╢╨╡╨╜╨╕╨╡.`,
+          `🎬 Открываю игру...\n\n` +
+          `Нажмите кнопку меню "🎭 Играть" чтобы открыть приложение.`,
           { reply_markup: getMainMenuKeyboard(userId) }
         );
       } else if (startPayload && startPayload.startsWith("join_")) {
@@ -325,16 +325,16 @@ export function createBot(): Telegraf {
           console.log("[Bot] Found session, sending link:", session.id);
           
           await ctx.reply(
-            `ЁЯОм ╨Т╨░╤Б ╨┐╤А╨╕╨│╨╗╨░╤Б╨╕╨╗╨╕ ╨▓ ╨╕╨│╤А╤Г!\n\n` +
-            `╨Ш╨│╤А╨╛╨║╨╛╨▓: ${session.participants.length}/${session.maxPlayers}\n\n` +
-            `ЁЯСЙ ╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨╜╨░ ╤Б╤Б╤Л╨╗╨║╤Г ╤З╤В╨╛╨▒╤Л ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П:\n${joinLink}`,
+            `🎬 Вас пригласили в игру!\n\n` +
+            `Игроков: ${session.participants.length}/${session.maxPlayers}\n\n` +
+            `👉 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
             { reply_markup: getMainMenuKeyboard(userId) }
           );
         } else {
           // Session not found - show error
           await ctx.reply(
-            `тЭМ ╨Ш╨│╤А╨░ ╤Б ╨║╨╛╨┤╨╛╨╝ ${sessionCode} ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░ ╨╕╨╗╨╕ ╤Г╨╢╨╡ ╨╖╨░╨║╤А╤Л╤В╨░.\n\n` +
-            `╨Я╨╛╨┐╤А╨╛╤Б╨╕╤В╨╡ ╨┤╤А╤Г╨│╨░ ╨┐╤А╨╕╤Б╨╗╨░╤В╤М ╨╜╨╛╨▓╤Л╨╣ ╨║╨╛╨┤.`,
+            `❌ Игра с кодом ${sessionCode} не найдена или уже закрыта.\n\n` +
+            `Попросите друга прислать новый код.`,
             { reply_markup: getMainMenuKeyboard(userId) }
           );
         }
@@ -362,11 +362,11 @@ export function createBot(): Telegraf {
     if (!startPayload && userId && config.notifyChannelId) {
       // Use setTimeout to ensure this runs after response is sent
       setTimeout(() => {
-        const userName = ctx.from?.first_name || "╨Р╨╜╨╛╨╜╨╕╨╝";
+        const userName = ctx.from?.first_name || "Аноним";
         const userLink = ctx.from?.username ? `@${ctx.from.username}` : `ID: ${userId}`;
         bot.telegram.sendMessage(
           config.notifyChannelId,
-          `ЁЯСд ╨Э╨╛╨▓╤Л╨╣ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М!\n\n${userName} (${userLink})`
+          `👤 Новый пользователь!\n\n${userName} (${userLink})`
         ).catch((err) => {
           // Silently ignore - channel notification is not critical
           console.error("Failed to notify channel:", err.message);
@@ -376,17 +376,17 @@ export function createBot(): Telegraf {
   });
 
   // Handle "Join game" button (from text menu)
-  bot.hears("ЁЯСе ╨Я╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П ╨║ ╨╕╨│╤А╨╡", async (ctx) => {
+  bot.hears("👥 Присоединиться к игре", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     
     console.log("[Bot] Join game button clicked", { userId });
 
     await botState.setPendingJoin(userId);
-    await ctx.reply("ЁЯФС ╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨┤ ╨╛╤В ╨┤╤А╤Г╨│╨░:", {
+    await ctx.reply("🔑 Введи код от друга:", {
       reply_markup: {
         keyboard: [
-          [{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }],
+          [{ text: "❌ Отмена" }],
         ],
         resize_keyboard: true,
         one_time_keyboard: false,
@@ -404,10 +404,10 @@ export function createBot(): Telegraf {
       console.log("[Bot] join_game inline button clicked", { userId });
 
       await botState.setPendingJoin(userId);
-      await ctx.reply("ЁЯФС ╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨┤ ╨╛╤В ╨┤╤А╤Г╨│╨░:", {
+      await ctx.reply("🔑 Введи код от друга:", {
         reply_markup: {
           keyboard: [
-            [{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }],
+            [{ text: "❌ Отмена" }],
           ],
           resize_keyboard: true,
           one_time_keyboard: false,
@@ -415,7 +415,7 @@ export function createBot(): Telegraf {
       });
     } catch (err) {
       console.error("[Bot] Error in join_game handler:", err);
-      await ctx.answerCbQuery("╨Я╤А╨╛╨╕╨╖╨╛╤И╨╗╨░ ╨╛╤И╨╕╨▒╨║╨░").catch(() => {});
+      await ctx.answerCbQuery("Произошла ошибка").catch(() => {});
     }
   });
 
@@ -425,9 +425,9 @@ export function createBot(): Telegraf {
     if (!userId) return;
 
     await botState.setPendingJoin(userId);
-    await ctx.reply("ЁЯФС ╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨┤ ╨╛╤В ╨┤╤А╤Г╨│╨░:", {
+    await ctx.reply("🔑 Введи код от друга:", {
       reply_markup: {
-        keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+        keyboard: [[{ text: "❌ Отмена" }]],
         resize_keyboard: true,
         one_time_keyboard: false,
       },
@@ -436,13 +436,13 @@ export function createBot(): Telegraf {
 
   // Handle "Start game" button (from text menu)
   // NOTE: Using text link instead of inline web_app button - iOS bug workaround [[memory:13197292]]
-  bot.hears("ЁЯОн ╨Э╨░╤З╨░╤В╤М ╨╕╨│╤А╤Г", async (ctx) => {
+  bot.hears("🎭 Начать игру", async (ctx) => {
     const botUsername = config.botUsername || "zlomem_bot";
     // Use ?startapp= to open Mini App correctly on all platforms
     const appLink = `https://t.me/${botUsername}/app`;
     
     await ctx.reply(
-      `ЁЯОо ╨Э╨░╨╢╨╝╨╕ ╨╜╨░ ╤Б╤Б╤Л╨╗╨║╤Г ╤З╤В╨╛╨▒╤Л ╨╛╤В╨║╤А╤Л╤В╤М ╨╕╨│╤А╤Г:\n\n${appLink}`,
+      `🎮 Нажми на ссылку чтобы открыть игру:\n\n${appLink}`,
       {
         reply_markup: getMainMenuKeyboard(ctx.from?.id),
       }
@@ -450,14 +450,14 @@ export function createBot(): Telegraf {
   });
 
   // Handle "Suggest episode" button (from text menu)
-  bot.hears("ЁЯТб ╨Я╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤", async (ctx) => {
+  bot.hears("💡 Предложить эпизод", async (ctx) => {
     await ctx.reply(
-      `ЁЯТб ╨Я╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤\n\n` +
-      `╨Ф╨╗╤П ╤В╨╛╨│╨╛, ╤З╤В╨╛╨▒╤Л ╨┐╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤, ╤Б╨║╨╕╨╜╤М╤В╨╡ ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╗╨╕ ╤Б╤Б╤Л╨╗╨║╤Г ╨╜╨░ ╨╢╨╡╨╗╨░╨╡╨╝╤Л╨╣ ╤Д╤А╨░╨│╨╝╨╡╨╜╤В ` +
-      `╨╕ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╤А╨╡╨┐╨╗╨╕╨║, ╨║╨╛╤В╨╛╤А╤Л╨╡ ╨▓╤Л ╤Е╨╛╤В╨╡╨╗╨╕ ╨▒╤Л ╨╛╨╖╨▓╤Г╤З╨╕╤В╤М ╨╜╨░ ╨┤╨░╨╜╨╜╤Л╨╣ ╤В╨╡╨╗╨╡╨│╤А╨░╨╝:\n\n` +
-      `ЁЯСЙ https://t.me/skameeckaa`,
+      `💡 Предложить эпизод\n\n` +
+      `Для того, чтобы предложить эпизод, скиньте видео или ссылку на желаемый фрагмент ` +
+      `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
+      `👉 https://t.me/skameeckaa`,
       {
-        reply_markup: getMainMenuKeyboard(ctx.from?.id), // ╨Т╨╡╤А╨╜╤Г╤В╤М ╨│╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О
+        reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
       }
     );
   });
@@ -466,12 +466,12 @@ export function createBot(): Telegraf {
   bot.action("suggest_episode", async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(
-      `ЁЯТб ╨Я╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤\n\n` +
-      `╨Ф╨╗╤П ╤В╨╛╨│╨╛, ╤З╤В╨╛╨▒╤Л ╨┐╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В╤М ╤Н╨┐╨╕╨╖╨╛╨┤, ╤Б╨║╨╕╨╜╤М╤В╨╡ ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╗╨╕ ╤Б╤Б╤Л╨╗╨║╤Г ╨╜╨░ ╨╢╨╡╨╗╨░╨╡╨╝╤Л╨╣ ╤Д╤А╨░╨│╨╝╨╡╨╜╤В ` +
-      `╨╕ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╤А╨╡╨┐╨╗╨╕╨║, ╨║╨╛╤В╨╛╤А╤Л╨╡ ╨▓╤Л ╤Е╨╛╤В╨╡╨╗╨╕ ╨▒╤Л ╨╛╨╖╨▓╤Г╤З╨╕╤В╤М ╨╜╨░ ╨┤╨░╨╜╨╜╤Л╨╣ ╤В╨╡╨╗╨╡╨│╤А╨░╨╝:\n\n` +
-      `ЁЯСЙ https://t.me/skameeckaa`,
+      `💡 Предложить эпизод\n\n` +
+      `Для того, чтобы предложить эпизод, скиньте видео или ссылку на желаемый фрагмент ` +
+      `и тайминги реплик, которые вы хотели бы озвучить на данный телеграм:\n\n` +
+      `👉 https://t.me/skameeckaa`,
       {
-        reply_markup: getMainMenuKeyboard(ctx.from?.id), // ╨Т╨╡╤А╨╜╤Г╤В╤М ╨│╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О
+        reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
       }
     );
   });
@@ -480,25 +480,25 @@ export function createBot(): Telegraf {
   bot.help(async (ctx) => {
     const isUserAdmin = isAdmin(ctx.from?.id ?? 0);
     
-    let helpText = "ЁЯОм DubDub тАФ ╨╕╨│╤А╨░ ╨┤╨╗╤П ╨╛╨╖╨▓╤Г╤З╨║╨╕ ╨▓╨╕╨┤╨╡╨╛\n\n" +
-      "1. ╨б╨╛╨╖╨┤╨░╨╣ ╤Б╨╡╤Б╤Б╨╕╤О ╨╕ ╨┐╤А╨╕╨│╨╗╨░╤Б╨╕ ╨┤╤А╤Г╨╖╨╡╨╣\n" +
-      "2. ╨Ъ╨░╨╢╨┤╤Л╨╣ ╨╕╨│╤А╨╛╨║ ╨╖╨░╨┐╨╕╤Б╤Л╨▓╨░╨╡╤В ╤А╨╡╨┐╨╗╨╕╨║╤Г\n" +
-      "3. ╨б╨╗╨╡╨┤╤Г╤О╤Й╨╕╨╣ ╨╕╨│╤А╨╛╨║ ╤Б╨╗╤Л╤И╨╕╤В ╤В╨╛╨╗╤М╨║╨╛ ╤З╨░╤Б╤В╤М ╨┐╤А╨╡╨┤╤Л╨┤╤Г╤Й╨╡╨╣ ╨╖╨░╨┐╨╕╤Б╨╕\n" +
-      "4. ╨Т ╨║╨╛╨╜╤Ж╨╡ ╨┐╨╛╨╗╤Г╤З╨░╨╡╤В╨╡ ╤Б╨╝╨╡╤И╨╜╨╛╨╡ ╨▓╨╕╨┤╨╡╨╛!\n\n";
+    let helpText = "🎬 DubDub — игра для озвучки видео\n\n" +
+      "1. Создай сессию и пригласи друзей\n" +
+      "2. Каждый игрок записывает реплику\n" +
+      "3. Следующий игрок слышит только часть предыдущей записи\n" +
+      "4. В конце получаете смешное видео!\n\n";
 
     if (isUserAdmin) {
-      helpText += "ЁЯСС ╨Р╨┤╨╝╨╕╨╜-╨║╨╛╨╝╨░╨╜╨┤╤Л:\n" +
-        "/scenes тАФ ╤Б╨┐╨╕╤Б╨╛╨║ ╤Б╤Ж╨╡╨╜\n" +
-        "/edit_cues тАФ ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╤В╤М ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕\n" +
-        "/stats тАФ ╤Б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨░\n" +
-        "╨Ю╤В╨┐╤А╨░╨▓╤М ╨▓╨╕╨┤╨╡╨╛ тАФ ╨┤╨╛╨▒╨░╨▓╨╕╤В╤М ╨╜╨╛╨▓╤Г╤О ╤Б╤Ж╨╡╨╜╤Г\n\n";
+      helpText += "👑 Админ-команды:\n" +
+        "/scenes — список сцен\n" +
+        "/edit_cues — редактировать тайминги\n" +
+        "/stats — статистика\n" +
+        "Отправь видео — добавить новую сцену\n\n";
     }
 
     const keyboard = {
       inline_keyboard: [
         [
           {
-            text: "ЁЯОн ╨Ю╤В╨║╤А╤Л╤В╤М DubDub",
+            text: "🎭 Открыть DubDub",
             web_app: { url: config.webappUrl },
           },
         ],
@@ -509,21 +509,21 @@ export function createBot(): Telegraf {
     if (isUserAdmin) {
       keyboard.inline_keyboard.push([
         {
-          text: "ЁЯСС ╨Р╨┤╨╝╨╕╨╜-╨┐╨░╨╜╨╡╨╗╤М",
+          text: "👑 Админ-панель",
           web_app: { url: `${config.webappUrl}/admin/scenes` },
         },
       ]);
     }
 
-    await ctx.reply(helpText + "╨Э╨░╨╢╨╝╨╕ ╨║╨╜╨╛╨┐╨║╤Г ╨╜╨╕╨╢╨╡, ╤З╤В╨╛╨▒╤Л ╨╜╨░╤З╨░╤В╤М ЁЯСЗ", {
+    await ctx.reply(helpText + "Нажми кнопку ниже, чтобы начать 👇", {
       reply_markup: keyboard,
     });
   });
 
-  // /scenes - ╤Б╨┐╨╕╤Б╨╛╨║ ╤Б╤Ж╨╡╨╜ (╤В╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜)
+  // /scenes - список сцен (только админ)
   bot.command("scenes", async (ctx) => {
     if (!isAdmin(ctx.from?.id ?? 0)) {
-      return ctx.reply("тЫФ ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░");
+      return ctx.reply("⛔ Нет доступа");
     }
 
     const scenes = await prisma.scene.findMany({
@@ -532,21 +532,21 @@ export function createBot(): Telegraf {
     });
 
     if (scenes.length === 0) {
-      return ctx.reply("╨б╤Ж╨╡╨╜ ╨┐╨╛╨║╨░ ╨╜╨╡╤В. ╨Ю╤В╨┐╤А╨░╨▓╤М ╨▓╨╕╨┤╨╡╨╛, ╤З╤В╨╛╨▒╤Л ╨┤╨╛╨▒╨░╨▓╨╕╤В╤М.");
+      return ctx.reply("Сцен пока нет. Отправь видео, чтобы добавить.");
     }
 
     const list = scenes.map((s, i) => {
       const catLabel = CATEGORY_LABELS[s.category as SceneCategory] || s.category;
-      return `${i + 1}. ${s.title}\n   ${catLabel}\n   ЁЯУ╣ ${s.durationSec}s, ${s.rolesCount} ╤А╨╡╨┐╨╗╨╕╨║\n   ЁЯЖФ ${s.id}`;
+      return `${i + 1}. ${s.title}\n   ${catLabel}\n   📹 ${s.durationSec}s, ${s.rolesCount} реплик\n   🆔 ${s.id}`;
     }).join("\n\n");
 
-    await ctx.reply(`ЁЯУЛ ╨б╤Ж╨╡╨╜╤Л (${scenes.length}):\n\n${list}`);
+    await ctx.reply(`📋 Сцены (${scenes.length}):\n\n${list}`);
   });
 
-  // /stats - ╤Б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨░ (╤В╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜)
+  // /stats - статистика (только админ)
   bot.command("stats", async (ctx) => {
     if (!isAdmin(ctx.from?.id ?? 0)) {
-      return ctx.reply("тЫФ ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░");
+      return ctx.reply("⛔ Нет доступа");
     }
 
     const todayStart = new Date();
@@ -565,16 +565,16 @@ export function createBot(): Telegraf {
       : 0;
 
     await ctx.reply(
-      `ЁЯУК ╨б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨░ DubDub\n\n` +
-      `ЁЯСе ╨Ш╨│╤А╨╛╨║╨╛╨▓: ${totalUsers}\n` +
-      `ЁЯОм ╨Т╤Б╨╡╨│╨╛ ╤Б╨╡╤Б╤Б╨╕╨╣: ${totalSessions}\n` +
-      `ЁЯУЕ ╨б╨╡╨│╨╛╨┤╨╜╤П: ${todaySessions}\n` +
-      `тЬЕ ╨Ч╨░╨▓╨╡╤А╤И╨╡╨╜╨╛: ${completedSessions} (${conversionRate}%)\n` +
-      `ЁЯОе ╨б╤Ж╨╡╨╜: ${scenesCount}`
+      `📊 Статистика DubDub\n\n` +
+      `👥 Игроков: ${totalUsers}\n` +
+      `🎬 Всего сессий: ${totalSessions}\n` +
+      `📅 Сегодня: ${todaySessions}\n` +
+      `✅ Завершено: ${completedSessions} (${conversionRate}%)\n` +
+      `🎥 Сцен: ${scenesCount}`
     );
   });
 
-  // /cancel - ╨╛╤В╨╝╨╡╨╜╨░ ╤В╨╡╨║╤Г╤Й╨╡╨╣ ╨╛╨┐╨╡╤А╨░╤Ж╨╕╨╕
+  // /cancel - отмена текущей операции
   bot.command("cancel", async (ctx) => {
     const userId = ctx.from?.id;
     if (userId) {
@@ -588,12 +588,12 @@ export function createBot(): Telegraf {
       await botState.clearAll(userId);
       
       if (hadPending) {
-        await ctx.reply("тЭМ ╨Ю╨┐╨╡╤А╨░╤Ж╨╕╤П ╨╛╤В╨╝╨╡╨╜╨╡╨╜╨░", {
-          reply_markup: getMainMenuKeyboard(ctx.from?.id), // ╨Т╤Б╨╡╨│╨┤╨░ ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╨╝ ╨│╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О
+        await ctx.reply("❌ Операция отменена", {
+          reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
         });
       } else {
-        // ╨Ф╨░╨╢╨╡ ╨╡╤Б╨╗╨╕ ╨╜╨╡╤В ╨░╨║╤В╨╕╨▓╨╜╤Л╤Е ╨╛╨┐╨╡╤А╨░╤Ж╨╕╨╣, ╨┐╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╨│╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О
-        await ctx.reply("╨У╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О", {
+        // Даже если нет активных операций, показываем главное меню
+        await ctx.reply("Главное меню", {
           reply_markup: getMainMenuKeyboard(ctx.from?.id),
         });
       }
@@ -601,20 +601,20 @@ export function createBot(): Telegraf {
   });
 
   // Handle "Admin panel" button
-  bot.hears("ЁЯСС ╨Р╨┤╨╝╨╕╨╜-╨┐╨░╨╜╨╡╨╗╤М", async (ctx) => {
+  bot.hears("👑 Админ-панель", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.reply("тЫФ ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░", {
+      return ctx.reply("⛔ Нет доступа", {
         reply_markup: getMainMenuKeyboard(userId),
       });
     }
 
-    await ctx.reply("╨Ю╤В╨║╤А╤Л╨▓╨░╤О ╨░╨┤╨╝╨╕╨╜-╨┐╨░╨╜╨╡╨╗╤М...", {
+    await ctx.reply("Открываю админ-панель...", {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: "ЁЯСС ╨Р╨┤╨╝╨╕╨╜-╨┐╨░╨╜╨╡╨╗╤М",
+              text: "👑 Админ-панель",
               web_app: { url: `${config.webappUrl}/admin/scenes` },
             },
           ],
@@ -623,31 +623,31 @@ export function createBot(): Telegraf {
     });
   });
 
-  // /edit_cues - ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╛╨▓ ╤Б╤Ж╨╡╨╜╤Л (╤В╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜)
+  // /edit_cues - редактирование таймингов сцены (только админ)
   bot.command("edit_cues", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.reply("тЫФ ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░");
+      return ctx.reply("⛔ Нет доступа");
     }
 
-    // ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ID ╤Б╤Ж╨╡╨╜╤Л ╨╕╨╖ ╨░╤А╨│╤Г╨╝╨╡╨╜╤В╨░ ╨╕╨╗╨╕ ╨┐╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╤Б╨┐╨╕╤Б╨╛╨║
+    // Получаем ID сцены из аргумента или показываем список
     const args = ctx.message.text.split(" ").slice(1);
     
     if (args.length === 0) {
-      // ╨Я╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╤Б╨┐╨╕╤Б╨╛╨║ ╤Б╤Ж╨╡╨╜ ╨┤╨╗╤П ╨▓╤Л╨▒╨╛╤А╨░
+      // Показываем список сцен для выбора
       const scenes = await prisma.scene.findMany({
         orderBy: { createdAt: "desc" },
         take: 10,
       });
 
       if (scenes.length === 0) {
-        return ctx.reply("╨б╤Ж╨╡╨╜ ╨┐╨╛╨║╨░ ╨╜╨╡╤В.");
+        return ctx.reply("Сцен пока нет.");
       }
 
       const list = scenes.map((s, i) => {
         const cues = JSON.parse(s.cueJson) as Array<{ roleIndex: number; startSec: number; durationSec: number }>;
         const cueStr = cues.map((c, j) => `${c.startSec}-${c.startSec + c.durationSec}`).join(", ");
-        return `${i + 1}. *${s.title}*\n   ╨в╨░╨╣╨╝╨╕╨╜╨│╨╕: \`${cueStr}\`\n   ID: \`${s.id}\``;
+        return `${i + 1}. *${s.title}*\n   Тайминги: \`${cueStr}\`\n   ID: \`${s.id}\``;
       }).join("\n\n");
 
       await botState.setPendingEdit(userId, {
@@ -657,11 +657,11 @@ export function createBot(): Telegraf {
       });
 
       await ctx.reply(
-        `ЁЯОм ╨Т╤Л╨▒╨╡╤А╨╕ ╤Б╤Ж╨╡╨╜╤Г ╨┤╨╗╤П ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╤П:\n\n${list}\n\n╨Ю╤В╨┐╤А╨░╨▓╤М ID ╤Б╤Ж╨╡╨╜╤Л:`,
+        `🎬 Выбери сцену для редактирования:\n\n${list}\n\nОтправь ID сцены:`,
         { 
           parse_mode: "Markdown",
           reply_markup: {
-            keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+            keyboard: [[{ text: "❌ Отмена" }]],
             resize_keyboard: true,
             one_time_keyboard: true,
           },
@@ -670,17 +670,17 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // ID ╤Б╤Ж╨╡╨╜╤Л ╨┐╨╡╤А╨╡╨┤╨░╨╜ ╨▓ ╨║╨╛╨╝╨░╨╜╨┤╨╡
+    // ID сцены передан в команде
     const sceneId = args[0]!;
     await startCueEditing(ctx, userId, sceneId);
   });
 
-  // Helper: ╨╜╨░╤З╨░╤В╤М ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ cues
+  // Helper: начать редактирование cues
   async function startCueEditing(ctx: Context, userId: number, sceneId: string) {
     const scene = await prisma.scene.findUnique({ where: { id: sceneId } });
 
     if (!scene) {
-      await ctx.reply(`тЭМ ╨б╤Ж╨╡╨╜╨░ "${sceneId}" ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░`);
+      await ctx.reply(`❌ Сцена "${sceneId}" не найдена`);
       return;
     }
 
@@ -713,17 +713,17 @@ export function createBot(): Telegraf {
     });
 
     await ctx.reply(
-      `ЁЯОм ╨а╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡: *${scene.title}*\n\n` +
-      `тП▒ ╨Ф╨╗╨╕╤В╨╡╨╗╤М╨╜╨╛╤Б╤В╤М: ${scene.durationSec}s\n` +
-      `ЁЯОЮ FPS: ${fps}\n` +
-      `ЁЯУК ╨Т╤Б╨╡╨│╨╛ ╨║╨░╨┤╤А╨╛╨▓: ${totalFrames}\n` +
-      `ЁЯУН ╨в╨╡╨║╤Г╤Й╨╕╨╡ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ (╨▓ ╨║╨░╨┤╤А╨░╤Е): \`${cueStr}\`\n\n` +
-      `╨Т╨▓╨╡╨┤╨╕ ╨╜╨╛╨▓╤Л╨╡ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨Т ╨Ъ╨Р╨Ф╨а╨Р╨е:\n` +
+      `🎬 Редактирование: *${scene.title}*\n\n` +
+      `⏱ Длительность: ${scene.durationSec}s\n` +
+      `🎞 FPS: ${fps}\n` +
+      `📊 Всего кадров: ${totalFrames}\n` +
+      `📍 Текущие тайминги (в кадрах): \`${cueStr}\`\n\n` +
+      `Введи новые тайминги В КАДРАХ:\n` +
       `\`0-125, 150-275\``,
       { 
         parse_mode: "Markdown",
         reply_markup: {
-          keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+          keyboard: [[{ text: "❌ Отмена" }]],
           resize_keyboard: true,
           one_time_keyboard: true,
         },
@@ -731,51 +731,51 @@ export function createBot(): Telegraf {
     );
   }
 
-  // ╨Ъ╨╛╨╝╨░╨╜╨┤╨░ ╨┤╨╗╤П ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ URL
+  // Команда для загрузки видео по URL
   bot.command("upload_url", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.reply("тЫФ ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░");
+      return ctx.reply("⛔ Нет доступа");
     }
 
     const messageText = ctx.message.text;
     if (!messageText) {
-      await ctx.reply("тЭМ ╨Ю╤И╨╕╨▒╨║╨░: ╨┐╤Г╤Б╤В╨╛╨╡ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╡");
+      await ctx.reply("❌ Ошибка: пустое сообщение");
       return;
     }
 
     const args = messageText.split(" ").slice(1);
     if (args.length === 0) {
       await ctx.reply(
-        `ЁЯФЧ ╨Ч╨░╨│╤А╤Г╨╖╨║╨░ ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ ╤Б╤Б╤Л╨╗╨║╨╡\n\n` +
-        `╨Ш╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╨╡: /upload_url <URL>\n\n` +
-        `╨Я╤А╨╕╨╝╨╡╤А:\n` +
+        `🔗 Загрузка видео по ссылке\n\n` +
+        `Использование: /upload_url <URL>\n\n` +
+        `Пример:\n` +
         `/upload_url https://example.com/video.mp4\n\n` +
-        `╨Ш╨╗╨╕ ╨┐╤А╨╛╤Б╤В╨╛ ╨╛╤В╨┐╤А╨░╨▓╤М ╤Б╤Б╤Л╨╗╨║╤Г ╨▒╨╛╤В╤Г, ╨╕ ╨╛╨╜ ╨┐╤А╨╡╨┤╨╗╨╛╨╢╨╕╤В ╨╖╨░╨│╤А╤Г╨╖╨╕╤В╤М.`
+        `Или просто отправь ссылку боту, и он предложит загрузить.`
       );
       return;
     }
 
     const fileUrl = args[0];
     if (!fileUrl || !isValidUrl(fileUrl)) {
-      await ctx.reply("тЭМ ╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ URL. ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ http:// ╨╕╨╗╨╕ https://");
+      await ctx.reply("❌ Неверный URL. Используй http:// или https://");
       return;
     }
 
     await handleVideoUrl(ctx, userId, fileUrl);
   });
 
-  // ╨Ю╨▒╤А╨░╨▒╨╛╤В╨║╨░ callback ╨┤╨╗╤П ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ ╨┐╨╛ URL
+  // Обработка callback для загрузки по URL
   bot.action(/^upload_url:(.+)$/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return ctx.answerCbQuery("тЫФ ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░");
+      return ctx.answerCbQuery("⛔ Нет доступа");
     }
 
     await ctx.answerCbQuery();
     const matchResult = ctx.match;
     if (!matchResult || !matchResult[1]) {
-      await ctx.reply("тЭМ ╨Ю╤И╨╕╨▒╨║╨░: ╨╜╨╡ ╤Г╨┤╨░╨╗╨╛╤Б╤М ╨┐╨╛╨╗╤Г╤З╨╕╤В╤М URL");
+      await ctx.reply("❌ Ошибка: не удалось получить URL");
       return;
     }
 
@@ -783,13 +783,13 @@ export function createBot(): Telegraf {
     await handleVideoUrl(ctx, userId, fileUrl);
   });
 
-  // Helper: ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ URL
+  // Helper: обработка загрузки видео по URL
   async function handleVideoUrl(ctx: Context, userId: number, fileUrl: string) {
     let tmpPath: string | null = null;
     try {
-      await ctx.reply("тП│ ╨б╨║╨░╤З╨╕╨▓╨░╤О ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ ╤Б╤Б╤Л╨╗╨║╨╡...");
+      await ctx.reply("⏳ Скачиваю видео по ссылке...");
 
-      // ╨б╨║╨░╤З╨╕╨▓╨░╨╡╨╝ ╤Д╨░╨╣╨╗ ╨┐╨╛ URL
+      // Скачиваем файл по URL
       const result = await downloadFileFromUrl(fileUrl);
       tmpPath = result.path;
       const buffer = result.buffer;
@@ -801,23 +801,23 @@ export function createBot(): Telegraf {
 
       console.log(`[Bot] File downloaded successfully: ${fileSizeMb.toFixed(2)} MB, path: ${tmpPath}`);
       
-      await ctx.reply(`ЁЯУе ╨д╨░╨╣╨╗ ╤Б╨║╨░╤З╨░╨╜ (${fileSizeMb.toFixed(2)} MB). ╨Р╨╜╨░╨╗╨╕╨╖╨╕╤А╤Г╤О ╨▓╨╕╨┤╨╡╨╛...`);
+      await ctx.reply(`📥 Файл скачан (${fileSizeMb.toFixed(2)} MB). Анализирую видео...`);
 
       try {
-        // ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ╨╕╨╜╤Д╨╛╤А╨╝╨░╤Ж╨╕╤О ╨╛ ╨▓╨╕╨┤╨╡╨╛
+        // Получаем информацию о видео
         const { duration, fps } = await getVideoInfo(tmpPath);
         const totalFrames = Math.round(duration * fps);
         
         console.log(`[Bot] Video info extracted: duration=${duration}s, fps=${fps}, frames=${totalFrames}`);
         
-        // ╨г╨┤╨░╨╗╤П╨╡╨╝ ╨▓╤А╨╡╨╝╨╡╨╜╨╜╤Л╨╣ ╤Д╨░╨╣╨╗ (╨╛╨╜ ╨▒╨╛╨╗╤М╤И╨╡ ╨╜╨╡ ╨╜╤Г╨╢╨╡╨╜, ╤В.╨║. ╨▒╤Г╨┤╨╡╨╝ ╤Б╨║╨░╤З╨╕╨▓╨░╤В╤М ╨╖╨░╨╜╨╛╨▓╨╛ ╨┐╤А╨╕ ╤Б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╨╕)
+        // Удаляем временный файл (он больше не нужен, т.к. будем скачивать заново при сохранении)
         await unlink(tmpPath).catch(() => {});
         tmpPath = null;
 
-        // ╨б╨╛╤Е╤А╨░╨╜╤П╨╡╨╝ ╤Б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡ (╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ fileUrl ╨▓╨╝╨╡╤Б╤В╨╛ fileId)
+        // Сохраняем состояние (используем fileUrl вместо fileId)
         await botState.setPendingScene(userId, {
           userId,
-          fileUrl, // ╨б╨╛╤Е╤А╨░╨╜╤П╨╡╨╝ URL ╨┤╨╗╤П ╨┐╨╛╤Б╨╗╨╡╨┤╤Г╤О╤Й╨╡╨│╨╛ ╤Б╨║╨░╤З╨╕╨▓╨░╨╜╨╕╤П
+          fileUrl, // Сохраняем URL для последующего скачивания
           duration: Math.round(duration * 10) / 10,
           fps,
           totalFrames,
@@ -825,15 +825,15 @@ export function createBot(): Telegraf {
         });
 
         await ctx.reply(
-          `тЬЕ ╨Т╨╕╨┤╨╡╨╛ ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╛!\n\n` +
-          `ЁЯУж ╨а╨░╨╖╨╝╨╡╤А: ${fileSizeMb.toFixed(2)} MB\n` +
-          `тП▒ ╨Ф╨╗╨╕╤В╨╡╨╗╤М╨╜╨╛╤Б╤В╤М: ${duration.toFixed(1)} ╤Б╨╡╨║\n` +
-          `ЁЯОЮ FPS: ${fps.toFixed(2)}\n` +
-          `ЁЯУК ╨Т╤Б╨╡╨│╨╛ ╨║╨░╨┤╤А╨╛╨▓: ${totalFrames}\n\n` +
-          `╨Т╨▓╨╡╨┤╨╕ ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╡ ╤Б╤Ж╨╡╨╜╤Л:`,
+          `✅ Видео обработано!\n\n` +
+          `📦 Размер: ${fileSizeMb.toFixed(2)} MB\n` +
+          `⏱ Длительность: ${duration.toFixed(1)} сек\n` +
+          `🎞 FPS: ${fps.toFixed(2)}\n` +
+          `📊 Всего кадров: ${totalFrames}\n\n` +
+          `Введи название сцены:`,
           {
             reply_markup: {
-              keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+              keyboard: [[{ text: "❌ Отмена" }]],
               resize_keyboard: true,
               one_time_keyboard: false,
             },
@@ -843,21 +843,21 @@ export function createBot(): Telegraf {
         console.error("[Bot] Video info extraction error:", infoErr);
         const errorMsg = infoErr.message || String(infoErr);
         
-        let userMsg = "тЭМ ╨Э╨╡ ╤Г╨┤╨░╨╗╨╛╤Б╤М ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╤В╤М ╨▓╨╕╨┤╨╡╨╛.\n\n";
+        let userMsg = "❌ Не удалось обработать видео.\n\n";
         
         if (errorMsg.includes("ffprobe failed")) {
-          userMsg += `тЪая╕П ╨д╨░╨╣╨╗ ╨╜╨╡ ╤П╨▓╨╗╤П╨╡╤В╤Б╤П ╨▓╨░╨╗╨╕╨┤╨╜╤Л╨╝ ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╗╨╕ ╨┐╨╛╨▓╤А╨╡╨╢╨┤╨╡╨╜.\n\n`;
-          userMsg += `╨Я╤А╨╛╨▓╨╡╤А╤М:\n`;
-          userMsg += `тАв ╨д╨░╨╣╨╗ ╨▓ ╤Д╨╛╤А╨╝╨░╤В╨╡ MP4, AVI, MOV ╨╕ ╤В.╨┤.\n`;
-          userMsg += `тАв ╨д╨░╨╣╨╗ ╨╜╨╡ ╨┐╨╛╨▓╤А╨╡╨╢╨┤╨╡╨╜\n`;
-          userMsg += `тАв ╨д╨░╨╣╨╗ ╤Б╨╛╨┤╨╡╤А╨╢╨╕╤В ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛╤В╨╛╨║\n`;
+          userMsg += `⚠️ Файл не является валидным видео или поврежден.\n\n`;
+          userMsg += `Проверь:\n`;
+          userMsg += `• Файл в формате MP4, AVI, MOV и т.д.\n`;
+          userMsg += `• Файл не поврежден\n`;
+          userMsg += `• Файл содержит видео поток\n`;
         } else if (errorMsg.includes("File not found")) {
-          userMsg += `тЪая╕П ╨д╨░╨╣╨╗ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜ ╨┐╨╛╤Б╨╗╨╡ ╤Б╨║╨░╤З╨╕╨▓╨░╨╜╨╕╤П.`;
+          userMsg += `⚠️ Файл не найден после скачивания.`;
         } else if (errorMsg.includes("Invalid video duration")) {
-          userMsg += `тЪая╕П ╨Э╨╡ ╤Г╨┤╨░╨╗╨╛╤Б╤М ╨╛╨┐╤А╨╡╨┤╨╡╨╗╨╕╤В╤М ╨┤╨╗╨╕╤В╨╡╨╗╤М╨╜╨╛╤Б╤В╤М ╨▓╨╕╨┤╨╡╨╛.\n`;
-          userMsg += `╨Т╨╛╨╖╨╝╨╛╨╢╨╜╨╛, ╤Д╨░╨╣╨╗ ╨╜╨╡ ╤П╨▓╨╗╤П╨╡╤В╤Б╤П ╨▓╨░╨╗╨╕╨┤╨╜╤Л╨╝ ╨▓╨╕╨┤╨╡╨╛.`;
+          userMsg += `⚠️ Не удалось определить длительность видео.\n`;
+          userMsg += `Возможно, файл не является валидным видео.`;
         } else {
-          userMsg += `╨Ф╨╡╤В╨░╨╗╨╕: ${errorMsg.substring(0, 200)}`;
+          userMsg += `Детали: ${errorMsg.substring(0, 200)}`;
         }
         
         await ctx.reply(userMsg);
@@ -866,55 +866,55 @@ export function createBot(): Telegraf {
     } catch (err: any) {
       console.error("[Bot] Video URL download error:", err);
       
-      // ╨г╨┤╨░╨╗╤П╨╡╨╝ ╨▓╤А╨╡╨╝╨╡╨╜╨╜╤Л╨╣ ╤Д╨░╨╣╨╗ ╨┐╤А╨╕ ╨╛╤И╨╕╨▒╨║╨╡
+      // Удаляем временный файл при ошибке
       if (tmpPath) {
         await unlink(tmpPath).catch(() => {});
       }
       
       const errorMsg = err.message || String(err);
-      let userMsg = "тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ ╤Б╤Б╤Л╨╗╨║╨╡.";
+      let userMsg = "❌ Ошибка загрузки видео по ссылке.";
       
       if (errorMsg.includes("Invalid URL")) {
-        userMsg += "\n\nтЪая╕П ╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В URL.";
+        userMsg += "\n\n⚠️ Неверный формат URL.";
       } else if (errorMsg.includes("404") || errorMsg.includes("Not Found")) {
-        userMsg += "\n\nтЪая╕П ╨д╨░╨╣╨╗ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜ ╨┐╨╛ ╤Н╤В╨╛╨╣ ╤Б╤Б╤Л╨╗╨║╨╡.";
+        userMsg += "\n\n⚠️ Файл не найден по этой ссылке.";
       } else if (errorMsg.includes("403") || errorMsg.includes("Forbidden")) {
-        userMsg += "\n\nтЪая╕П ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨░ ╨║ ╤Д╨░╨╣╨╗╤Г ╨┐╨╛ ╤Н╤В╨╛╨╣ ╤Б╤Б╤Л╨╗╨║╨╡.";
+        userMsg += "\n\n⚠️ Нет доступа к файлу по этой ссылке.";
       } else if (errorMsg.includes("ffprobe") || errorMsg.includes("Invalid video")) {
-        // ╨г╨╢╨╡ ╨╛╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╛ ╨▓╤Л╤И╨╡
+        // Уже обработано выше
         return;
       } else {
-        userMsg += `\n\n╨Ф╨╡╤В╨░╨╗╨╕: ${errorMsg.substring(0, 200)}`;
+        userMsg += `\n\nДетали: ${errorMsg.substring(0, 200)}`;
       }
       
       await ctx.reply(userMsg);
     }
   }
 
-  // ╨Ю╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╨▓╨╕╨┤╨╡╨╛ ╨╛╤В ╨░╨┤╨╝╨╕╨╜╨░
+  // Обработка видео от админа
   bot.on(message("video"), async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return; // ╨Ш╨│╨╜╨╛╤А╨╕╤А╤Г╨╡╨╝ ╨▓╨╕╨┤╨╡╨╛ ╨╛╤В ╨╜╨╡-╨░╨┤╨╝╨╕╨╜╨╛╨▓
+      return; // Игнорируем видео от не-админов
     }
 
     const video = ctx.message.video;
     
-    // ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ ╤А╨░╨╖╨╝╨╡╤А╨░ ╤Д╨░╨╣╨╗╨░ (Telegram ╨╛╨│╤А╨░╨╜╨╕╤З╨╕╨▓╨░╨╡╤В ╨┤╨╛ ~20MB ╨┤╨╗╤П ╨┐╤А╤П╨╝╨╛╨│╨╛ ╤Б╨║╨░╤З╨╕╨▓╨░╨╜╨╕╤П)
+    // Проверка размера файла (Telegram ограничивает до ~20MB для прямого скачивания)
     const fileSizeMb = (video.file_size || 0) / (1024 * 1024);
     if (fileSizeMb > 50) {
       await ctx.reply(
-        `тЭМ ╨Т╨╕╨┤╨╡╨╛ ╤Б╨╗╨╕╤И╨║╨╛╨╝ ╨▒╨╛╨╗╤М╤И╨╛╨╡ (${fileSizeMb.toFixed(1)} MB).\n\n` +
-        `Telegram ╨╛╨│╤А╨░╨╜╨╕╤З╨╕╨▓╨░╨╡╤В ╤А╨░╨╖╨╝╨╡╤А ╤Д╨░╨╣╨╗╨╛╨▓ ╨┤╨╗╤П ╨┐╤А╤П╨╝╨╛╨│╨╛ ╤Б╨║╨░╤З╨╕╨▓╨░╨╜╨╕╤П.\n` +
-        `╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╤Б╨╢╨░╤В╤М ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╗╨╕ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ ╤Д╨░╨╣╨╗ ╨┤╨╛ 50 MB.`
+        `❌ Видео слишком большое (${fileSizeMb.toFixed(1)} MB).\n\n` +
+        `Telegram ограничивает размер файлов для прямого скачивания.\n` +
+        `Попробуй сжать видео или используй файл до 50 MB.`
       );
       return;
     }
     
     try {
-      await ctx.reply("тП│ ╨Ю╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╤О ╨▓╨╕╨┤╨╡╨╛...");
+      await ctx.reply("⏳ Обрабатываю видео...");
 
-      // ╨б╨║╨░╤З╨╕╨▓╨░╨╡╨╝ ╨╕ ╨┐╨╛╨╗╤Г╤З╨░╨╡╨╝ ╨╕╨╜╤Д╨╛╤А╨╝╨░╤Ж╨╕╤О
+      // Скачиваем и получаем информацию
       let tmpPath: string;
       let buffer: Buffer;
       
@@ -925,15 +925,15 @@ export function createBot(): Telegraf {
       } catch (downloadErr: any) {
         console.error("Download error:", downloadErr);
         
-        // ╨Х╤Б╨╗╨╕ ╨╛╤И╨╕╨▒╨║╨░ "file is too big", ╨┐╨╛╨┐╤А╨╛╨▒╤Г╨╡╨╝ ╤З╨╡╤А╨╡╨╖ ╤Д╨░╨╣╨╗ ╨╜╨░╨┐╤А╤П╨╝╤Г╤О
+        // Если ошибка "file is too big", попробуем через файл напрямую
         if (downloadErr.response?.error_code === 400 && downloadErr.description?.includes("too big")) {
           await ctx.reply(
-            `тЭМ ╨Т╨╕╨┤╨╡╨╛ ╤Б╨╗╨╕╤И╨║╨╛╨╝ ╨▒╨╛╨╗╤М╤И╨╛╨╡ ╨┤╨╗╤П ╤Б╨║╨░╤З╨╕╨▓╨░╨╜╨╕╤П ╤З╨╡╤А╨╡╨╖ Telegram.\n\n` +
-            `ЁЯУж ╨а╨░╨╖╨╝╨╡╤А: ${fileSizeMb.toFixed(1)} MB\n\n` +
-            `ЁЯТб ╨а╨╡╤И╨╡╨╜╨╕╤П:\n` +
-            `1. ╨б╨╢╨░╤В╤М ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╡╤А╨╡╨┤ ╨╛╤В╨┐╤А╨░╨▓╨║╨╛╨╣\n` +
-            `2. ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╤М ╨▓╨╕╨┤╨╡╨╛ ╨┤╨╛ 20-30 MB\n` +
-            `3. ╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨╜╨░╨┐╤А╤П╨╝╤Г╤О ╨╜╨░ ╤Б╨╡╤А╨▓╨╡╤А ╤З╨╡╤А╨╡╨╖ SCP/FTP`
+            `❌ Видео слишком большое для скачивания через Telegram.\n\n` +
+            `📦 Размер: ${fileSizeMb.toFixed(1)} MB\n\n` +
+            `💡 Решения:\n` +
+            `1. Сжать видео перед отправкой\n` +
+            `2. Использовать видео до 20-30 MB\n` +
+            `3. Загрузить напрямую на сервер через SCP/FTP`
           );
           return;
         }
@@ -944,10 +944,10 @@ export function createBot(): Telegraf {
         const { duration, fps } = await getVideoInfo(tmpPath);
         const totalFrames = Math.round(duration * fps);
         
-        // ╨г╨┤╨░╨╗╤П╨╡╨╝ ╨▓╤А╨╡╨╝╨╡╨╜╨╜╤Л╨╣ ╤Д╨░╨╣╨╗
+        // Удаляем временный файл
         await unlink(tmpPath).catch(() => {});
 
-        // ╨б╨╛╤Е╤А╨░╨╜╤П╨╡╨╝ ╤Б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡
+        // Сохраняем состояние
         await botState.setPendingScene(userId, {
           userId,
           fileId: video.file_id,
@@ -958,14 +958,14 @@ export function createBot(): Telegraf {
         });
 
         await ctx.reply(
-          `ЁЯУ╣ ╨Т╨╕╨┤╨╡╨╛ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╛!\n` +
-          `тП▒ ╨Ф╨╗╨╕╤В╨╡╨╗╤М╨╜╨╛╤Б╤В╤М: ${duration.toFixed(1)} ╤Б╨╡╨║\n` +
-          `ЁЯОЮ FPS: ${fps}\n` +
-          `ЁЯУК ╨Т╤Б╨╡╨│╨╛ ╨║╨░╨┤╤А╨╛╨▓: ${totalFrames}\n\n` +
-          `╨Т╨▓╨╡╨┤╨╕ ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╡ ╤Б╤Ж╨╡╨╜╤Л:`,
+          `📹 Видео получено!\n` +
+          `⏱ Длительность: ${duration.toFixed(1)} сек\n` +
+          `🎞 FPS: ${fps}\n` +
+          `📊 Всего кадров: ${totalFrames}\n\n` +
+          `Введи название сцены:`,
           {
             reply_markup: {
-              keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+              keyboard: [[{ text: "❌ Отмена" }]],
               resize_keyboard: true,
               one_time_keyboard: false,
             },
@@ -979,30 +979,30 @@ export function createBot(): Telegraf {
       console.error("Video processing error:", err);
       const errorMsg = err.message || String(err);
       
-      let userMsg = "тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨╕ ╨▓╨╕╨┤╨╡╨╛.";
+      let userMsg = "❌ Ошибка обработки видео.";
       if (errorMsg.includes("too big") || errorMsg.includes("file is too big")) {
-        userMsg += `\n\nЁЯУж ╨д╨░╨╣╨╗ ╤Б╨╗╨╕╤И╨║╨╛╨╝ ╨▒╨╛╨╗╤М╤И╨╛╨╣ (${fileSizeMb.toFixed(1)} MB).`;
-        userMsg += `\n╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╤Б╨╢╨░╤В╤М ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╗╨╕ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ ╤Д╨░╨╣╨╗ ╨┤╨╛ 20-30 MB.`;
+        userMsg += `\n\n📦 Файл слишком большой (${fileSizeMb.toFixed(1)} MB).`;
+        userMsg += `\nПопробуй сжать видео или используй файл до 20-30 MB.`;
       } else if (errorMsg.includes("ffprobe")) {
-        userMsg += `\n\nтЪая╕П ╨Э╨╡ ╤Г╨┤╨░╨╗╨╛╤Б╤М ╨╛╨┐╤А╨╡╨┤╨╡╨╗╨╕╤В╤М ╨┐╨░╤А╨░╨╝╨╡╤В╤А╤Л ╨▓╨╕╨┤╨╡╨╛.`;
-        userMsg += `\n╨Я╤А╨╛╨▓╨╡╤А╤М, ╤З╤В╨╛ ╨▓╨╕╨┤╨╡╨╛ ╨▓ ╤Д╨╛╤А╨╝╨░╤В╨╡ MP4 ╨╕ ╨╜╨╡ ╨┐╨╛╨▓╤А╨╡╨╢╨┤╨╡╨╜╨╛.`;
+        userMsg += `\n\n⚠️ Не удалось определить параметры видео.`;
+        userMsg += `\nПроверь, что видео в формате MP4 и не повреждено.`;
       } else {
-        userMsg += `\n\n╨Ф╨╡╤В╨░╨╗╨╕: ${errorMsg.substring(0, 100)}`;
+        userMsg += `\n\nДетали: ${errorMsg.substring(0, 100)}`;
       }
       
       await ctx.reply(userMsg);
     }
   });
 
-  // ╨Ю╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╤В╨╡╨║╤Б╤В╨╛╨▓╤Л╤Е ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╣ (╨┤╨╗╤П ╨┤╨╕╨░╨╗╨╛╨│╨░ ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П/╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╤П ╤Б╤Ж╨╡╨╜╤Л ╨╕ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╡╨╜╨╕╤П)
+  // Обработка текстовых сообщений (для диалога добавления/редактирования сцены и присоединения)
   bot.on(message("text"), async (ctx) => {
     const userId = ctx.from?.id;
     const text = ctx.message.text;
 
     if (!userId) return;
 
-    // ╨Ю╤В╨╝╨╡╨╜╨░
-    if (text === "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" || text.toLowerCase() === "╨╛╤В╨╝╨╡╨╜╨░") {
+    // Отмена
+    if (text === "❌ Отмена" || text.toLowerCase() === "отмена") {
       const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
         botState.getPendingScene(userId),
         botState.getPendingEdit(userId),
@@ -1014,17 +1014,17 @@ export function createBot(): Telegraf {
       
       console.log(`[Bot] User ${userId} cancelled operation. Had pending:`, hadPending);
       
-      // ╨Т╤Б╨╡╨│╨┤╨░ ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╨╝ ╨│╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О ╨┐╨╛╤Б╨╗╨╡ ╨╛╤В╨╝╨╡╨╜╤Л
+      // Всегда возвращаем главное меню после отмены
       await ctx.reply(
-        hadPending ? "тЭМ ╨Ю╨┐╨╡╤А╨░╤Ж╨╕╤П ╨╛╤В╨╝╨╡╨╜╨╡╨╜╨░" : "╨У╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О",
+        hadPending ? "❌ Операция отменена" : "Главное меню",
         {
-          reply_markup: getMainMenuKeyboard(ctx.from?.id), // ╨Т╤Б╨╡╨│╨┤╨░ ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╨╝ ╨│╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О
+          reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
         }
       );
       return;
     }
 
-    // ╨Х╤Б╨╗╨╕ ╤Н╤В╨╛ ╨░╨┤╨╝╨╕╨╜ ╨╕ ╤В╨╡╨║╤Б╤В ╨┐╨╛╤Е╨╛╨╢ ╨╜╨░ URL, ╨╕ ╨╜╨╡╤В ╨░╨║╤В╨╕╨▓╨╜╨╛╨│╨╛ ╨┤╨╕╨░╨╗╨╛╨│╨░ - ╨┐╤А╨╡╨┤╨╗╨░╨│╨░╨╡╨╝ ╨╖╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ URL
+    // Если это админ и текст похож на URL, и нет активного диалога - предлагаем загрузить видео по URL
     const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
       botState.getPendingScene(userId),
       botState.getPendingEdit(userId),
@@ -1033,14 +1033,14 @@ export function createBot(): Telegraf {
     
     if (userId && isAdmin(userId) && isValidUrl(text) && !hasPendingScene && !hasPendingEdit && !hasPendingJoin) {
       await ctx.reply(
-        `ЁЯФЧ ╨Э╨░╨╣╨┤╨╡╨╜╨░ ╤Б╤Б╤Л╨╗╨║╨░ ╨╜╨░ ╤Д╨░╨╣╨╗!\n\n` +
-        `╨е╨╛╤З╨╡╤И╤М ╨╖╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨▓╨╕╨┤╨╡╨╛ ╨┐╨╛ ╤Н╤В╨╛╨╣ ╤Б╤Б╤Л╨╗╨║╨╡?\n\n` +
-        `╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ ╨║╨╛╨╝╨░╨╜╨┤╤Г: /upload_url ${text}\n\n` +
-        `╨Ш╨╗╨╕ ╨╜╨░╨╢╨╝╨╕ ╨║╨╜╨╛╨┐╨║╤Г ╨╜╨╕╨╢╨╡:`,
+        `🔗 Найдена ссылка на файл!\n\n` +
+        `Хочешь загрузить видео по этой ссылке?\n\n` +
+        `Используй команду: /upload_url ${text}\n\n` +
+        `Или нажми кнопку ниже:`,
         {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "тЬЕ ╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨┐╨╛ ╤Б╤Б╤Л╨╗╨║╨╡", callback_data: `upload_url:${encodeURIComponent(text)}` }],
+              [{ text: "✅ Загрузить по ссылке", callback_data: `upload_url:${encodeURIComponent(text)}` }],
             ],
           },
         }
@@ -1048,30 +1048,30 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╨╡╤Б╤В╤М ╨╗╨╕ ╨░╨║╤В╨╕╨▓╨╜╤Л╨╣ ╨┤╨╕╨░╨╗╨╛╨│ ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╤П
+    // Проверяем, есть ли активный диалог редактирования
     const pendingEdit = hasPendingEdit || await botState.getPendingEdit(userId);
     if (pendingEdit) {
       await handleEditDialog(ctx, userId, text, pendingEdit);
       return;
     }
 
-    // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╨╡╤Б╤В╤М ╨╗╨╕ ╨░╨║╤В╨╕╨▓╨╜╤Л╨╣ ╨┤╨╕╨░╨╗╨╛╨│ ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П ╤Б╤Ж╨╡╨╜╤Л ╨Я╨Х╨а╨Х╨Ф ╨┐╤А╨╛╨▓╨╡╤А╨║╨╛╨╣ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╡╨╜╨╕╤П
-    // ╨н╤В╨╛ ╨▓╨░╨╢╨╜╨╛, ╤З╤В╨╛╨▒╤Л ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨╛╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╗╨╕╤Б╤М ╨┐╤А╨░╨▓╨╕╨╗╤М╨╜╨╛
+    // Проверяем, есть ли активный диалог добавления сцены ПЕРЕД проверкой присоединения
+    // Это важно, чтобы тайминги обрабатывались правильно
     let pending = hasPendingScene || await botState.getPendingScene(userId);
     if (pending) {
-      // ╨Х╤Б╤В╤М ╨░╨║╤В╨╕╨▓╨╜╤Л╨╣ ╨┤╨╕╨░╨╗╨╛╨│ ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П ╤Б╤Ж╨╡╨╜╤Л, ╨╛╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╡╨╝ ╨╡╨│╨╛ (╨┐╤А╨╛╨┤╨╛╨╗╨╢╨╕╨╝ ╨╜╨╕╨╢╨╡)
+      // Есть активный диалог добавления сцены, обрабатываем его (продолжим ниже)
       console.log(`[Bot] User ${userId} has pending scene, step: ${pending.step}`);
     } else if (hasPendingJoin || await botState.getPendingJoin(userId)) {
-      // ╨в╨╛╨╗╤М╨║╨╛ ╨╡╤Б╨╗╨╕ ╨╜╨╡╤В ╨░╨║╤В╨╕╨▓╨╜╨╛╨│╨╛ ╨┤╨╕╨░╨╗╨╛╨│╨░ ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П ╤Б╤Ж╨╡╨╜╤Л, ╨╛╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╡╨╝ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╡╨╜╨╕╨╡
+      // Только если нет активного диалога добавления сцены, обрабатываем присоединение
       const sessionCode = text.trim().toLowerCase();
       
       console.log("[Bot] Searching for session with code:", sessionCode);
       
-      // ╨Ш╤Й╨╡╨╝ ╤Б╨╡╤Б╤Б╨╕╤О ╨┐╨╛ ID (╨┐╨╛╨╗╨╜╨╛╨╝╤Г ╤Б╨╛╨▓╨┐╨░╨┤╨╡╨╜╨╕╤О) - ╤В╨╛╨╗╤М╨║╨╛ ╨░╨║╤В╨╕╨▓╨╜╤Л╨╡ ╤Б╨╡╤Б╤Б╨╕╨╕
+      // Ищем сессию по ID (полному совпадению) - только активные сессии
       let session = await prisma.session.findFirst({
         where: { 
           id: sessionCode,
-          status: { in: ["lobby", "recording"] }, // ╨в╨╛╨╗╤М╨║╨╛ ╨░╨║╤В╨╕╨▓╨╜╤Л╨╡ ╤Б╨╡╤Б╤Б╨╕╨╕
+          status: { in: ["lobby", "recording"] }, // Только активные сессии
         },
         include: {
           participants: true,
@@ -1079,13 +1079,13 @@ export function createBot(): Telegraf {
         },
       });
 
-      // ╨Х╤Б╨╗╨╕ ╨╜╨╡ ╨╜╨░╤И╨╗╨╕ ╨┐╨╛ ╨┐╨╛╨╗╨╜╨╛╨╝╤Г ID, ╨╕╤Й╨╡╨╝ ╨┐╨╛ ╨┐╨╛╤Б╨╗╨╡╨┤╨╜╨╕╨╝ ╤Б╨╕╨╝╨▓╨╛╨╗╨░╨╝ (case-insensitive)
+      // Если не нашли по полному ID, ищем по последним символам (case-insensitive)
       if (!session && sessionCode.length >= 6) {
         console.log("[Bot] Full ID not found, searching by suffix...");
         // Get all active sessions and filter in memory (Prisma doesn't support case-insensitive endsWith)
         const allSessions = await prisma.session.findMany({
           where: {
-            status: { in: ["lobby", "recording"] }, // ╨в╨╛╨╗╤М╨║╨╛ ╨░╨║╤В╨╕╨▓╨╜╤Л╨╡ ╤Б╨╡╤Б╤Б╨╕╨╕
+            status: { in: ["lobby", "recording"] }, // Только активные сессии
           },
           include: {
             participants: true,
@@ -1108,7 +1108,7 @@ export function createBot(): Telegraf {
       console.log("[Bot] Session search result:", session ? { id: session.id, status: session.status, participants: session.participants.length } : "not found");
 
       if (!session) {
-        // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╨╝╨╛╨╢╨╡╤В ╤Б╨╡╤Б╤Б╨╕╤П ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╨╡╤В, ╨╜╨╛ ╤Г╨╢╨╡ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░
+        // Проверяем, может сессия существует, но уже завершена
         const completedSession = await prisma.session.findFirst({
           where: { 
             id: sessionCode,
@@ -1118,33 +1118,33 @@ export function createBot(): Telegraf {
 
         if (completedSession) {
           await ctx.reply(
-            `тЭМ ╨н╤В╨░ ╨╕╨│╤А╨░ ╤Г╨╢╨╡ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░.\n\n` +
-            `╨б╤В╨░╤В╤Г╤Б: ${completedSession.status}\n\n` +
-            `╨б╨╛╨╖╨┤╨░╨╣ ╨╜╨╛╨▓╤Г╤О ╨╕╨│╤А╤Г ╨╕╨╗╨╕ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤Б╤М ╨║ ╨░╨║╤В╨╕╨▓╨╜╨╛╨╣.`,
+            `❌ Эта игра уже завершена.\n\n` +
+            `Статус: ${completedSession.status}\n\n` +
+            `Создай новую игру или присоединись к активной.`,
             { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
           );
         } else {
           await ctx.reply(
-            `тЭМ ╨б╨╡╤Б╤Б╨╕╤П ╤Б ╨║╨╛╨┤╨╛╨╝ "${sessionCode}" ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░.\n\n` +
-            `╨Я╤А╨╛╨▓╨╡╤А╤М╤В╨╡ ╨║╨╛╨┤ ╨╕ ╨┐╨╛╨┐╤А╨╛╨▒╤Г╨╣╤В╨╡ ╨╡╤Й╤С ╤А╨░╨╖.`,
+            `❌ Сессия с кодом "${sessionCode}" не найдена.\n\n` +
+            `Проверьте код и попробуйте ещё раз.`,
             { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
           );
         }
         return;
       }
 
-      // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╨╜╨╡ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╨╗╤Б╤П ╨╗╨╕ ╤Г╨╢╨╡
+      // Проверяем, не присоединился ли уже
       const alreadyJoined = session.participants.some(p => p.tgUserId === String(userId));
       if (alreadyJoined) {
         await ctx.reply(
-          `тЬЕ ╨Т╤Л ╤Г╨╢╨╡ ╨▓ ╤Н╤В╨╛╨╣ ╨╕╨│╤А╨╡!\n\n` +
-          `╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г ╨╜╨╕╨╢╨╡, ╤З╤В╨╛╨▒╤Л ╨╛╤В╨║╤А╤Л╤В╤М ╨╕╨│╤А╤Г:`,
+          `✅ Вы уже в этой игре!\n\n` +
+          `Нажмите кнопку ниже, чтобы открыть игру:`,
           {
             reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: "ЁЯОо ╨Ю╤В╨║╤А╤Л╤В╤М ╨╕╨│╤А╤Г",
+                    text: "🎮 Открыть игру",
                     web_app: { url: `${config.webappUrl}/s/${session.id}` },
                   },
                 ],
@@ -1155,44 +1155,44 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╨╡╤Б╤В╤М ╨╗╨╕ ╨╝╨╡╤Б╤В╨╛
+      // Проверяем, есть ли место
       if (session.participants.length >= session.maxPlayers) {
         await ctx.reply(
-          `тЭМ ╨Ш╨│╤А╨░ ╤Г╨╢╨╡ ╨┐╨╛╨╗╨╜╨░╤П (${session.maxPlayers}/${session.maxPlayers} ╨╕╨│╤А╨╛╨║╨╛╨▓).`,
+          `❌ Игра уже полная (${session.maxPlayers}/${session.maxPlayers} игроков).`,
           { reply_markup: { remove_keyboard: true } }
         );
         return;
       }
 
-      // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝ ╤Б╤В╨░╤В╤Г╤Б - ╨┤╨╗╤П "recording" ╨╝╨╛╨╢╨╜╨╛ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П, ╨╡╤Б╨╗╨╕ ╨╡╤Й╨╡ ╨╡╤Б╤В╤М ╨╝╨╡╤Б╤В╨╛
-      // ╨Э╨╛ ╨╗╤Г╤З╤И╨╡ ╤А╨░╨╖╤А╨╡╤И╨╕╤В╤М ╤В╨╛╨╗╤М╨║╨╛ ╨┤╨╗╤П "lobby"
+      // Проверяем статус - для "recording" можно присоединиться, если еще есть место
+      // Но лучше разрешить только для "lobby"
       if (session.status !== "lobby" && session.status !== "recording") {
         await ctx.reply(
-          `тЭМ ╨Ш╨│╤А╨░ ╤Г╨╢╨╡ ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░ (╤Б╤В╨░╤В╤Г╤Б: ${session.status}).\n\n` +
-          `╨б╨╛╨╖╨┤╨░╨╣ ╨╜╨╛╨▓╤Г╤О ╨╕╨│╤А╤Г ╨╕╨╗╨╕ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤Б╤М ╨║ ╨░╨║╤В╨╕╨▓╨╜╨╛╨╣.`,
+          `❌ Игра уже завершена (статус: ${session.status}).\n\n` +
+          `Создай новую игру или присоединись к активной.`,
             { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
         );
         return;
       }
       
-      // ╨Х╤Б╨╗╨╕ ╤Б╤В╨░╤В╤Г╤Б "recording", ╨╜╨╛ ╨╡╤Й╨╡ ╨╡╤Б╤В╤М ╨╝╨╡╤Б╤В╨╛ - ╨╝╨╛╨╢╨╜╨╛ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П
-      // ╨Э╨╛ ╨┤╨╗╤П "recording" ╨╗╤Г╤З╤И╨╡ ╨╜╨╡ ╤А╨░╨╖╤А╨╡╤И╨░╤В╤М ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╡╨╜╨╕╨╡ (╨╕╨│╤А╨░ ╤Г╨╢╨╡ ╨╕╨┤╨╡╤В)
+      // Если статус "recording", но еще есть место - можно присоединиться
+      // Но для "recording" лучше не разрешать присоединение (игра уже идет)
       if (session.status === "recording") {
         await ctx.reply(
-          `тЭМ ╨Ш╨│╤А╨░ ╤Г╨╢╨╡ ╨╜╨░╤З╨░╨╗╨░╤Б╤М. ╨Ь╨╛╨╢╨╜╨╛ ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П ╤В╨╛╨╗╤М╨║╨╛ ╨║ ╨╕╨│╤А╨░╨╝ ╨▓ ╨╗╨╛╨▒╨▒╨╕.`,
+          `❌ Игра уже началась. Можно присоединиться только к играм в лобби.`,
             { reply_markup: getMainMenuKeyboard(ctx.from?.id) }
         );
         return;
       }
 
-      // ╨Т╤Б╤С ╨╛╨║, ╨╛╤В╨║╤А╤Л╨▓╨░╨╡╨╝ Mini App ╤З╨╡╤А╨╡╨╖ ╤Б╤Б╤Л╨╗╨║╤Г (╨╜╨╡ inline web_app button)
-      // Inline web_app buttons ╨╕╨╝╨╡╤О╤В ╨▒╨░╨│ ╨╜╨░ iOS - ╨╛╤В╨║╤А╤Л╨▓╨░╤О╤В WebView ╨▓╨╝╨╡╤Б╤В╨╛ Mini App
+      // Всё ок, открываем Mini App через ссылку (не inline web_app button)
+      // Inline web_app buttons имеют баг на iOS - открывают WebView вместо Mini App
       const joinLink = `https://t.me/${config.botUsername}?startapp=s_${session.id}`;
       await ctx.reply(
-        `тЬЕ ╨Э╨░╨╣╨┤╨╡╨╜╨░ ╨╕╨│╤А╨░!\n\n` +
-        `╨Ш╨│╤А╨╛╨║╨╛╨▓: ${session.participants.length}/${session.maxPlayers}\n` +
-        `╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П: ${CATEGORY_LABELS[session.category as SceneCategory] || session.category}\n\n` +
-        `ЁЯСЙ ╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨╜╨░ ╤Б╤Б╤Л╨╗╨║╤Г ╤З╤В╨╛╨▒╤Л ╨┐╤А╨╕╤Б╨╛╨╡╨┤╨╕╨╜╨╕╤В╤М╤Б╤П:\n${joinLink}`,
+        `✅ Найдена игра!\n\n` +
+        `Игроков: ${session.participants.length}/${session.maxPlayers}\n` +
+        `Категория: ${CATEGORY_LABELS[session.category as SceneCategory] || session.category}\n\n` +
+        `👉 Нажмите на ссылку чтобы присоединиться:\n${joinLink}`,
         { 
           reply_markup: getMainMenuKeyboard(ctx.from?.id),
           // Telegram auto-converts the link to a clickable button
@@ -1201,35 +1201,35 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // ╨Ю╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╨┤╨╕╨░╨╗╨╛╨│╨░ ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П ╤Б╤Ж╨╡╨╜╤Л (╨╡╤Б╨╗╨╕ pending ╤Г╨╢╨╡ ╨╛╨┐╤А╨╡╨┤╨╡╨╗╨╡╨╜ ╨▓╤Л╤И╨╡)
-    // ╨Я╨╡╤А╨╡╨╛╨┐╤А╨╡╨┤╨╡╨╗╤П╨╡╨╝ pending ╨╜╨░ ╤Б╨╗╤Г╤З╨░╨╣, ╨╡╤Б╨╗╨╕ ╨╛╨╜ ╨▒╤Л╨╗ ╨╛╨┐╤А╨╡╨┤╨╡╨╗╨╡╨╜ ╨▓╤Л╤И╨╡, ╨╜╨╛ ╨╝╨╛╨│ ╨▒╤Л╤В╤М ╨╕╨╖╨╝╨╡╨╜╨╡╨╜
+    // Обработка диалога добавления сцены (если pending уже определен выше)
+    // Переопределяем pending на случай, если он был определен выше, но мог быть изменен
     if (!pending) {
       pending = await botState.getPendingScene(userId);
     }
     
     if (!pending) {
       console.log(`[Bot] No pending scene for user ${userId}, text:`, text);
-      return; // ╨Э╨╡╤В ╨░╨║╤В╨╕╨▓╨╜╨╛╨│╨╛ ╨┤╨╕╨░╨╗╨╛╨│╨░
+      return; // Нет активного диалога
     }
     
     console.log(`[Bot] Processing pending scene for user ${userId}, step: ${pending.step}, text:`, text);
 
-    // ╨и╨░╨│ 1: ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╡
+    // Шаг 1: Получаем название
     if (pending.step === "awaiting_title") {
       pending.title = text.trim();
       pending.step = "awaiting_category";
       await botState.setPendingScene(userId, pending);
 
       await ctx.reply(
-        `ЁЯСН ╨Э╨░╨╖╨▓╨░╨╜╨╕╨╡: "${pending.title}"\n\n` +
-        `╨Т╤Л╨▒╨╡╤А╨╕ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤О:`,
+        `👍 Название: "${pending.title}"\n\n` +
+        `Выбери категорию:`,
         {
           reply_markup: {
             keyboard: [
-              [{ text: "ЁЯОм ╨Ъ╨╕╨╜╨╛/╤Б╨╡╤А╨╕╨░╨╗╤Л" }],
-              [{ text: "ЁЯШВ ╨Ь╨╡╨╝╤Л" }],
-              [{ text: "ЁЯПЫя╕П ╨Я╨╛╨╗╨╕╤В╨╕╨║╨░" }],
-              [{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }],
+              [{ text: "🎬 Кино/сериалы" }],
+              [{ text: "😂 Мемы" }],
+              [{ text: "🏛️ Политика" }],
+              [{ text: "❌ Отмена" }],
             ],
             resize_keyboard: true,
             one_time_keyboard: true,
@@ -1239,21 +1239,21 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // ╨и╨░╨│ 2: ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤О
+    // Шаг 2: Получаем категорию
     if (pending.step === "awaiting_category") {
       console.log(`[Bot] User ${userId} selecting category, text:`, text);
       console.log(`[Bot] Pending before category selection:`, { step: pending.step, title: pending.title });
       
       let category: SceneCategory;
-      if (text.includes("╨Ъ╨╕╨╜╨╛") || text.includes("╤Б╨╡╤А╨╕╨░╨╗") || text.includes("ЁЯОм")) {
+      if (text.includes("Кино") || text.includes("сериал") || text.includes("🎬")) {
         category = "movies";
-      } else if (text.includes("╨Ь╨╡╨╝") || text.includes("ЁЯШВ")) {
+      } else if (text.includes("Мем") || text.includes("😂")) {
         category = "memes";
-      } else if (text.includes("╨Я╨╛╨╗╨╕╤В") || text.includes("ЁЯПЫя╕П")) {
+      } else if (text.includes("Полит") || text.includes("🏛️")) {
         category = "politics";
       } else {
         console.log(`[Bot] Invalid category text:`, text);
-        await ctx.reply("тЭМ ╨Т╤Л╨▒╨╡╤А╨╕ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤О ╨╕╨╖ ╨║╨╜╨╛╨┐╨╛╨║");
+        await ctx.reply("❌ Выбери категорию из кнопок");
         return;
       }
 
@@ -1264,33 +1264,33 @@ export function createBot(): Telegraf {
       console.log(`[Bot] Category selected, pending saved:`, { step: pending.step, category: pending.category, userId });
 
       await ctx.reply(
-        `ЁЯСН ╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П: ${CATEGORY_LABELS[category]}\n\n` +
-        `╨в╨╡╨┐╨╡╤А╤М ╨▓╨▓╨╡╨┤╨╕ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╤А╨╡╨┐╨╗╨╕╨║ ╨Т ╨Ъ╨Р╨Ф╨а╨Р╨е.\n\n` +
-        `ЁЯУЭ ╨Я╨╛╨┤╨┤╨╡╤А╨╢╨╕╨▓╨░╨╡╨╝╤Л╨╡ ╤Д╨╛╤А╨╝╨░╤В╤Л:\n` +
-        `тАв \`0-125, 150-275\` (╨╛╨▒╤Л╤З╨╜╤Л╨╣)\n` +
-        `тАв \`╨Ш╨│╤А╨╛╨║ 1 тАФ 280 - 367\`\n` +
-        `тАв \`╨Ш╨│╤А╨╛╨║ 2 тАФ 787 - 922\`\n\n` +
-        `ЁЯУК ╨Т╤Б╨╡╨│╨╛ ╨║╨░╨┤╤А╨╛╨▓: ${pending.totalFrames}\n` +
-        `ЁЯОЮ FPS: ${pending.fps}\n\n` +
-        `╨Ь╨╛╨╢╨╜╨╛ ╤Г╨║╨░╨╖╨░╤В╤М ╨▓╤Б╨╡ ╤А╨╡╨┐╨╗╨╕╨║╨╕ ╨╛╨┤╨╜╨╛╨╣ ╤Б╤В╤А╨╛╨║╨╛╨╣ ╨╕╨╗╨╕ ╨┐╨╛ ╨╛╨┤╨╜╨╛╨╣ ╨╜╨░ ╤Б╤В╤А╨╛╨║╤Г.`,
+        `👍 Категория: ${CATEGORY_LABELS[category]}\n\n` +
+        `Теперь введи тайминги реплик В КАДРАХ.\n\n` +
+        `📝 Поддерживаемые форматы:\n` +
+        `• \`0-125, 150-275\` (обычный)\n` +
+        `• \`Игрок 1 — 280 - 367\`\n` +
+        `• \`Игрок 2 — 787 - 922\`\n\n` +
+        `📊 Всего кадров: ${pending.totalFrames}\n` +
+        `🎞 FPS: ${pending.fps}\n\n` +
+        `Можно указать все реплики одной строкой или по одной на строку.`,
         { 
           parse_mode: "Markdown",
           reply_markup: {
-            keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+            keyboard: [[{ text: "❌ Отмена" }]],
             resize_keyboard: true,
-            one_time_keyboard: false, // ╨Я╨╛╤Б╤В╨╛╤П╨╜╨╜╨░╤П ╨║╨╗╨░╨▓╨╕╨░╤В╤Г╤А╨░
+            one_time_keyboard: false, // Постоянная клавиатура
           },
         }
       );
       
-      // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╤Б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡ ╤Б╨╛╤Е╤А╨░╨╜╨╕╨╗╨╛╤Б╤М
+      // Проверяем, что состояние сохранилось
       const savedPending = await botState.getPendingScene(userId);
       console.log(`[Bot] Pending after save:`, savedPending ? { step: savedPending.step, category: savedPending.category } : "null");
       
       return;
     }
 
-    // ╨и╨░╨│ 3: ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨Т ╨Ъ╨Р╨Ф╨а╨Р╨е
+    // Шаг 3: Получаем тайминги В КАДРАХ
     if (pending.step === "awaiting_cues") {
       console.log(`[Bot] User ${userId} entered cues text:`, text);
       console.log(`[Bot] Pending state:`, { step: pending.step, title: pending.title, category: pending.category });
@@ -1300,17 +1300,17 @@ export function createBot(): Telegraf {
       if (!cues || cues.length === 0) {
         console.log(`[Bot] Failed to parse cues for user ${userId}, text:`, text);
         await ctx.reply(
-          "тЭМ ╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В ╤В╨░╨╣╨╝╨╕╨╜╨│╨╛╨▓.\n\n" +
-          "ЁЯУЭ ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ ╨╛╨┤╨╕╨╜ ╨╕╨╖ ╤Д╨╛╤А╨╝╨░╤В╨╛╨▓:\n" +
-          "тАв `0-125, 150-275` (╨╛╨▒╤Л╤З╨╜╤Л╨╣)\n" +
-          "тАв `╨Ш╨│╤А╨╛╨║ 1 тАФ 280 - 367` (╤Б ╨┐╤А╨╡╤Д╨╕╨║╤Б╨╛╨╝)\n" +
-          "тАв `╨Ш╨│╤А╨╛╨║ 2 тАФ 787 - 922`\n\n" +
-          "╨Ь╨╛╨╢╨╜╨╛ ╤Г╨║╨░╨╖╨░╤В╤М ╨▓╤Б╨╡ ╤А╨╡╨┐╨╗╨╕╨║╨╕ ╨╛╨┤╨╜╨╛╨╣ ╤Б╤В╤А╨╛╨║╨╛╨╣ ╨╕╨╗╨╕ ╨┐╨╛ ╨╛╨┤╨╜╨╛╨╣ ╨╜╨░ ╤Б╤В╤А╨╛╨║╤Г.\n\n" +
-          "╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╨╡╤Й╤С ╤А╨░╨╖:",
+          "❌ Неверный формат таймингов.\n\n" +
+          "📝 Используй один из форматов:\n" +
+          "• `0-125, 150-275` (обычный)\n" +
+          "• `Игрок 1 — 280 - 367` (с префиксом)\n" +
+          "• `Игрок 2 — 787 - 922`\n\n" +
+          "Можно указать все реплики одной строкой или по одной на строку.\n\n" +
+          "Попробуй ещё раз:",
           { 
             parse_mode: "Markdown",
             reply_markup: {
-              keyboard: [[{ text: "тЭМ ╨Ю╤В╨╝╨╡╨╜╨░" }]],
+              keyboard: [[{ text: "❌ Отмена" }]],
               resize_keyboard: true,
               one_time_keyboard: false,
             },
@@ -1321,28 +1321,28 @@ export function createBot(): Telegraf {
 
       console.log(`[Bot] Successfully parsed ${cues.length} cues:`, cues);
 
-      // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨▓ ╨┐╤А╨╡╨┤╨╡╨╗╨░╤Е ╨▓╨╕╨┤╨╡╨╛
+      // Проверяем, что тайминги в пределах видео
       const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
       if (maxEndFrame > pending.totalFrames + pending.fps) {
         await ctx.reply(
-          `тЭМ ╨Ъ╨░╨┤╤А ${maxEndFrame} ╨▓╤Л╤Е╨╛╨┤╨╕╤В ╨╖╨░ ╨┐╤А╨╡╨┤╨╡╨╗╤Л ╨▓╨╕╨┤╨╡╨╛ (${pending.totalFrames} ╨║╨░╨┤╤А╨╛╨▓).\n` +
-          `╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╨╡╤Й╤С ╤А╨░╨╖:`
+          `❌ Кадр ${maxEndFrame} выходит за пределы видео (${pending.totalFrames} кадров).\n` +
+          `Попробуй ещё раз:`
         );
         return;
       }
 
-      await ctx.reply("тП│ ╨Ч╨░╨│╤А╤Г╨╢╨░╤О ╨▓╨╕╨┤╨╡╨╛ ╨▓ ╤Е╤А╨░╨╜╨╕╨╗╨╕╤Й╨╡...");
+      await ctx.reply("⏳ Загружаю видео в хранилище...");
 
       try {
-        // ╨б╨║╨░╤З╨╕╨▓╨░╨╡╨╝ ╨▓╨╕╨┤╨╡╨╛ (╨╗╨╕╨▒╨╛ ╨╕╨╖ Telegram, ╨╗╨╕╨▒╨╛ ╨┐╨╛ URL)
+        // Скачиваем видео (либо из Telegram, либо по URL)
         let buffer: Buffer;
         if (pending.fileUrl) {
-          // ╨Ч╨░╨│╤А╤Г╨╢╨░╨╡╨╝ ╨┐╨╛ URL
+          // Загружаем по URL
           console.log(`[Bot] Downloading video from URL: ${pending.fileUrl}`);
           const result = await downloadFileFromUrl(pending.fileUrl);
           buffer = result.buffer;
         } else if (pending.fileId) {
-          // ╨Ч╨░╨│╤А╤Г╨╢╨░╨╡╨╝ ╨╕╨╖ Telegram
+          // Загружаем из Telegram
           console.log(`[Bot] Downloading video from Telegram: ${pending.fileId}`);
           const result = await downloadTelegramFile(bot, pending.fileId);
           buffer = result.buffer;
@@ -1350,14 +1350,14 @@ export function createBot(): Telegraf {
           throw new Error("No file source specified (fileId or fileUrl)");
         }
 
-        // ╨У╨╡╨╜╨╡╤А╨╕╤А╤Г╨╡╨╝ ID ╤Б╤Ж╨╡╨╜╤Л
+        // Генерируем ID сцены
         const sceneId = `scene_${Date.now()}`;
         const s3Key = `scenes/${sceneId}.mp4`;
 
-        // ╨Ч╨░╨│╤А╤Г╨╢╨░╨╡╨╝ ╨▓ S3
+        // Загружаем в S3
         await storage.upload(s3Key, buffer, "video/mp4");
 
-        // ╨д╨╛╤А╨╝╨╕╤А╤Г╨╡╨╝ cueJson ╨Т ╨Ъ╨Р╨Ф╨а╨Р╨е (╨╜╨╛╨▓╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В!)
+        // Формируем cueJson В КАДРАХ (новый формат!)
         const cueJson = JSON.stringify(
           cues.map((c, i) => ({
             roleIndex: i,
@@ -1366,7 +1366,7 @@ export function createBot(): Telegraf {
           }))
         );
 
-        // ╨б╨╛╨╖╨┤╨░╤С╨╝ ╨╖╨░╨┐╨╕╤Б╤М ╨▓ ╨▒╨░╨╖╨╡
+        // Создаём запись в базе
         await prisma.scene.create({
           data: {
             id: sceneId,
@@ -1380,25 +1380,25 @@ export function createBot(): Telegraf {
           },
         });
 
-        // ╨Ю╤З╨╕╤Й╨░╨╡╨╝ ╤Б╨╛╤Б╤В╨╛╤П╨╜╨╕╨╡
+        // Очищаем состояние
         await botState.deletePendingScene(userId);
 
-        // ╨Я╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╨╕ ╨║╨░╨┤╤А╤Л ╨╕ ╤Б╨╡╨║╤Г╨╜╨┤╤Л
+        // Показываем и кадры и секунды
         const fps = pending.fps;
         const cueInfo = cues.map((c, i) => {
           const startSec = (c.startFrame / fps).toFixed(2);
           const endSec = (c.endFrame / fps).toFixed(2);
-          return `  ╨Ш╨│╤А╨╛╨║ ${i + 1}: ╨║╨░╨┤╤А╤Л ${c.startFrame}-${c.endFrame} (${startSec}s тАФ ${endSec}s)`;
+          return `  Игрок ${i + 1}: кадры ${c.startFrame}-${c.endFrame} (${startSec}s — ${endSec}s)`;
         }).join("\n");
 
         await ctx.reply(
-          `тЬЕ ╨б╤Ж╨╡╨╜╨░ ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨░!\n\n` +
-          `ЁЯУЭ ╨Э╨░╨╖╨▓╨░╨╜╨╕╨╡: ${pending.title}\n` +
-          `ЁЯЖФ ID: ${sceneId}\n` +
-          `тП▒ ╨Ф╨╗╨╕╤В╨╡╨╗╤М╨╜╨╛╤Б╤В╤М: ${pending.duration}s\n` +
-          `ЁЯОЮ FPS: ${fps}\n` +
-          `ЁЯОн ╨а╨╡╨┐╨╗╨╕╨║: ${cues.length}\n\n` +
-          `╨в╨░╨╣╨╝╨╕╨╜╨│╨╕:\n${cueInfo}`,
+          `✅ Сцена добавлена!\n\n` +
+          `📝 Название: ${pending.title}\n` +
+          `🆔 ID: ${sceneId}\n` +
+          `⏱ Длительность: ${pending.duration}s\n` +
+          `🎞 FPS: ${fps}\n` +
+          `🎭 Реплик: ${cues.length}\n\n` +
+          `Тайминги:\n${cueInfo}`,
           { reply_markup: { remove_keyboard: true } }
         );
 
@@ -1406,47 +1406,47 @@ export function createBot(): Telegraf {
         console.error("Scene upload error:", err);
         await botState.deletePendingScene(userId);
         await ctx.reply(
-          "тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕. ╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╨╡╤Й╤С ╤А╨░╨╖.",
+          "❌ Ошибка загрузки. Попробуй ещё раз.",
           { reply_markup: { remove_keyboard: true } }
         );
       }
     }
   });
 
-  // Helper: ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╨┤╨╕╨░╨╗╨╛╨│╨░ ╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╤П
+  // Helper: обработка диалога редактирования
   async function handleEditDialog(ctx: Context, userId: number, text: string, pendingEdit: PendingEdit) {
-    // ╨и╨░╨│ 1: ╨Т╤Л╨▒╨╛╤А ╤Б╤Ж╨╡╨╜╤Л ╨┐╨╛ ID
+    // Шаг 1: Выбор сцены по ID
     if (pendingEdit.step === "awaiting_sceneId") {
       const sceneId = text.trim();
       await startCueEditing(ctx, userId, sceneId);
       return;
     }
 
-    // ╨и╨░╨│ 2: ╨Э╨╛╨▓╤Л╨╡ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨Т ╨Ъ╨Р╨Ф╨а╨Р╨е
+    // Шаг 2: Новые тайминги В КАДРАХ
     if (pendingEdit.step === "awaiting_new_cues" && pendingEdit.scene) {
       const cues = parseCuesFrames(text);
 
       if (!cues) {
         await ctx.reply(
-          "тЭМ ╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В. ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ ╨ж╨Х╨Ы╨л╨Х ╤З╨╕╤Б╨╗╨░ (╨║╨░╨┤╤А╤Л): `0-125, 150-275`\n" +
-          "╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╨╡╤Й╤С ╤А╨░╨╖:",
+          "❌ Неверный формат. Используй ЦЕЛЫЕ числа (кадры): `0-125, 150-275`\n" +
+          "Попробуй ещё раз:",
           { parse_mode: "Markdown" }
         );
         return;
       }
 
-      // ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨▓ ╨┐╤А╨╡╨┤╨╡╨╗╨░╤Е ╨▓╨╕╨┤╨╡╨╛
+      // Проверяем, что тайминги в пределах видео
       const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
       if (maxEndFrame > pendingEdit.scene.totalFrames + pendingEdit.scene.fps) {
         await ctx.reply(
-          `тЭМ ╨Ъ╨░╨┤╤А ${maxEndFrame} ╨▓╤Л╤Е╨╛╨┤╨╕╤В ╨╖╨░ ╨┐╤А╨╡╨┤╨╡╨╗╤Л ╨▓╨╕╨┤╨╡╨╛ (${pendingEdit.scene.totalFrames} ╨║╨░╨┤╤А╨╛╨▓).\n` +
-          `╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╨╡╤Й╤С ╤А╨░╨╖:`
+          `❌ Кадр ${maxEndFrame} выходит за пределы видео (${pendingEdit.scene.totalFrames} кадров).\n` +
+          `Попробуй ещё раз:`
         );
         return;
       }
 
       try {
-        // ╨д╨╛╤А╨╝╨╕╤А╤Г╨╡╨╝ ╨╜╨╛╨▓╤Л╨╣ cueJson ╨Т ╨Ъ╨Р╨Ф╨а╨Р╨е
+        // Формируем новый cueJson В КАДРАХ
         const cueJson = JSON.stringify(
           cues.map((c, i) => ({
             roleIndex: i,
@@ -1455,7 +1455,7 @@ export function createBot(): Telegraf {
           }))
         );
 
-        // ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╤Б╤Ж╨╡╨╜╤Г
+        // Обновляем сцену
         await prisma.scene.update({
           where: { id: pendingEdit.sceneId },
           data: {
@@ -1466,19 +1466,19 @@ export function createBot(): Telegraf {
 
         await botState.deletePendingEdit(userId);
 
-        // ╨Я╨╛╨║╨░╨╖╤Л╨▓╨░╨╡╨╝ ╨╕ ╨║╨░╨┤╤А╤Л ╨╕ ╤Б╨╡╨║╤Г╨╜╨┤╤Л
+        // Показываем и кадры и секунды
         const fps = pendingEdit.scene.fps;
         const cueInfo = cues.map((c, i) => {
           const startSec = (c.startFrame / fps).toFixed(2);
           const endSec = (c.endFrame / fps).toFixed(2);
-          return `  ╨Ш╨│╤А╨╛╨║ ${i + 1}: ╨║╨░╨┤╤А╤Л ${c.startFrame}-${c.endFrame} (${startSec}s тАФ ${endSec}s)`;
+          return `  Игрок ${i + 1}: кадры ${c.startFrame}-${c.endFrame} (${startSec}s — ${endSec}s)`;
         }).join("\n");
 
         await ctx.reply(
-          `тЬЕ ╨в╨░╨╣╨╝╨╕╨╜╨│╨╕ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╤Л!\n\n` +
-          `ЁЯУЭ ╨б╤Ж╨╡╨╜╨░: ${pendingEdit.scene.title}\n` +
-          `ЁЯОн ╨а╨╡╨┐╨╗╨╕╨║: ${cues.length}\n\n` +
-          `╨Э╨╛╨▓╤Л╨╡ ╤В╨░╨╣╨╝╨╕╨╜╨│╨╕:\n${cueInfo}`,
+          `✅ Тайминги обновлены!\n\n` +
+          `📝 Сцена: ${pendingEdit.scene.title}\n` +
+          `🎭 Реплик: ${cues.length}\n\n` +
+          `Новые тайминги:\n${cueInfo}`,
           { reply_markup: { remove_keyboard: true } }
         );
 
@@ -1486,7 +1486,7 @@ export function createBot(): Telegraf {
         console.error("Cue update error:", err);
         await botState.deletePendingEdit(userId);
         await ctx.reply(
-          "тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╤П. ╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣ ╨╡╤Й╤С ╤А╨░╨╖.",
+          "❌ Ошибка обновления. Попробуй ещё раз.",
           { reply_markup: { remove_keyboard: true } }
         );
       }
@@ -1496,7 +1496,7 @@ export function createBot(): Telegraf {
   // Error handling
   bot.catch((err, ctx) => {
     console.error("Bot error:", err);
-    ctx.reply("╨Я╤А╨╛╨╕╨╖╨╛╤И╨╗╨░ ╨╛╤И╨╕╨▒╨║╨░. ╨Я╨╛╨┐╤А╨╛╨▒╤Г╨╣╤В╨╡ ╨┐╨╛╨╖╨╢╨╡.").catch(() => {});
+    ctx.reply("Произошла ошибка. Попробуйте позже.").catch(() => {});
   });
 
   return bot;
@@ -1513,14 +1513,14 @@ export async function sendVideoToCreator(
       tgUserId,
       { url: videoUrl },
       {
-        caption: "ЁЯОм ╨Т╨░╤И ╨┤╤Г╨▒╨╗╤П╨╢ ╨│╨╛╤В╨╛╨▓!\n\n" +
-          `╨Я╨╛╨┤╨╡╨╗╨╕╤В╨╡╤Б╤М ╤Б ╨┤╤А╤Г╨╖╤М╤П╨╝╨╕: t.me/${config.botUsername}?startapp=${sessionId}`,
+        caption: "🎬 Ваш дубляж готов!\n\n" +
+          `Поделитесь с друзьями: t.me/${config.botUsername}?startapp=${sessionId}`,
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: "ЁЯУд ╨Я╨╛╨┤╨╡╨╗╨╕╤В╤М╤Б╤П",
-                switch_inline_query: `╨б╨╝╨╛╤В╤А╨╕ ╨╜╨░╤И ╨┤╤Г╨▒╨╗╤П╨╢! t.me/${config.botUsername}?startapp=${sessionId}`,
+                text: "📤 Поделиться",
+                switch_inline_query: `Смотри наш дубляж! t.me/${config.botUsername}?startapp=${sessionId}`,
               },
             ],
           ],
