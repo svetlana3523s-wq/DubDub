@@ -175,9 +175,9 @@ async function sendViaUpload(
         supports_streaming: true,
         reply_markup: {
               keyboard: [
-                [{ text: "?? ?????? ????" }],
-                [{ text: "?? ?????????????? ? ????" }],
-                [{ text: "?? ?????????? ??????" }],
+                [{ text: "🎮 Играть" }],
+                [{ text: "🔄 Сыграть ещё" }],
+                [{ text: "🏠 В главное меню" }],
               ],
               resize_keyboard: true,
               is_persistent: true,
@@ -287,9 +287,9 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
             supports_streaming: true,
             reply_markup: {
               keyboard: [
-                [{ text: "?? ?????? ????" }],
-                [{ text: "?? ?????????????? ? ????" }],
-                [{ text: "?? ?????????? ??????" }],
+                [{ text: "🎮 Играть" }],
+                [{ text: "🔄 Сыграть ещё" }],
+                [{ text: "🏠 В главное меню" }],
               ],
               resize_keyboard: true,
               is_persistent: true,
