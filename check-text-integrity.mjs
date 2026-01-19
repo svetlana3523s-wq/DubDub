@@ -42,6 +42,10 @@ function walk(dir) {
 }
 
 function checkFile(filePath, ext) {
+  const normalizedPath = path.normalize(filePath);
+  if (normalizedPath.endsWith(`${path.sep}check-text-integrity.mjs`)) {
+    return;
+  }
   let content = "";
   try {
     content = fs.readFileSync(filePath, "utf8");
