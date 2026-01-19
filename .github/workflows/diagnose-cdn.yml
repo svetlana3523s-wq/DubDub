@@ -86,6 +86,12 @@ jobs:
           CDN_BASE="${CDN_BASE%/}"
 
           CDN_DOMAIN="$(echo "$CDN_BASE" | sed -E 's#^https?://##; s#/.*$##')"
+          RESOLVE_IP="$(dig +short @8.8.8.8 "${CDN_DOMAIN}" | head -n 1 || true)"
+          CURL_RESOLVE_OPT=""
+          if [ -n "$RESOLVE_IP" ]; then
+            CURL_RESOLVE_OPT="--resolve ${CDN_DOMAIN}:443:${RESOLVE_IP}"
+            echo "DNS override: ${CDN_DOMAIN} -> ${RESOLVE_IP}"
+          fi
 
           SESSION_ID="$INPUT_SESSION_ID"
           if [ -z "$SESSION_ID" ]; then
@@ -120,21 +126,21 @@ jobs:
 
           echo "CDN check: domain=${CDN_DOMAIN} target=${TARGET_PATH}"
 
-          head_status="$(curl -sS -o /dev/null -D - -I "$URL" | awk 'NR==1{print $2}' || true)"
-          head_ct="$(curl -sS -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print $2}' | tail -n 1)"
-          head_len="$(curl -sS -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{print $2}' | tail -n 1)"
-          head_ar="$(curl -sS -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' | tail -n 1)"
+          head_status="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I "$URL" | awk 'NR==1{print $2}' || true)"
+          head_ct="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print $2}' | tail -n 1)"
+          head_len="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{print $2}' | tail -n 1)"
+          head_ar="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' | tail -n 1)"
 
           echo "HEAD: status=${head_status:-unknown} ct=${head_ct:-missing} len=${head_len:-missing} ar=${head_ar:-missing}"
 
-          range_status="$(curl -sS -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | awk 'NR==1{print $2}' || true)"
-          range_cr="$(curl -sS -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-range"{print $2}' | tail -n 1)"
-          range_ar="$(curl -sS -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' | tail -n 1)"
+          range_status="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | awk 'NR==1{print $2}' || true)"
+          range_cr="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-range"{print $2}' | tail -n 1)"
+          range_ar="$(curl -sS $CURL_RESOLVE_OPT -o /dev/null -D - -I -H 'Range: bytes=0-1023' "$URL" | tr -d '\r' | awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' | tail -n 1)"
 
           echo "RANGE: status=${range_status:-unknown} cr=${range_cr:-missing} ar=${range_ar:-missing}"
 
           tmpfile="$(mktemp)"
-          curl -sS -o "$tmpfile" -H 'Range: bytes=0-1023' "$URL" || true
+          curl -sS $CURL_RESOLVE_OPT -o "$tmpfile" -H 'Range: bytes=0-1023' "$URL" || true
           bytes="$(wc -c < "$tmpfile" 2>/dev/null || echo 0)"
           rm -f "$tmpfile"
           echo "DOWNLOAD_1KB: bytes=${bytes}"
