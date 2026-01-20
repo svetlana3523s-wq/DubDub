@@ -1,6 +1,7 @@
 import { Telegraf } from "telegraf";
 import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { config } from "./config.js";
+import { RU } from "@dubdub/shared";
 import { PrismaClient } from "@prisma/client";
 import { Readable } from "stream";
 import { createWriteStream, createReadStream, unlink } from "fs";
@@ -175,9 +176,9 @@ async function sendViaUpload(
         supports_streaming: true,
         reply_markup: {
               keyboard: [
-                [{ text: "🎮 Играть" }],
-                [{ text: "🔄 Сыграть ещё" }],
-                [{ text: "🏠 В главное меню" }],
+                [{ text: RU.worker.telegramKeyboard.play }],
+                [{ text: RU.worker.telegramKeyboard.playAgain }],
+                [{ text: RU.worker.telegramKeyboard.mainMenu }],
               ],
               resize_keyboard: true,
               is_persistent: true,
@@ -237,7 +238,7 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
       throw new Error(`RenderSend not found for render ${render.id}, user ${telegramUserId}`);
     }
 
-    const caption = `🎬 Ваш дубляж ${render.session.task ? `"${render.session.task}"` : ""}\n\nСоздано в @${config.botUsername}`;
+    const caption = RU.worker.sendCaption(render.session.task, config.botUsername);
 
     // Get file size (HEAD request to S3)
     const sizeCheckStartTime = Date.now();
@@ -261,7 +262,7 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
         where: { id: renderSend.id },
         data: {
           status: "too_large",
-          error: `Файл слишком большой (${fileSizeMB}MB). Максимум 50MB.`,
+          error: RU.worker.tooLargeError(fileSizeMB),
         },
       });
       throw new Error(`File too large: ${fileSizeMB}MB (max 50MB)`);
@@ -269,7 +270,7 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
 
     // For all files <=50MB, use upload method (download to temp file, then upload)
     const publicBaseUrl = getPublicBaseUrl();
-    const cdnUrl = publicBaseUrl ? `${publicBaseUrl}/renders/${sessionId}.mp4` : "";
+    const cdnUrl = publicBaseUrl ? `${publicBaseUrl}/renders/${sessionId}.mp4?v=${render.id}` : "";
     console.log(`[SEND-TELEGRAM-CDN enabled] publicBaseUrl=${publicBaseUrl || "<empty>"} cdnUrl=${cdnUrl || "<empty>"} sessionId=${sessionId}`);
     let sentViaCdn = false;
 
@@ -287,9 +288,9 @@ export async function sendVideoToTelegram(input: SendTelegramInput): Promise<voi
             supports_streaming: true,
             reply_markup: {
               keyboard: [
-                [{ text: "🎮 Играть" }],
-                [{ text: "🔄 Сыграть ещё" }],
-                [{ text: "🏠 В главное меню" }],
+                [{ text: RU.worker.telegramKeyboard.play }],
+                [{ text: RU.worker.telegramKeyboard.playAgain }],
+                [{ text: RU.worker.telegramKeyboard.mainMenu }],
               ],
               resize_keyboard: true,
               is_persistent: true,
