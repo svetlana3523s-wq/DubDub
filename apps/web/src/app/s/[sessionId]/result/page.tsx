@@ -36,7 +36,8 @@ export default function ResultPage({ params }: PageProps) {
   const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
-  const [showNewSceneConfirm, setShowNewSceneConfirm] = useState<"sameScene" | "newScene" | null>(null);
+  const [lastStatusAt, setLastStatusAt] = useState<number | null>(null);
+  const [statusStale, setStatusStale] = useState(false);
   
   // Multiplayer replay confirmation
   const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ pending: false });
@@ -45,7 +46,6 @@ export default function ResultPage({ params }: PageProps) {
 
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
-  const effectiveSendStatus = sendStatus || (sent ? "sent" : sending ? "sending" : null);
 
   // Track render error count for retry logic
   const [renderErrorCount, setRenderErrorCount] = useState(0);
@@ -55,11 +55,16 @@ export default function ResultPage({ params }: PageProps) {
   const sendStatusPollAttemptRef = useRef<number>(0);
   const sendStatusPollStartTimeRef = useRef<number>(0);
   const sendStatusPollInProgressRef = useRef<boolean>(false);
+  const statusStaleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopSendStatusPolling = useCallback(() => {
     if (sendStatusPollTimeoutRef.current) {
       clearTimeout(sendStatusPollTimeoutRef.current);
       sendStatusPollTimeoutRef.current = null;
+    }
+    if (statusStaleTimeoutRef.current) {
+      clearTimeout(statusStaleTimeoutRef.current);
+      statusStaleTimeoutRef.current = null;
     }
     sendStatusPollInProgressRef.current = false;
   }, []);
@@ -71,7 +76,7 @@ export default function ResultPage({ params }: PageProps) {
 
       sendStatusPollInProgressRef.current = true;
       setSending(true);
-      setSendStatus("sending");
+      setSendStatus(null);
       setSendError(null);
       setRetryAfterSeconds(null);
       setCountdown(null);
@@ -106,6 +111,15 @@ export default function ResultPage({ params }: PageProps) {
       const pollSendStatus = async () => {
         try {
           const statusResult = await api.getSendStatus(initData, sessionId);
+          const now = Date.now();
+          setLastStatusAt(now);
+          setStatusStale(false);
+          if (statusStaleTimeoutRef.current) {
+            clearTimeout(statusStaleTimeoutRef.current);
+          }
+          statusStaleTimeoutRef.current = setTimeout(() => {
+            setStatusStale(true);
+          }, 20000);
           setSendStatus(statusResult.status);
 
           if (statusResult.status === "rate_limited") {
@@ -142,6 +156,14 @@ export default function ResultPage({ params }: PageProps) {
           }
         } catch (err) {
           console.error("Poll send status failed:", err);
+          stopSendStatusPolling();
+          setSendStatus("unknown");
+          setSending(false);
+          setSendError(RU.web.result.sendStatusFailed);
+          setRetryAfterSeconds(null);
+          setCountdown(null);
+          setStatusStale(true);
+          return;
         }
 
         scheduleNext();
@@ -293,6 +315,15 @@ export default function ResultPage({ params }: PageProps) {
       try {
         const statusResult = await api.getSendStatus(initData, sessionId);
         if (cancelled) return;
+        const now = Date.now();
+        setLastStatusAt(now);
+        setStatusStale(false);
+        if (statusStaleTimeoutRef.current) {
+          clearTimeout(statusStaleTimeoutRef.current);
+        }
+        statusStaleTimeoutRef.current = setTimeout(() => {
+          setStatusStale(true);
+        }, 20000);
         setSendStatus(statusResult.status);
 
         if (statusResult.status === "sent") {
@@ -336,7 +367,13 @@ export default function ResultPage({ params }: PageProps) {
           startSendStatusPolling(3000);
         }
       } catch {
-        // ignore init polling errors
+        stopSendStatusPolling();
+        setSendStatus("unknown");
+        setSending(false);
+        setSendError(RU.web.result.sendStatusFailed);
+        setRetryAfterSeconds(null);
+        setCountdown(null);
+        setStatusStale(true);
       }
     };
 
@@ -347,14 +384,8 @@ export default function ResultPage({ params }: PageProps) {
     };
   }, [isReady, initData, render?.status, sessionId, startSendStatusPolling, stopSendStatusPolling]);
 
-  const handleReplay = async (mode: "sameScene" | "newScene", skipConfirm = false) => {
+  const handleReplay = async (mode: "sameScene" | "newScene") => {
     if (!initData || replaying) return;
-    
-    // Show confirmation only if video was NOT sent
-    if (!sent && !skipConfirm) {
-      setShowNewSceneConfirm(mode);
-      return;
-    }
     
     setReplaying(mode);
     
@@ -368,12 +399,10 @@ export default function ResultPage({ params }: PageProps) {
           await api.replaySession(initData, sessionId, mode);
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
           setSent(false);
-          setShowNewSceneConfirm(null);
           window.location.href = `/s/${sessionId}`;
         } else if (result.waitingForConfirmation) {
           // Multiplayer - waiting for confirmation
           setWaitingForConfirmation(true);
-          setShowNewSceneConfirm(null);
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
         }
       } else {
@@ -381,7 +410,6 @@ export default function ResultPage({ params }: PageProps) {
         await api.replaySession(initData, sessionId, mode);
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
         setSent(false);
-        setShowNewSceneConfirm(null);
         window.location.href = `/s/${sessionId}`;
       }
     } catch (err) {
@@ -458,6 +486,8 @@ export default function ResultPage({ params }: PageProps) {
     );
   }
 
+  const effectiveSendStatus = sendStatus ?? (sent ? "sent" : null);
+
   return (
     <div className="flex-1 flex flex-col p-6">
       <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full space-y-6">
@@ -524,8 +554,13 @@ export default function ResultPage({ params }: PageProps) {
               </p>
             ) : sendError ? (
               <p className="text-red-400">{sendError}</p>
-            ) : (
+            ) : effectiveSendStatus === "queued" || effectiveSendStatus === "sending" ? (
               <p>{RU.web.result.sendStatusSending}</p>
+            ) : (
+              <p>Проверяем статус отправки…</p>
+            )}
+            {statusStale && (
+              <p className="text-yellow-400 mt-1">Статус давно не обновлялся.</p>
             )}
           </div>
 
@@ -570,33 +605,6 @@ export default function ResultPage({ params }: PageProps) {
             </button>
           </div>
         </div>
-
-        {/* "Unsent video" Confirmation Dialog */}
-        {showNewSceneConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
-            <div className="card max-w-sm w-full space-y-4 animate-slide-up">
-              <div className="text-center">
-                <div className="text-4xl mb-3">{RU.web.result.warningEmoji()}</div>
-                <h3 className="text-lg font-bold mb-2">
-                  {showNewSceneConfirm === "newScene"
-                    ? RU.web.result.confirmTitleNew
-                    : RU.web.result.confirmTitleSame}
-                </h3>
-                <p className="text-sm text-tg-hint">{RU.web.result.confirmBody}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setShowNewSceneConfirm(null)}
-                  className="btn-secondary"
-                >{RU.web.result.confirmCancel}</button>
-                <button
-                  onClick={() => handleReplay(showNewSceneConfirm, true)}
-                  className="btn-primary"
-                >{RU.web.result.confirmOk}</button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Multiplayer Replay Confirmation Dialog (for other player) */}
         {replayStatus.pending && !replayStatus.isRequester && !replayStatus.confirmed && (
