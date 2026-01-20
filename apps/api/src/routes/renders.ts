@@ -12,7 +12,7 @@ export const rendersRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: authMiddleware,
       config: {
         rateLimit: {
-          max: 600, // Higher limit for status polling (600 req/min)
+          max: 1200, // Higher limit for status polling (1200 req/min)
           timeWindow: "1 minute",
         },
       },

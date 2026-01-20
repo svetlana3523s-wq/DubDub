@@ -17,6 +17,7 @@ const fastify = Fastify({
   logger: {
     level: "info",
   },
+  trustProxy: true,
   bodyLimit: 500 * 1024 * 1024, // 500 MB for video uploads
   requestTimeout: 600000, // 10 minutes for large file uploads
   connectionTimeout: 600000, // 10 minutes

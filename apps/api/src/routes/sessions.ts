@@ -313,7 +313,10 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
   // Get session state
   fastify.get<{ Params: { id: string } }>(
     "/sessions/:id",
-    { preHandler: authMiddleware },
+    {
+      preHandler: authMiddleware,
+      config: { rateLimit: { max: 1200, timeWindow: "1 minute" } },
+    },
     async (request, reply): Promise<SessionStateResponse> => {
       const { id } = request.params;
       const user = request.tgUser;
@@ -1017,7 +1020,10 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
   // Get replay request status
   fastify.get<{ Params: { id: string } }>(
     "/sessions/:id/replay-status",
-    { preHandler: authMiddleware },
+    {
+      preHandler: authMiddleware,
+      config: { rateLimit: { max: 1200, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const { id } = request.params;
       const user = request.tgUser;
