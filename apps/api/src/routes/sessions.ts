@@ -315,7 +315,14 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     "/sessions/:id",
     {
       preHandler: authMiddleware,
-      config: { rateLimit: { max: 1200, timeWindow: "1 minute" } },
+      config: {
+        rateLimit: {
+          max: 1200,
+          timeWindow: "1 minute",
+          keyGenerator: (req) =>
+            req.tgUser?.id ? `tg:${req.tgUser.id}` : `ip:${req.ip}`,
+        },
+      },
     },
     async (request, reply): Promise<SessionStateResponse> => {
       const { id } = request.params;
@@ -1022,7 +1029,14 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     "/sessions/:id/replay-status",
     {
       preHandler: authMiddleware,
-      config: { rateLimit: { max: 1200, timeWindow: "1 minute" } },
+      config: {
+        rateLimit: {
+          max: 1200,
+          timeWindow: "1 minute",
+          keyGenerator: (req) =>
+            req.tgUser?.id ? `tg:${req.tgUser.id}` : `ip:${req.ip}`,
+        },
+      },
     },
     async (request, reply) => {
       const { id } = request.params;
