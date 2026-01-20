@@ -59,6 +59,7 @@ export default function ResultPage({ params }: PageProps) {
   const sendStatusPollInProgressRef = useRef<boolean>(false);
   const statusStaleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const debugLongPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debugLongPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopSendStatusPolling = useCallback(() => {
     if (sendStatusPollTimeoutRef.current) {
