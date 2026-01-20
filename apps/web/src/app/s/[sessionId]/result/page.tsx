@@ -40,6 +40,7 @@ export default function ResultPage({ params }: PageProps) {
   const [statusStale, setStatusStale] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [debugEnabled, setDebugEnabled] = useState(false);
+  const [sessionRateLimitCountdown, setSessionRateLimitCountdown] = useState<number | null>(null);
   
   // Multiplayer replay confirmation
   const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ pending: false });
@@ -59,6 +60,7 @@ export default function ResultPage({ params }: PageProps) {
   const sendStatusPollInProgressRef = useRef<boolean>(false);
   const statusStaleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const debugLongPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionRateLimitUntilRef = useRef<number>(0);
 
   const stopSendStatusPolling = useCallback(() => {
     if (sendStatusPollTimeoutRef.current) {
@@ -214,9 +216,15 @@ export default function ResultPage({ params }: PageProps) {
         executeConfirmedReplay();
       }
     } catch (err) {
+      const retryAfter = getRetryAfterSeconds(err);
+      if (retryAfter !== null) {
+        sessionRateLimitUntilRef.current = Date.now() + retryAfter * 1000;
+        setSessionRateLimitCountdown(retryAfter);
+        return;
+      }
       console.error("Fetch replay status failed:", err);
     }
-  }, [initData, sessionId, executeConfirmedReplay]);
+  }, [initData, sessionId, executeConfirmedReplay, getRetryAfterSeconds]);
 
   // Countdown timer for rate_limited status
   useEffect(() => {
@@ -249,6 +257,15 @@ export default function ResultPage({ params }: PageProps) {
     }
   };
 
+  const getRetryAfterSeconds = (err: any) => {
+    const status = err?.status;
+    const retryAfter = err?.retryAfterSeconds;
+    if (status === 429) {
+      return typeof retryAfter === "number" && retryAfter > 0 ? retryAfter : 10;
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (countdown === null || countdown <= 0) {
       setCountdown(null);
@@ -266,6 +283,24 @@ export default function ResultPage({ params }: PageProps) {
 
     return () => clearInterval(timer);
   }, [countdown, retryAfterSeconds]);
+
+  useEffect(() => {
+    if (sessionRateLimitCountdown === null || sessionRateLimitCountdown <= 0) {
+      setSessionRateLimitCountdown(null);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setSessionRateLimitCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [sessionRateLimitCountdown]);
 
   useEffect(() => {
   if (!isReady || !initData) return;
@@ -294,6 +329,9 @@ export default function ResultPage({ params }: PageProps) {
 
     // Poll for replay status (for multiplayer) and render status
     const interval = setInterval(async () => {
+      if (Date.now() < sessionRateLimitUntilRef.current) {
+        return;
+      }
       try {
         // Check session status first - if not "ready", replay was executed, redirect both players
         const sessionData = await api.getSession(initData, sessionId);
@@ -327,8 +365,14 @@ export default function ResultPage({ params }: PageProps) {
             setRender(data);
           }
         }
-      } catch {
-        // ignore network errors
+      } catch (err) {
+        const retryAfter = getRetryAfterSeconds(err);
+        if (retryAfter !== null) {
+          sessionRateLimitUntilRef.current = Date.now() + retryAfter * 1000;
+          setSessionRateLimitCountdown(retryAfter);
+          return;
+        }
+        // ignore other network errors
       }
     }, 5000); // 5 seconds to avoid rate limit and give FFmpeg time
 
@@ -337,7 +381,7 @@ export default function ResultPage({ params }: PageProps) {
       // Cleanup send status polling on unmount
       stopSendStatusPolling();
     };
-  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus, stopSendStatusPolling]);
+  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus, stopSendStatusPolling, getRetryAfterSeconds]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -595,6 +639,11 @@ export default function ResultPage({ params }: PageProps) {
             )}
             {statusStale && (
               <p className="text-yellow-400 mt-1">Статус давно не обновлялся.</p>
+            )}
+            {sessionRateLimitCountdown !== null && (
+              <p className="text-yellow-400 mt-1">
+                Сервер ограничил скорость, повторим через {sessionRateLimitCountdown} сек.
+              </p>
             )}
             {showDebug && (
               <p className="text-tg-hint mt-1">

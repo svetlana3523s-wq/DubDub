@@ -27,7 +27,8 @@ class ApiError extends Error {
   constructor(
     message: string,
     public code?: string,
-    public status?: number
+    public status?: number,
+    public retryAfterSeconds?: number
   ) {
     super(message);
     this.name = "ApiError";
@@ -73,12 +74,15 @@ async function request<T>(
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    const retryAfterRaw = res.headers.get("retry-after");
+    const retryAfterSeconds = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : undefined;
     console.error("[API] Request error", {
       path,
       url,
       status: res.status,
       code: data.code,
       error: data.error,
+      retryAfterSeconds,
       body: data,
     });
     lastApiError = {
@@ -88,11 +92,13 @@ async function request<T>(
       code: data.code,
       error: data.error,
       errorMessage: data.error || `HTTP ${res.status}`,
+      retryAfterSeconds,
     };
     throw new ApiError(
       data.error || `HTTP ${res.status}`,
       data.code,
-      res.status
+      res.status,
+      retryAfterSeconds
     );
   }
 
