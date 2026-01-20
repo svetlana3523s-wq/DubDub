@@ -31,6 +31,7 @@ export default function ResultPage({ params }: PageProps) {
   const [cacheTimestamp] = useState(() => Date.now());
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sendStatus, setSendStatus] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -44,6 +45,7 @@ export default function ResultPage({ params }: PageProps) {
 
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
+  const effectiveSendStatus = sendStatus || (sent ? "sent" : sending ? "sending" : null);
 
   // Track render error count for retry logic
   const [renderErrorCount, setRenderErrorCount] = useState(0);
@@ -69,6 +71,7 @@ export default function ResultPage({ params }: PageProps) {
 
       sendStatusPollInProgressRef.current = true;
       setSending(true);
+      setSendStatus("sending");
       setSendError(null);
       setRetryAfterSeconds(null);
       setCountdown(null);
@@ -103,6 +106,7 @@ export default function ResultPage({ params }: PageProps) {
       const pollSendStatus = async () => {
         try {
           const statusResult = await api.getSendStatus(initData, sessionId);
+          setSendStatus(statusResult.status);
 
           if (statusResult.status === "rate_limited") {
             const retryAfter = statusResult.retryAfterSeconds || 60;
@@ -111,6 +115,7 @@ export default function ResultPage({ params }: PageProps) {
             setSendError(null);
           } else if (statusResult.status === "sent") {
             stopSendStatusPolling();
+            setSendStatus("sent");
             setSent(true);
             setSending(false);
             setSendError(null);
@@ -124,6 +129,7 @@ export default function ResultPage({ params }: PageProps) {
                 ? RU.web.result.sendStatusTooLarge
                 : RU.web.result.sendStatusFailed;
             stopSendStatusPolling();
+            setSendStatus(statusResult.status);
             setSending(false);
             setSendError(errorMessage);
             setRetryAfterSeconds(null);
@@ -287,9 +293,11 @@ export default function ResultPage({ params }: PageProps) {
       try {
         const statusResult = await api.getSendStatus(initData, sessionId);
         if (cancelled) return;
+        setSendStatus(statusResult.status);
 
         if (statusResult.status === "sent") {
           stopSendStatusPolling();
+          setSendStatus("sent");
           setSent(true);
           setSending(false);
           setSendError(null);
@@ -304,6 +312,7 @@ export default function ResultPage({ params }: PageProps) {
                 ? RU.web.result.sendStatusTooLarge
                 : RU.web.result.sendStatusFailed;
           stopSendStatusPolling();
+          setSendStatus(statusResult.status);
           setSending(false);
           setSendError(errorMessage);
           setRetryAfterSeconds(null);
@@ -316,6 +325,7 @@ export default function ResultPage({ params }: PageProps) {
           statusResult.status === "sending" ||
           statusResult.status === "rate_limited"
         ) {
+          setSendStatus(statusResult.status);
           if (statusResult.status === "rate_limited") {
             const retryAfter = statusResult.retryAfterSeconds || 60;
             setRetryAfterSeconds(retryAfter);
@@ -504,11 +514,11 @@ export default function ResultPage({ params }: PageProps) {
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
           {/* Delivery status */}
           <div className="card text-center">
-            {sent ? (
+            {effectiveSendStatus === "sent" ? (
               <p className="text-green-500">
                 {RU.web.result.sendStatusSent}
               </p>
-            ) : retryAfterSeconds !== null && countdown !== null ? (
+            ) : effectiveSendStatus === "rate_limited" && retryAfterSeconds !== null && countdown !== null ? (
               <p className="text-yellow-400">
                 {RU.web.result.sendStatusRateLimited(countdown)}
               </p>
