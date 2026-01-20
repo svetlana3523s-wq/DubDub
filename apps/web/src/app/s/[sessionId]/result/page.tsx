@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -39,6 +39,7 @@ export default function ResultPage({ params }: PageProps) {
   const [lastStatusAt, setLastStatusAt] = useState<number | null>(null);
   const [statusStale, setStatusStale] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [debugEnabled, setDebugEnabled] = useState(false);
   
   // Multiplayer replay confirmation
   const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ pending: false });
@@ -57,6 +58,7 @@ export default function ResultPage({ params }: PageProps) {
   const sendStatusPollStartTimeRef = useRef<number>(0);
   const sendStatusPollInProgressRef = useRef<boolean>(false);
   const statusStaleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debugLongPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopSendStatusPolling = useCallback(() => {
     if (sendStatusPollTimeoutRef.current) {
@@ -220,6 +222,32 @@ export default function ResultPage({ params }: PageProps) {
   useEffect(() => {
     setDebugMode(new URLSearchParams(window.location.search).has("debug"));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (debugLongPressTimeoutRef.current) {
+        clearTimeout(debugLongPressTimeoutRef.current);
+        debugLongPressTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleDebugPressStart = () => {
+    if (debugEnabled) return;
+    if (debugLongPressTimeoutRef.current) {
+      clearTimeout(debugLongPressTimeoutRef.current);
+    }
+    debugLongPressTimeoutRef.current = setTimeout(() => {
+      setDebugEnabled(true);
+    }, 3000);
+  };
+
+  const handleDebugPressEnd = () => {
+    if (debugLongPressTimeoutRef.current) {
+      clearTimeout(debugLongPressTimeoutRef.current);
+      debugLongPressTimeoutRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (countdown === null || countdown <= 0) {
@@ -492,6 +520,7 @@ export default function ResultPage({ params }: PageProps) {
   }
 
   const effectiveSendStatus = sendStatus ?? (sent ? "sent" : null);
+  const showDebug = debugMode || debugEnabled;
 
   return (
     <div className="flex-1 flex flex-col p-6">
@@ -567,7 +596,7 @@ export default function ResultPage({ params }: PageProps) {
             {statusStale && (
               <p className="text-yellow-400 mt-1">Статус давно не обновлялся.</p>
             )}
-            {debugMode && (
+            {showDebug && (
               <p className="text-tg-hint mt-1">
                 {`Last API error: ${(() => {
                   const last = getLastApiError();
@@ -585,6 +614,10 @@ export default function ResultPage({ params }: PageProps) {
                     <button
             type="button"
             onClick={() => window.alert(RU.web.result.gameId(sessionId))}
+            onPointerDown={handleDebugPressStart}
+            onPointerUp={handleDebugPressEnd}
+            onPointerLeave={handleDebugPressEnd}
+            onPointerCancel={handleDebugPressEnd}
             className="w-full btn-secondary"
           >
             {RU.web.result.showGameId}
