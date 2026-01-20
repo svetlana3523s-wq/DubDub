@@ -226,6 +226,15 @@ export default function ResultPage({ params }: PageProps) {
     }
   }, [initData, sessionId, executeConfirmedReplay, getRetryAfterSeconds]);
 
+  const getRetryAfterSeconds = (err: any) => {
+    const status = err?.status;
+    const retryAfter = err?.retryAfterSeconds;
+    if (status === 429) {
+      return typeof retryAfter === "number" && retryAfter > 0 ? retryAfter : 10;
+    }
+    return null;
+  };
+
   // Countdown timer for rate_limited status
   useEffect(() => {
     setDebugMode(new URLSearchParams(window.location.search).has("debug"));
@@ -255,15 +264,6 @@ export default function ResultPage({ params }: PageProps) {
       clearTimeout(debugLongPressTimeoutRef.current);
       debugLongPressTimeoutRef.current = null;
     }
-  };
-
-  const getRetryAfterSeconds = (err: any) => {
-    const status = err?.status;
-    const retryAfter = err?.retryAfterSeconds;
-    if (status === 429) {
-      return typeof retryAfter === "number" && retryAfter > 0 ? retryAfter : 10;
-    }
-    return null;
   };
 
   useEffect(() => {
