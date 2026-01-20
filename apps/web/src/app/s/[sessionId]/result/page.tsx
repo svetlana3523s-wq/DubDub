@@ -203,6 +203,15 @@ export default function ResultPage({ params }: PageProps) {
     }
   }, [initData, sessionId, render]);
 
+  const getRetryAfterSeconds = (err: any) => {
+    const status = err?.status;
+    const retryAfter = err?.retryAfterSeconds;
+    if (status === 429) {
+      return typeof retryAfter === "number" && retryAfter > 0 ? retryAfter : 10;
+    }
+    return null;
+  };
+
   // Fetch replay status and session status
   const fetchReplayStatus = useCallback(async () => {
     if (!initData) return;
@@ -225,15 +234,6 @@ export default function ResultPage({ params }: PageProps) {
       console.error("Fetch replay status failed:", err);
     }
   }, [initData, sessionId, executeConfirmedReplay, getRetryAfterSeconds]);
-
-  const getRetryAfterSeconds = (err: any) => {
-    const status = err?.status;
-    const retryAfter = err?.retryAfterSeconds;
-    if (status === 429) {
-      return typeof retryAfter === "number" && retryAfter > 0 ? retryAfter : 10;
-    }
-    return null;
-  };
 
   // Countdown timer for rate_limited status
   useEffect(() => {
