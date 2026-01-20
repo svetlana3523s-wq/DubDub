@@ -207,7 +207,7 @@ export default function ResultPage({ params }: PageProps) {
   }, [countdown, retryAfterSeconds]);
 
   useEffect(() => {
-    if (!isReady || !initData || render?.status !== "ready") return;
+  if (!isReady || !initData) return;
 
     const fetchData = async () => {
       try {
