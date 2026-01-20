@@ -17,6 +17,11 @@ const apiBaseUrlRaw =
   "http://localhost:4000";
 
 const API_URL = apiBaseUrlRaw.replace(/\/+$/, "");
+let lastApiError: any = null;
+
+export function getLastApiError() {
+  return lastApiError;
+}
 
 class ApiError extends Error {
   constructor(
@@ -34,18 +39,56 @@ async function request<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-TG-INIT-DATA": initData,
-      ...options?.headers,
-    },
-  });
+  const url = `${API_URL}${path}`;
+  let res: Response;
+
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-TG-INIT-DATA": initData,
+        ...options?.headers,
+      },
+    });
+  } catch (err) {
+    const errorName = err instanceof Error ? err.name : "FetchError";
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    lastApiError = {
+      ts: Date.now(),
+      path,
+      url,
+      errorName,
+      errorMessage,
+    };
+    console.error("[API] Request failed", {
+      path,
+      url,
+      errorName,
+      errorMessage,
+    });
+    throw err;
+  }
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    console.error("[API] Request error", {
+      path,
+      url,
+      status: res.status,
+      code: data.code,
+      error: data.error,
+      body: data,
+    });
+    lastApiError = {
+      ts: Date.now(),
+      path,
+      status: res.status,
+      code: data.code,
+      error: data.error,
+      errorMessage: data.error || `HTTP ${res.status}`,
+    };
     throw new ApiError(
       data.error || `HTTP ${res.status}`,
       data.code,

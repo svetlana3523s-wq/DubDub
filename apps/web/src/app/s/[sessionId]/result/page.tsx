@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
-import { api } from "@/lib/api";
+import { api, getLastApiError } from "@/lib/api";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { RU } from "@dubdub/shared";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
@@ -38,6 +38,7 @@ export default function ResultPage({ params }: PageProps) {
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
   const [lastStatusAt, setLastStatusAt] = useState<number | null>(null);
   const [statusStale, setStatusStale] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   
   // Multiplayer replay confirmation
   const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ pending: false });
@@ -216,6 +217,10 @@ export default function ResultPage({ params }: PageProps) {
   }, [initData, sessionId, executeConfirmedReplay]);
 
   // Countdown timer for rate_limited status
+  useEffect(() => {
+    setDebugMode(new URLSearchParams(window.location.search).has("debug"));
+  }, []);
+
   useEffect(() => {
     if (countdown === null || countdown <= 0) {
       setCountdown(null);
@@ -561,6 +566,18 @@ export default function ResultPage({ params }: PageProps) {
             )}
             {statusStale && (
               <p className="text-yellow-400 mt-1">Статус давно не обновлялся.</p>
+            )}
+            {debugMode && (
+              <p className="text-tg-hint mt-1">
+                {`Last API error: ${(() => {
+                  const last = getLastApiError();
+                  if (!last) return "none";
+                  const status = last.status ? ` ${last.status}` : "";
+                  const code = last.code ? ` ${last.code}` : "";
+                  const error = last.errorMessage ? ` ${last.errorMessage}` : "";
+                  return `${last.path || "unknown"}${status}${code}${error}`;
+                })()}`}
+              </p>
             )}
           </div>
 
