@@ -1,99 +1,77 @@
-# ОТЧЁТ: автодеплой DubDub (VPS + PM2 + GitHub Actions)
+# AUTODEPLOY_READINESS_REPORT.md
 
-**Дата:** 2026-01-18  
-**Репозиторий:** DubDub  
-**Файл-истина (всегда искать здесь):** `AUTODEPLOY_READINESS_REPORT.md`
+Last updated: 2026-01-21
 
-## 1) Итог
-**STATUS: PASS** — автодеплой работает. Проверка с прод-домена:
-- `https://api.tvotototo.ru/meta/version` → `200` и возвращает JSON (minWebBuildId/recommendedAction/messageRu).
+This document describes the production deployment pipeline (GitHub Actions -> VPS) and the minimal proof checklist. For current incidents, see `CURRENT_STATE.md`.
 
-## 2) Где что лежит (важные файлы)
-- Workflow (CI/CD): `.github/workflows/deploy-prod.yml`
-- Скрипт деплоя на сервере: `scripts/deploy_remote.sh`
-- PM2 ecosystem: `ecosystem.config.cjs`
-- Документация по ручному деплою/контексту: `DEPLOY.md`
-- Эндпоинт меты: `apps/api/src/routes/meta.ts` (регистрируется в `apps/api/src/index.ts`)
+## Status
 
-## 3) Как это работает (коротко)
-1) GitHub Actions собирает монорепо (`pnpm -r build`) и пакует `release.tgz`.
-2) `release.tgz` загружается на VPS в `/tmp/release.tgz`.
-3) По SSH запускается `deploy_remote.sh` (из распакованного релиза), который:
-   - создаёт новый релиз: `DEPLOY_PATH/releases/<timestamp>`
-   - подхватывает `.env` (см. раздел 5)
-   - ставит зависимости (с dev deps для Prisma), делает `db:generate`
-   - миграции Prisma выполняет **только если** есть `prisma/migrations` и оно не пустое
-   - приводит deps к production (`pnpm install --prod --force`)
-   - переключает symlink `DEPLOY_PATH/current` на новый релиз
-   - перезапускает процессы через PM2 из `DEPLOY_PATH/current/ecosystem.config.cjs`
-   - делает локальный smoke-check (не блокирующий): `/health` и `/meta/version` с ретраями
-4) Post-deploy check в GitHub Actions (не блокирующий) проверяет публичные:
-   - `${PROD_API_BASE_URL}/health`
-   - `${PROD_API_BASE_URL}/meta/version`
+STATUS: PASS - Deploy Prod workflow exists and is the primary deployment mechanism.
 
-## 4) GitHub Secrets (имена + что означают)
-Добавляются в GitHub → Settings → Secrets and variables → Actions → Repository secrets.
+## Where things live (prod)
 
-Обязательные:
-- `DEPLOY_HOST` — хост VPS (IP/домен).
-- `DEPLOY_USER` — пользователь SSH.
-- `DEPLOY_SSH_KEY` — приватный SSH ключ (полный текст, включая BEGIN/END).
-- `DEPLOY_PATH` — каталог деплоя на VPS (см. важное ниже).
+- Workflow: `.github/workflows/deploy-prod.yml`
+- Remote deploy script: `scripts/deploy_remote.sh`
+- PM2 config: `ecosystem.config.cjs`
+- Deploy root on VPS: `/var/www/dubdub`
+- Shared env on VPS: `/var/www/dubdub/shared/.env`
+- Active release: `/var/www/dubdub/current` (symlink)
+- Releases dir: `/var/www/dubdub/releases/<timestamp>`
 
-Опциональные:
-- `DEPLOY_PORT` — SSH порт (если не 22).
-- `PROD_API_BASE_URL` — публичная база API для post-deploy check (пример: `https://api.tvotototo.ru`).
+## How Deploy Prod works (high level)
 
-Важно:
-- Значения секретов **не пишем** в репозиторий.
-- В логах Actions секреты должны маскироваться `***`.
+1) GitHub Actions checks out `main` (or the provided input ref).
+2) Builds the monorepo (`pnpm -r build`) and packages `release.tgz`.
+3) Uploads `release.tgz` to VPS: `/tmp/release.tgz`.
+4) Runs `scripts/deploy_remote.sh` on VPS which:
+   - creates a new release dir `releases/<timestamp>`
+   - writes `RELEASE_SHA` into the release dir (if provided)
+   - symlinks `.env` from `shared/.env` (fallback to `/var/www/dubdub/.env`)
+   - installs deps (including dev deps for Prisma generate/migrate), then prunes to prod deps
+   - switches `/var/www/dubdub/current` symlink to the new release
+   - restarts PM2 processes using `/var/www/dubdub/current/ecosystem.config.cjs`
+   - performs a local smoke check against `/health` and `/meta/version` (non-blocking)
 
-## 5) Где лежит `.env` на VPS и какие переменные нужны
-`scripts/deploy_remote.sh` ищет env так:
-1) `DEPLOY_PATH/shared/.env` (предпочтительно)  
-2) fallback: `DEPLOY_PATH/.env`
+## GitHub Secrets required
 
-Минимально критичные переменные для запуска (на сервере):
-- `DATABASE_URL` (обязательно для Prisma)
-- `REDIS_URL`
-- `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`
-- `BOT_TOKEN`, `BOT_USERNAME`
-- `API_BASE_URL`, `WEBAPP_URL`
-- `MIN_WEB_BUILD_ID` (для `/meta/version`; если пусто/нет — проверка версии “выключена”)
+- `DEPLOY_HOST` - VPS host/IP
+- `DEPLOY_USER` - SSH user
+- `DEPLOY_SSH_KEY` - private key contents (ed25519)
+- `DEPLOY_PATH` - expected `/var/www/dubdub`
+- `DEPLOY_PORT` - optional, defaults to 22
+- `PROD_API_BASE_URL` - optional, used for post-deploy HTTP checks (e.g. `https://api.tvotototo.ru`)
 
-Для web-сборки (build-time, в CI):
-- `NEXT_PUBLIC_WEB_BUILD_ID` — CI ставит автоматически как `web_<sha12>`
+## Proof checklist (what "OK" means)
 
-## 6) Важная совместимость путей
-В `ecosystem.config.cjs` путь к env зафиксирован как:
-- `/var/www/dubdub/shared/.env`
+From GitHub Actions logs (preferred):
+- "Post-deploy check" shows:
+  - `GET /health` -> 200
+  - `GET /meta/version` -> 200
+- "Post-deploy proof (VPS state)" prints:
+  - `CURRENT_SYMLINK` points to the newest release
+  - `RELEASE_SHA` exists (matches the workflow SHA)
+  - `ss -ltnp | grep :3001` shows API listening
+  - local `curl http://127.0.0.1:3001/health` returns 200
 
-Поэтому **рекомендуется**, чтобы:
-- `DEPLOY_PATH` = `/var/www/dubdub`
+From VPS (AUTO diagnostics only, no edits):
+- `readlink -f /var/www/dubdub/current`
+- `cat /var/www/dubdub/current/RELEASE_SHA` (if present)
+- `pm2 status`
+- `ss -ltnp | grep :3001`
+- `curl -sS -D - http://127.0.0.1:3001/health -o /dev/null | head -n 5`
 
-Если deploy path другой — нужно менять `ecosystem.config.cjs`, иначе PM2 не найдёт env-файл.
+## Common failure modes
 
-## 7) Проверка после деплоя (что считается “ОК”)
-Снаружи (публично):
-- `${PROD_API_BASE_URL}/health` → `200` (иногда первый запрос после рестарта может быть `502`, ретраи это учитывают)
-- `${PROD_API_BASE_URL}/meta/version` → `200` и JSON вида:
-  - `minWebBuildId`: строка или `null`
-  - `recommendedAction`: `"refresh"`
-  - `messageRu`: строка
+- "Green deploy but server still old code"
+  - Check `/var/www/dubdub/current/RELEASE_SHA` and `CURRENT_SYMLINK`.
+  - Ensure PM2 is started from `current/ecosystem.config.cjs` (deploy script deletes & restarts processes).
+- API returns 502 from nginx
+  - Usually API process crashed on startup or port is not listening.
+  - Collect: `pm2 logs dubdub-api`, `ss -ltnp | grep :3001`, `/var/log/nginx/error.log`.
+- Prisma failures (DATABASE_URL missing / migrations)
+  - Ensure `/var/www/dubdub/shared/.env` exists and contains `DATABASE_URL`.
 
-Локально на VPS (делается автоматически в deploy script):
-- `http://127.0.0.1:${API_PORT:-4000}/health`
-- `http://127.0.0.1:${API_PORT:-4000}/meta/version`
+## Ops rule (hard)
 
-## 8) Типовые проблемы (и что они значат)
-- `DEPLOY_PATH: unbound variable` → переменная не передавалась в ssh-скрипт (исправлено).
-- `shared/.env not found` + `DATABASE_URL is not set` → на VPS нет `.env` в ожидаемом месте.
-- `prisma: not found` → ставились только prod deps; для Prisma нужен dev deps (исправлено: ставим dev deps, потом возвращаемся к prod).
-- `Prisma P3005 (db not empty, no migrations)` → `prisma/migrations` пусто (исправлено: migrate deploy пропускается).
-- `Route GET:/meta/version not found` при `health=200` → обычно запущен старый dist/старый PM2 script path; решается перезапуском PM2 из `current` (исправлено: delete+start).
-
-## 9) Откат (rollback) — принцип
-Откат делается переключением `DEPLOY_PATH/current` на предыдущий каталог в `DEPLOY_PATH/releases/` и перезапуском PM2.
-
-## 10) Текущее подтверждение “работает”
-- `/meta/version` на проде отдаёт `200` (проверено пользователем в браузере).
+- No manual editing of files on VPS via SSH/PowerShell.
+- Any change must be done via commits + Deploy Prod workflow, or the deploy script itself.

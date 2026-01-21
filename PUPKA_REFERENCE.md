@@ -1,148 +1,61 @@
-# PUPKA_REFERENCE.md (канон для “пупка”)
-Обновлено: 2026-01-18
+# PUPKA_REFERENCE.md
 
-Этот файл — единая точка правды для оперативных данных (домены, пути, процессы, S3, команды, проверки).
-Правило: если данные меняются — правим сначала здесь, а затем (по необходимости) в `CURRENT_STATE.md` и доках.
+Last updated: 2026-01-21
 
-Приоритет источников при конфликте: `artifacts/*` (пруфы) → `docs/*` → `CURRENT_STATE.md` → “на словах”.
+Single source of truth for the PUPKA coordination assistant. Update this file first, then update `CURRENT_STATE.md` if needed.
 
-Как я (пупка) использую этот файл:
-- на любой вопрос сначала сверяюсь с `PUPKA_REFERENCE.md`;
-- если чего-то нет — ищу в `docs/` и `artifacts/`, затем добавляю сюда (и только потом даю промты CODEX/AUTO).
+## Roles
 
-## 0) Роли и процесс
-- CODEX: код/коммиты/изменения в репо.
-- AUTO: деплой/диагностика на VPS.
-- Пупка (я): читаю репо/артефакты, готовлю точные промты для CODEX/AUTO и чек-лист “пруфов”.
-- Запрет: не править файлы на VPS вручную через SSH/PowerShell (риск поломки кавычек/кодировки). Только git-deploy.
+- User: makes product decisions and validates in Telegram WebView.
+- CODEX: writes code, commits, triggers GitHub Actions deploys.
+- AUTO: VPS diagnostics/proofs only (no manual edits).
+- PUPKA: reads repo/docs/artifacts, produces precise prompts + handoffs, keeps context docs consistent.
 
-## 1) Домены, URL, IP (prod)
-- Site (nginx entry): `https://tvotototo.ru`
+## Production endpoints
+
 - WebApp: `https://app.tvotototo.ru`
 - API: `https://api.tvotototo.ru`
-- CDN (основной): `https://cdn.tvotototo.ru`
-- CDN (тест): `https://cdn-test.tvotototo.ru`
-- VPS IP: `130.49.146.229`
+- Root: `https://tvotototo.ru`
+- CDN (prod): `https://cdn.tvotototo.ru`
+- CDN (test): `https://cdn-test.tvotototo.ru`
 
-## 2) Canonical URL (для проверки в iPhone/Telegram)
-- Пример сессии для тестов: `cmkivu60m000dzb0ner98ko9t`
-- Канонический URL результата:
-  - `https://app.tvotototo.ru/s/cmkivu60m000dzb0ner98ko9t/result`
-  - Source: `artifacts/tg_webapp_canonical_url.txt`
+## VPS basics
 
-## 3) VPS: пути и процессы (prod)
-- Repo: `/var/www/dubdub`
-- API env: `/var/www/dubdub/.env`
-- Web env: `/var/www/dubdub/apps/web/.env`
-- Артефакты на VPS: `/var/www/dubdub/artifacts`
+- Deploy root: `/var/www/dubdub`
+- Shared env: `/var/www/dubdub/shared/.env`
+- Active release: `/var/www/dubdub/current`
+- Processes (PM2): `dubdub-api`, `dubdub-worker`, `dubdub-web`
+- API port (prod): `3001`
 
-PM2 процессы:
-- `dubdub-api` (id часто 0)
-- `dubdub-worker`
-- `dubdub-web` (id встречался 4)
+## What to trust priority
 
-Порты:
-- API (Fastify): `3001`
-- MinIO (legacy/docker): `9000` (и `9001` console)
+1) `artifacts/*` (proofs/logs)
+2) `docs/*`
+3) `CURRENT_STATE.md`
+4) Chat messages (least reliable)
 
-## 4) Storage / S3 (фактический канон)
-Текущая реальность: worker и API читают/пишут медиа в S3-совместимое хранилище (Yandex Object Storage).
+## Current known issue (P0)
 
-S3 параметры (prod, подтверждено логами):
-- `S3_ENDPOINT=https://storage.yandexcloud.net`
-- `S3_REGION=ru-central1`
-- `S3_BUCKET=dubdub-renders-7197`
-- Source: `artifacts/files_proxy_storage_mismatch.txt`
+- Telegram iOS WebView: send-status must update without manual reload.
+- Workaround: same-origin proxy for send-status under `https://app.tvotototo.ru/api/render-send-status/:id`.
+- Ensure polling + no-store are working so status flips to `sent` automatically.
 
-Legacy (исторически было):
-- MinIO endpoint: `http://127.0.0.1:9000` (через nginx на VPS)
-- Бакет MinIO: `dubdub`
-- Примечание: старые доки/диагностики могли считать MinIO “источником истины”, но после миграции сцены/рендеры должны быть в Yandex S3.
+## Debug shortcuts
 
-## 5) Формулы S3 key (канон)
-- Scene: `scenes/scene_<timestamp>_<uuid>.mp4` (в БД `Scene.s3Key`, worker использует именно его)
-- Take: `uploads/<sessionId>/<roleIndex>.webm` (в БД `Take.s3Key`)
-- Render: `renders/<sessionId>.mp4`
-- Source: `docs/media_storage_facts.md`
+- In-app debug line: long-press (3s) on "Show game ID" on the result page.
+- When reporting a bug, include:
+  - sessionId (from "Show game ID")
+  - screenshot with the debug line visible (if present)
+  - whether it was inside Telegram WebView (iOS/Android) or external browser
 
-## 6) /files/renders: nginx routing (важный фикс)
-Симптом: `GET https://tvotototo.ru/files/renders/<sessionId>.mp4` отдаёт 404 `X-Minio-Error-Code: NoSuchKey`, при этом `http://localhost:3001/files/renders/<sessionId>.mp4` = 200.
+## Deploy verification (preferred)
 
-Root cause:
-- nginx проксировал `/files/renders/` на MinIO `9000`, минуя API `3001`.
+- GitHub Actions "Deploy Prod" logs:
+  - Post-deploy HTTP checks: `/health`, `/meta/version`
+  - Post-deploy proof: `CURRENT_SYMLINK`, `RELEASE_SHA`, and `:3001` listener
 
-Фикс:
-- `/files/renders/` → `http://127.0.0.1:3001/files/renders/`
-- отключить кэш для renders (`Cache-Control: no-cache, no-store, must-revalidate`)
-- Source: `docs/files_proxy_routing_rootcause.md`, `docs/files_proxy_routing_fix.md`
-
-## 7) Version Gate (P0 фича)
-Идея: принудительно обновлять фронт в Telegram WebView.
-
-Переменные:
-- Web: `NEXT_PUBLIC_WEB_BUILD_ID` (в `/var/www/dubdub/apps/web/.env`)
-- API: `MIN_WEB_BUILD_ID` (в `/var/www/dubdub/.env`)
-
-Эндпоинт:
-- `GET /meta/version` (API) должен возвращать `minWebBuildId`.
-
-Код (API):
-- `apps/api/src/config.ts`: `minWebBuildId: process.env.MIN_WEB_BUILD_ID || "",`
-- `apps/api/src/routes/meta.ts`: `GET /meta/version`
-- `apps/api/src/index.ts`: `await fastify.register(metaRoutes);`
-
-Пруфы:
-- `artifacts/version_gate_env_proof.txt`
-- `artifacts/version_gate_deploy_proof.txt`
-- `docs/version_gate_deploy_status.md`
-
-Git (origin):
-- `origin/main` сейчас указывает на `cd1d7a8ff5c6ae7a83dfbae2598cb8706b96c71a` (добавляет `/meta/version`).
-- История: `8b8111c56c0c1c8091fdbb930ee8d7a1ec037a16` — фикс `minWebBuildId` (до этого `/meta/version` мог быть `404` из-за отсутствия регистрации routes).
-
-## 8) Telegram send-to-telegram (суть и узкие места)
-- API: `POST /files/renders/:sessionId/send-to-telegram`
-- Polling: `GET /files/renders/:sessionId/send-status`
-- Worker отправляет видео:
-  - маленькие файлы: URL-метод (`sendVideo(... { url })`)
-  - средние: Buffer-метод (`sendVideo(... { source })`)
-- Важно: URL, который уходит в Telegram, исторически был `https://api.tvotototo.ru/files/renders/${sessionId}.mp4`.
-- Source: `TELEGRAM_SEND_DIAGNOSTIC.md`
-
-CDN-опция:
-- План: если CDN совместим (HEAD=200, Range=206, Content-Type `video/mp4`) — отправлять по CDN URL, иначе fallback.
-- Риск: “код есть в src, но нет в dist” из-за неправильной сборки worker; см. `artifacts/cdn_config_runtime.txt`.
-
-## 9) Git-deploy: каноничные команды (для AUTO)
-Чистый обновляющий деплой (без локальных правок на VPS):
-```bash
-cd /var/www/dubdub
-git fetch origin
-git reset --hard origin/main
-pnpm install
-cd apps/api && pnpm build
-pm2 restart dubdub-api --update-env
-```
-
-Проверки (минимум):
-```bash
-curl -sS http://127.0.0.1:3001/meta/version
-curl -sS -D - https://api.tvotototo.ru/meta/version
-pm2 status
-```
-
-## 10) Что держать актуальным (минимальный набор “секретов без секретов”)
-Обновлять здесь при изменениях:
-- домены (`tvotototo.ru`, `api.*`, `app.*`, `cdn.*`)
-- IP VPS
-- пути `/var/www/dubdub/...`
-- PM2 имена/ids
-- S3 endpoint/region/bucket
-- текущий тестовый `sessionId` для воспроизведения проблем
-
-## 11) Кандидаты на “сжать/удалить” (только по подтверждению)
-Дубли по CDN уже удалены:
-- удалено: `docs/cdn_verification.md`, `docs/cdn_verification_report.md`
-
-По “rootcause vs fix”:
-- оставляем оба, но считаем resolved: `docs/files_proxy_routing_rootcause.md`, `docs/files_proxy_routing_fix.md`
+If AUTO needs to verify on VPS (read-only):
+- `readlink -f /var/www/dubdub/current`
+- `cat /var/www/dubdub/current/RELEASE_SHA`
+- `pm2 status`
+- `ss -ltnp | grep :3001`
