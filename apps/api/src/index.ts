@@ -33,6 +33,12 @@ await fastify.register(cors, {
   maxAge: 600,
 });
 
+fastify.addHook("onRequest", async (request, reply) => {
+  if (request.method === "OPTIONS") {
+    return reply.code(204).send();
+  }
+});
+
 // Multipart for file uploads
 await fastify.register(multipart, {
   limits: {
