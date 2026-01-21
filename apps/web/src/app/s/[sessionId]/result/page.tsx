@@ -634,20 +634,20 @@ export default function ResultPage({ params }: PageProps) {
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
           {/* Delivery status */}
           <div className="card text-center">
-            {effectiveSendStatus === "sent" ? (
-              <p className="text-green-500">
-                {RU.web.result.sendStatusSent}
+            <p className="text-green-500">{RU.web.result.sendStatusAssumedSent}</p>
+            {effectiveSendStatus === "rate_limited" &&
+              retryAfterSeconds !== null &&
+              countdown !== null && (
+                <p className="text-yellow-400 mt-1">
+                  {RU.web.result.sendStatusRateLimited(countdown)}
+                </p>
+              )}
+            {(sendError ||
+              effectiveSendStatus === "failed" ||
+              effectiveSendStatus === "too_large") && (
+              <p className="text-red-400 mt-1">
+                {sendError || RU.web.result.sendStatusFailed}
               </p>
-            ) : effectiveSendStatus === "rate_limited" && retryAfterSeconds !== null && countdown !== null ? (
-              <p className="text-yellow-400">
-                {RU.web.result.sendStatusRateLimited(countdown)}
-              </p>
-            ) : sendError ? (
-              <p className="text-red-400">{sendError}</p>
-            ) : effectiveSendStatus === "queued" || effectiveSendStatus === "sending" ? (
-              <p>{RU.web.result.sendStatusSending}</p>
-            ) : (
-              <p>Проверяем статус отправки…</p>
             )}
             {statusStale && (
               <p className="text-yellow-400 mt-1">Статус давно не обновлялся.</p>
@@ -693,7 +693,7 @@ export default function ResultPage({ params }: PageProps) {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => handleReplay("sameScene")}
-              disabled={replaying !== null || waitingForConfirmation}
+              disabled={replaying !== null}
               className="btn-primary disabled:opacity-70"
             >
               {replaying === "sameScene" ? (
@@ -707,7 +707,7 @@ export default function ResultPage({ params }: PageProps) {
             </button>
             <button
               onClick={() => handleReplay("newScene")}
-              disabled={replaying !== null || waitingForConfirmation}
+              disabled={replaying !== null}
               className="btn-primary disabled:opacity-70"
             >
               {replaying === "newScene" ? (
@@ -722,41 +722,6 @@ export default function ResultPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Multiplayer Replay Confirmation Dialog (for other player) */}
-        {replayStatus.pending && !replayStatus.isRequester && !replayStatus.confirmed && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50 animate-fade-in">
-            <div className="card max-w-sm w-full space-y-4 animate-slide-up">
-              <div className="text-center">
-                <div className="text-4xl mb-3">{RU.web.result.replayEmoji()}</div>
-                <h3 className="text-lg font-bold mb-2">
-                  {replayStatus.mode === "newScene"
-                    ? RU.web.result.replayRequestTitleNew
-                    : RU.web.result.replayRequestTitleSame}
-                </h3>
-                <p className="text-sm text-tg-hint">
-                  {RU.web.result.replayRequestBody(
-                    replayStatus.requestedByName || "",
-                    replayStatus.mode === "newScene" ? "newScene" : "sameScene"
-                  )}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleConfirmReplay(false)}
-                  disabled={confirmingReplay}
-                  className="btn-secondary disabled:opacity-70"
-                >{confirmingReplay ? RU.web.result.replayConfirmLoading : RU.web.result.replayConfirmNo}</button>
-                <button
-                  onClick={() => handleConfirmReplay(true)}
-                  disabled={confirmingReplay}
-                  className="btn-primary disabled:opacity-70"
-                >{confirmingReplay ? (
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                  ) : RU.web.result.replayConfirmYes}</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
