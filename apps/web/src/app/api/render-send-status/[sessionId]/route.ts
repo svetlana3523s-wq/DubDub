@@ -21,11 +21,21 @@ export async function GET(
         ...(initData ? { "X-TG-INIT-DATA": initData } : {}),
       },
       cache: "no-store",
+      next: { revalidate: 0 },
     });
 
     const data = await res.json().catch(() => ({}));
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(data, {
+      status: res.status,
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    });
   } catch {
-    return NextResponse.json({ error: "proxy_failed" }, { status: 502 });
+    return NextResponse.json(
+      { error: "proxy_failed" },
+      {
+        status: 502,
+        headers: { "Cache-Control": "no-store, max-age=0" },
+      }
+    );
   }
 }

@@ -200,6 +200,7 @@ export const api = {
         res = await fetch(path, {
           headers: {
             "Content-Type": "application/json",
+            "Cache-Control": "no-store",
             "X-TG-INIT-DATA": initData,
           },
           cache: "no-store",

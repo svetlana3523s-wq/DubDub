@@ -38,6 +38,7 @@ export default function ResultPage({ params }: PageProps) {
   const [replaying, setReplaying] = useState<"sameScene" | "newScene" | null>(null);
   const [lastStatusAt, setLastStatusAt] = useState<number | null>(null);
   const [statusStale, setStatusStale] = useState(false);
+  const [lastPollAt, setLastPollAt] = useState<number | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [sessionRateLimitCountdown, setSessionRateLimitCountdown] = useState<number | null>(null);
@@ -114,6 +115,8 @@ export default function ResultPage({ params }: PageProps) {
       };
 
       const pollSendStatus = async () => {
+        const pollStartedAt = Date.now();
+        setLastPollAt(pollStartedAt);
         try {
           const statusResult = await api.getSendStatus(initData, sessionId);
           const now = Date.now();
@@ -168,6 +171,7 @@ export default function ResultPage({ params }: PageProps) {
           setRetryAfterSeconds(null);
           setCountdown(null);
           setStatusStale(true);
+          setLastPollAt(Date.now());
           return;
         }
 
@@ -392,6 +396,7 @@ export default function ResultPage({ params }: PageProps) {
       try {
         const statusResult = await api.getSendStatus(initData, sessionId);
         if (cancelled) return;
+        setLastPollAt(Date.now());
         const now = Date.now();
         setLastStatusAt(now);
         setStatusStale(false);
@@ -460,6 +465,13 @@ export default function ResultPage({ params }: PageProps) {
       cancelled = true;
     };
   }, [isReady, initData, render?.status, sessionId, startSendStatusPolling, stopSendStatusPolling]);
+
+  useEffect(() => {
+    if (!render || render.status !== "ready") return;
+    if (sent) return;
+    if (sendStatusPollInProgressRef.current) return;
+    startSendStatusPolling(3000);
+  }, [render?.status, sent, startSendStatusPolling]);
 
   const handleReplay = async (mode: "sameScene" | "newScene") => {
     if (!initData || replaying) return;
@@ -655,6 +667,11 @@ export default function ResultPage({ params }: PageProps) {
                   const error = last.errorMessage ? ` ${last.errorMessage}` : "";
                   return `${last.path || "unknown"}${status}${code}${error}`;
                 })()}`}
+              </p>
+            )}
+            {showDebug && (
+              <p className="text-tg-hint mt-1">
+                {`Last send-status poll: ${lastPollAt ? new Date(lastPollAt).toLocaleTimeString() : "never"}`}
               </p>
             )}
           </div>
