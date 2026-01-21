@@ -28,13 +28,9 @@ await fastify.register(cors, {
   origin: true,
   credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "X-TG-INIT-DATA"],
+  allowedHeaders: ["Content-Type", "X-TG-INIT-DATA", "x-tg-init-data"],
   exposedHeaders: ["Retry-After"],
   maxAge: 600,
-});
-
-fastify.options("*", async (_request, reply) => {
-  return reply.code(204).send();
 });
 
 // Multipart for file uploads
