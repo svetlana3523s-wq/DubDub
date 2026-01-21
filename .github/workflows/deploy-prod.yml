@@ -137,7 +137,7 @@ jobs:
           DEPLOY_PATH="$1"
           TMP_DIR="$(mktemp -d)"
           tar -xzf /tmp/release.tgz -C "$TMP_DIR"
-          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "$DEPLOY_PATH"
+          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "$DEPLOY_PATH" "${GITHUB_SHA}"
           rm -rf "$TMP_DIR"
           SSH
 
@@ -175,3 +175,28 @@ jobs:
 
           check "/health"
           check "/meta/version"
+
+      - name: Post-deploy proof (VPS state)
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s -- \"${DEPLOY_PATH}\"" << 'SSH'
+          set -euo pipefail
+          DEPLOY_PATH="$1"
+          echo "DEPLOY_PATH=${DEPLOY_PATH}"
+          echo "CURRENT_SYMLINK=$(readlink -f "${DEPLOY_PATH}/current" 2>/dev/null || echo 'missing')"
+          if [ -f "${DEPLOY_PATH}/current/RELEASE_SHA" ]; then
+            echo "RELEASE_SHA=$(cat "${DEPLOY_PATH}/current/RELEASE_SHA")"
+          else
+            echo "RELEASE_SHA=missing"
+          fi
+          if [ -d "${DEPLOY_PATH}/.git" ]; then
+            cd "${DEPLOY_PATH}"
+            git rev-parse HEAD
+            git log -1 --oneline
+          else
+            echo "No git repo at ${DEPLOY_PATH}"
+          fi
+          pm2 describe dubdub-api | sed -n '1,80p' || true
+          ss -ltnp | grep :3001 || true
+          curl -sS -D - http://127.0.0.1:3001/health -o /dev/null | head -n 5 || true
+          SSH

@@ -3,9 +3,10 @@ set -euo pipefail
 
 TARBALL="${1:-}"
 DEPLOY_PATH="${2:-}"
+RELEASE_SHA="${3:-}"
 
 if [ -z "$TARBALL" ] || [ -z "$DEPLOY_PATH" ]; then
-  echo "Usage: deploy_remote.sh <release.tgz> <deploy_path>"
+  echo "Usage: deploy_remote.sh <release.tgz> <deploy_path> [release_sha]"
   exit 1
 fi
 
@@ -23,6 +24,9 @@ RELEASE_DIR="$RELEASES_DIR/$TIMESTAMP"
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR"
 mkdir -p "$RELEASE_DIR"
 tar -xzf "$TARBALL" -C "$RELEASE_DIR"
+if [ -n "$RELEASE_SHA" ]; then
+  echo "$RELEASE_SHA" > "$RELEASE_DIR/RELEASE_SHA"
+fi
 
 if [ -f "$SHARED_DIR/.env" ]; then
   ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env"
