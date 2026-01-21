@@ -14,8 +14,6 @@ export const rendersRoutes: FastifyPluginAsync = async (fastify) => {
         rateLimit: {
           max: 1200, // Higher limit for status polling (1200 req/min)
           timeWindow: "1 minute",
-          keyGenerator: (req) =>
-            req.tgUser?.id ? `tg:${req.tgUser.id}` : `ip:${req.ip}`,
         },
       },
     },
