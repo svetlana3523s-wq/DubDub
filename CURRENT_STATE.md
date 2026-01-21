@@ -32,6 +32,10 @@ Last updated: 2026-01-21
   - Otherwise fallback to Telegram upload.
   - 429 => `rate_limited` with `retryAfterSeconds` + delayed retry.
 
+## Bot invite links
+- Source of truth: `BOT_USERNAME` from env (no hardcoded bot name).
+- Example invite: `https://t.me/zlomem_bot?startapp=s_<sessionId>` (no leading `@` in URL).
+
 ## iOS Telegram WebView (important)
 - Direct polling `https://api.../files/renders/:id/send-status` caused WebView network failures (`Load failed`) due to preflight/CORS behavior.
 - Workaround: result page polls send-status via same-origin proxy under `https://app.tvotototo.ru/api/render-send-status/:id` (no CORS).

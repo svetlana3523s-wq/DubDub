@@ -48,6 +48,16 @@ function isAdmin(userId: number): boolean {
   return config.adminTgUserIds.includes(String(userId));
 }
 
+function getNormalizedBotUsername(): string {
+  const raw = (config.botUsername || "").trim();
+  const normalized = raw.startsWith("@") ? raw.slice(1) : raw;
+  if (!normalized) {
+    console.error("[Bot] BOT_USERNAME is missing or empty");
+    throw new Error("BOT_USERNAME is missing");
+  }
+  return normalized;
+}
+
 // getVideoInfo imported from ./lib/video-utils.js
 
 async function downloadTelegramFile(
@@ -307,7 +317,8 @@ export function createBot(): Telegraf {
         
         if (session) {
           // Send link instead of inline web_app button (iOS bug workaround)
-          const joinLink = `https://t.me/${config.botUsername}?startapp=s_${session.id}`;
+          const botUsername = getNormalizedBotUsername();
+          const joinLink = `https://t.me/${botUsername}?startapp=s_${session.id}`;
           console.log("[Bot] Found session, sending link:", session.id);
           
           await ctx.reply(
@@ -424,7 +435,7 @@ export function createBot(): Telegraf {
   // Handle "Start game" button (from text menu)
   // NOTE: Using text link instead of inline web_app button - iOS bug workaround [[memory:13197292]]
   bot.hears(RU.bot.mainMenu.startGame, async (ctx) => {
-    const botUsername = config.botUsername || "zlomem_bot";
+    const botUsername = getNormalizedBotUsername();
     // Use ?startapp= to open Mini App correctly on all platforms
     const appLink = `https://t.me/${botUsername}/app`;
     
@@ -1121,7 +1132,8 @@ export function createBot(): Telegraf {
 
       // Всё ок, открываем Mini App через ссылку (не inline web_app button)
       // Inline web_app buttons имеют баг на iOS - открывают WebView вместо Mini App
-      const joinLink = `https://t.me/${config.botUsername}?startapp=s_${session.id}`;
+      const botUsername = getNormalizedBotUsername();
+      const joinLink = `https://t.me/${botUsername}?startapp=s_${session.id}`;
       await ctx.reply(
         RU.bot.join.found(
           session.participants.length,
