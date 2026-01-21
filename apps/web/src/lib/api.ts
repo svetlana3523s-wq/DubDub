@@ -192,9 +192,77 @@ export const api = {
     initData: string,
     sessionId: string
   ): Promise<{ status: string | null; error: string | null; attempts: number; retryAfterSeconds?: number | null }> =>
-    request(initData, `/files/renders/${sessionId}/send-status`, {
-      cache: "no-store", // Prevent caching for status polling
-    }),
+    (async () => {
+      const path = `/api/render-send-status/${sessionId}`;
+      let res: Response;
+
+      try {
+        res = await fetch(path, {
+          headers: {
+            "Content-Type": "application/json",
+            "X-TG-INIT-DATA": initData,
+          },
+          cache: "no-store",
+        });
+      } catch (err) {
+        const errorName = err instanceof Error ? err.name : "FetchError";
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        lastApiError = {
+          ts: Date.now(),
+          path,
+          url: path,
+          errorName,
+          errorMessage,
+        };
+        console.error("[API] Request failed", {
+          path,
+          url: path,
+          errorName,
+          errorMessage,
+        });
+        throw err;
+      }
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const retryAfterRaw = res.headers.get("retry-after");
+        const retryAfterSeconds = retryAfterRaw
+          ? Number.parseInt(retryAfterRaw, 10)
+          : undefined;
+        console.error("[API] Request error", {
+          path,
+          url: path,
+          status: res.status,
+          code: data.code,
+          error: data.error,
+          retryAfterSeconds,
+          body: data,
+        });
+        lastApiError = {
+          ts: Date.now(),
+          path,
+          status: res.status,
+          code: data.code,
+          error: data.error,
+          errorMessage: data.error || `HTTP ${res.status}`,
+          retryAfterSeconds,
+        };
+        throw new ApiError(
+          data.error || `HTTP ${res.status}`,
+          data.code,
+          res.status,
+          retryAfterSeconds
+        );
+      }
+
+      return data as {
+        status: string | null;
+        error: string | null;
+        attempts: number;
+        retryAfterSeconds?: number | null;
+      };
+    })(),
 
   replaySession: (
     initData: string,
