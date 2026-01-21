@@ -132,12 +132,13 @@ jobs:
       - name: Remote deploy
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s -- \"${DEPLOY_PATH}\"" << 'SSH'
+          ssh -i ~/.ssh/id_ed25519 -p "${DEPLOY_PORT}" -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s -- \"${DEPLOY_PATH}\" \"${GITHUB_SHA}\"" << 'SSH'
           set -euo pipefail
           DEPLOY_PATH="$1"
+          RELEASE_SHA="$2"
           TMP_DIR="$(mktemp -d)"
           tar -xzf /tmp/release.tgz -C "$TMP_DIR"
-          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "$DEPLOY_PATH" "${GITHUB_SHA}"
+          bash "$TMP_DIR/deploy_remote.sh" /tmp/release.tgz "$DEPLOY_PATH" "$RELEASE_SHA"
           rm -rf "$TMP_DIR"
           SSH
 
