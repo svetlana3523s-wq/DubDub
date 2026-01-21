@@ -27,6 +27,10 @@ const fastify = Fastify({
 await fastify.register(cors, {
   origin: true,
   credentials: true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "X-TG-INIT-DATA"],
+  exposedHeaders: ["Retry-After"],
+  maxAge: 600,
 });
 
 // Multipart for file uploads
