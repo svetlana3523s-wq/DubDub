@@ -814,6 +814,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           data: {
             sceneId: newSceneId,
             status: "recording", // Start recording immediately
+            task: session.gameMode === "tasks" ? getRandomTask() : null,
             // Keep: category, gameMode, task, maxPlayers, createdByTgUserId
           },
           include: {
