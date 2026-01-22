@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { GlassCard } from "@/components/GlassCard";
+import { GradientButton } from "@/components/GradientButton";
 import { RU } from "@dubdub/shared";
 import type { SessionStateResponse, JoinSessionResponse } from "@dubdub/shared";
 
@@ -16,10 +18,21 @@ interface PageProps {
 type ViewState = "loading" | "error" | "lobby" | "record" | "wait" | "finish" | "rendering";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  movies: "🎬 Кино/сериалы",
-  memes: "😂 Мемы",
-  politics: "🏛️ Политика",
+  movies: "???? ????????/??????????????",
+  memes: "???? ????????",
+  politics: "??????? ????????????????",
 };
+
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen text-white relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-32 -right-20 h-72 w-72 rounded-full bg-purple-600/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-blue-500/30 blur-3xl" />
+      <div className="relative min-h-screen safe-bottom">{children}</div>
+    </div>
+  );
+}
+
 
 function SessionCodeCard({ sessionId }: { sessionId: string }) {
   const sessionCode = sessionId.slice(-8).toUpperCase();
@@ -56,7 +69,7 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <div className="card animate-fade-in" style={{ animationDelay: "0.2s" }}>
+    <div className="glass-card animate-fade-in" style={{ animationDelay: "0.2s" }}>
       <div className="text-center space-y-4">
         <div>
           <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
@@ -74,7 +87,7 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
         
         <button
           onClick={handleSendToFriend}
-          className="btn-tg w-full"
+          className="btn-gradient w-full"
         >
           📤 Отправить другу
         </button>
@@ -352,72 +365,76 @@ export default function SessionPage({ params }: PageProps) {
   // Loading
   if (viewState === "loading" || !isReady) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-3 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-tg-hint">Загрузка...</p>
+      <PageShell>
+        <div className="flex-1 flex items-center justify-center min-h-[70vh]">
+          <GlassCard className="text-center space-y-4">
+            <div className="w-12 h-12 border-3 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-tg-hint">????????????????...</p>
+          </GlassCard>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
-  // Error
+  // Error  // Error
   if (viewState === "error") {
-    const isAuthError = error?.includes("авторизации") || error?.includes("initData");
+    const isAuthError = error?.includes("??????????????????????") || error?.includes("initData");
     const tgAvailable = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
-    
+
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="text-center space-y-4">
-          <div className="text-5xl">😕</div>
-          <h2 className="text-xl font-bold">Ошибка</h2>
-          <p className="text-tg-hint">{error}</p>
-          
-          {/* Diagnostic info */}
-          <div className="text-xs text-tg-hint bg-tg-secondary p-2 rounded text-left">
-            <p>TG WebApp: {tgAvailable ? '✅' : '❌'}</p>
-            <p>initData: {initData ? '✅' : '❌'}</p>
-            <p>Session: {sessionId.slice(-8)}</p>
-            <p>window.Telegram: {typeof window !== 'undefined' && 'Telegram' in window ? '✅' : '❌'}</p>
-            <p>URL: {typeof window !== 'undefined' ? window.location.pathname : '?'}</p>
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            {isAuthError && (
-              <>
-                <button
-                  onClick={() => {
-                    retry();
-                    setViewState("loading");
-                    setError(null);
-                  }}
-                  className="btn-primary"
-                >
-                  🔄 Попробовать снова
-                </button>
-                <p className="text-xs text-tg-hint mt-2">
-                  Если не помогает, закройте приложение и откройте заново через бота
-                </p>
-              </>
-            )}
-            <button
-              onClick={() => router.push("/")}
-              className="btn-secondary"
-            >
-              На главную
-            </button>
-          </div>
+      <PageShell>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[70vh]">
+          <GlassCard className="text-center space-y-4">
+            <div className="text-5xl">????</div>
+            <h2 className="text-xl font-bold">????????????</h2>
+            <p className="text-tg-hint">{error}</p>
+
+            {/* Diagnostic info */}
+            <div className="text-xs text-tg-hint bg-white/5 p-3 rounded-2xl text-left border border-white/10">
+              <p>TG WebApp: {tgAvailable ? '???' : '???'}</p>
+              <p>initData: {initData ? '???' : '???'}</p>
+              <p>Session: {sessionId.slice(-8)}</p>
+              <p>window.Telegram: {typeof window !== 'undefined' && 'Telegram' in window ? '???' : '???'}</p>
+              <p>URL: {typeof window !== 'undefined' ? window.location.pathname : '?'}</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {isAuthError && (
+                <>
+                  <GradientButton
+                    onClick={() => {
+                      retry();
+                      setViewState("loading");
+                      setError(null);
+                    }}
+                  >
+                    ???? ?????????????????????? ??????????
+                  </GradientButton>
+                  <p className="text-xs text-tg-hint mt-2">
+                    ???????? ???? ????????????????, ???????????????? ???????????????????? ?? ???????????????? ???????????? ?????????? ????????
+                  </p>
+                </>
+              )}
+              <button
+                onClick={() => router.push("/")}
+                className="btn-glass"
+              >
+                ???? ??????????????
+              </button>
+            </div>
+          </GlassCard>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
-  // Lobby
+  // Lobby  // Lobby
   if (viewState === "lobby" && session) {
     const canSkipScene =
       session.takes.length === 0 &&
       (session.session.maxPlayers === 1 || session.session.createdByTgUserId === user?.id);
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col p-6">
         <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full space-y-6">
           <div className="text-center animate-slide-up">
@@ -433,7 +450,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Category + Task */}
-          <div className="card text-center animate-fade-in">
+          <div className="glass-card text-center animate-fade-in">
             <div className="text-sm text-tg-hint mb-2">
               {CATEGORY_LABELS[session.session.category] || session.session.category}
             </div>
@@ -449,7 +466,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Players */}
-          <div className="card space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <div className="glass-card space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
             {session.participants.map((p, i) => (
               <div
                 key={p.id}
@@ -491,7 +508,7 @@ export default function SessionPage({ params }: PageProps) {
               <button
                 onClick={handleSkipScene}
                 disabled={skipInProgress}
-                className="btn-secondary w-full disabled:opacity-70"
+                className="btn-glass w-full disabled:opacity-70"
               >
                 {skipInProgress ? "..." : RU.web.session.skipScene}
               </button>
@@ -502,6 +519,7 @@ export default function SessionPage({ params }: PageProps) {
           )}
         </div>
       </div>
+      </PageShell>
     );
   }
 
@@ -519,6 +537,7 @@ export default function SessionPage({ params }: PageProps) {
       (session.session.maxPlayers === 1 || session.session.createdByTgUserId === user?.id);
 
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col p-6 overflow-y-auto">
         <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5">
           {/* Header */}
@@ -533,7 +552,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Task (only in tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
-            <div className="card text-center animate-fade-in">
+            <div className="glass-card text-center animate-fade-in">
               <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
             </div>
@@ -544,7 +563,7 @@ export default function SessionPage({ params }: PageProps) {
               <button
                 onClick={handleSkipScene}
                 disabled={skipInProgress}
-                className="btn-secondary w-full disabled:opacity-70"
+                className="btn-glass w-full disabled:opacity-70"
               >
                 {skipInProgress ? "..." : RU.web.session.skipScene}
               </button>
@@ -555,7 +574,7 @@ export default function SessionPage({ params }: PageProps) {
           )}
 
           {/* Full scene with original audio */}
-          <div className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
+          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <VideoPlayer
               key={`full-${session.myRoleIndex}`}
               src={session.sceneUrl}
@@ -568,7 +587,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Your fragment to dub */}
-          <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </div>
@@ -585,7 +604,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Recorder */}
-          <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.15s" }}>
             <VoiceRecorder
               key={`recorder-${session.myRoleIndex}`}
               maxDuration={cueDuration}
@@ -596,7 +615,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Retake */}
           {hasRecorded && !retakeUsed && (
-            <button onClick={handleRetake} className="btn-secondary w-full">
+            <button onClick={handleRetake} className="btn-glass w-full">
               🔄 Перезаписать (1 раз)
             </button>
           )}
@@ -606,6 +625,7 @@ export default function SessionPage({ params }: PageProps) {
           )}
         </div>
       </div>
+      </PageShell>
     );
   }
 
@@ -616,6 +636,7 @@ export default function SessionPage({ params }: PageProps) {
     );
     
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col p-6 overflow-y-auto">
         <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5">
           {/* Header */}
@@ -629,14 +650,14 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Task (if tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
-            <div className="card text-center animate-fade-in">
+            <div className="glass-card text-center animate-fade-in">
               <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
             </div>
           )}
 
           {/* Full scene with original audio */}
-          <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <VideoPlayer
               key={`wait-full`}
               src={session.sceneUrl}
@@ -650,7 +671,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Your fragment to dub */}
           {myCue && (
-            <div className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
+            <div className="glass-card animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
                 🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
               </div>
@@ -668,6 +689,7 @@ export default function SessionPage({ params }: PageProps) {
           )}
         </div>
       </div>
+      </PageShell>
     );
   }
 
@@ -682,8 +704,9 @@ export default function SessionPage({ params }: PageProps) {
     const canStartRender = isSolo || myTakeExists;
 
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="text-center space-y-6 animate-slide-up max-w-sm">
+        <div className="glass-card text-center space-y-6 animate-slide-up max-w-sm">
           <div className="text-5xl">🎬</div>
           <div>
             <h2 className="text-2xl font-bold mb-2">Все записали!</h2>
@@ -697,21 +720,23 @@ export default function SessionPage({ params }: PageProps) {
             <button 
               onClick={handleFinish} 
               disabled={finishing}
-              className="btn-primary text-lg px-8 py-4 disabled:opacity-70"
+              className="btn-gradient text-lg px-8 py-4 disabled:opacity-70"
             >
               {finishing ? "⏳ Собираем..." : "✨ Собрать видео"}
             </button>
           )}
         </div>
       </div>
+      </PageShell>
     );
   }
 
   // Rendering
   if (viewState === "rendering") {
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="text-center space-y-6 animate-slide-up">
+        <div className="glass-card text-center space-y-6 animate-slide-up">
           <div className="relative w-20 h-20 mx-auto">
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
@@ -724,6 +749,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+      </PageShell>
     );
   }
 

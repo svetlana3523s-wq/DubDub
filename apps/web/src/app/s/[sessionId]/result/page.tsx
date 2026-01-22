@@ -1,15 +1,28 @@
 ﻿"use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api, getLastApiError } from "@/lib/api";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { GlassCard } from "@/components/GlassCard";
+import { GradientButton } from "@/components/GradientButton";
 import { RU } from "@dubdub/shared";
 import type { RenderStatusResponse, SessionStateResponse } from "@dubdub/shared";
 
 interface PageProps {
   params: { sessionId: string };
+}
+
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+      <PageShell>
+    <div className="min-h-screen text-white relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-32 -right-20 h-72 w-72 rounded-full bg-purple-600/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-blue-500/30 blur-3xl" />
+      <div className="relative min-h-screen safe-bottom">{children}</div>
+    </div>
+  );
 }
 
 interface ReplayStatus {
@@ -538,14 +551,17 @@ export default function ResultPage({ params }: PageProps) {
 
   if (loading || !isReady) {
     return (
+      <PageShell>
       <div className="flex-1 flex items-center justify-center">
         <div className="w-12 h-12 border-3 border-accent-primary border-t-transparent rounded-full animate-spin" />
       </div>
+      </PageShell>
     );
   }
 
   if (!render || render.status === "failed") {
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-4">
           <div className="text-5xl">{RU.web.result.renderFailEmoji()}</div>
@@ -553,11 +569,13 @@ export default function ResultPage({ params }: PageProps) {
           <p className="text-tg-hint">{RU.web.result.renderFailedSubtitle}</p>
         </div>
       </div>
+      </PageShell>
     );
   }
 
   if (render.status !== "ready" || !render.videoUrl) {
     return (
+      <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="text-center space-y-6 animate-slide-up">
           <div className="relative w-20 h-20 mx-auto">
@@ -572,6 +590,7 @@ export default function ResultPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+      </PageShell>
     );
   }
 
@@ -590,50 +609,50 @@ export default function ResultPage({ params }: PageProps) {
 
         {/* Task (only in tasks mode) */}
         {session && session.session.gameMode === "tasks" && session.session.task && (
-          <div className="card text-center animate-fade-in">
+          <GlassCard className="text-center animate-fade-in">
             <div className="text-sm text-tg-hint mb-1">{RU.web.result.taskLabel()}</div>
             <div className="font-medium">{session.session.task}</div>
-          </div>
+          </GlassCard>
         )}
 
         {/* Video - add fixed timestamp to bust cache after replay */}
-        <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+        <GlassCard className="animate-fade-in p-3" style={{ animationDelay: "0.1s" }}>
           <VideoPlayer
             src={render.videoUrl ? `${render.videoUrl}?t=${cacheTimestamp}` : ""}
             muted={false}
             showTimeRange={false}
           />
-        </div>
+        </GlassCard>
 
         {/* Players */}
         {session && (
-          <div className="flex justify-center gap-2 flex-wrap animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <GlassCard className="flex justify-center gap-2 flex-wrap animate-fade-in" style={{ animationDelay: "0.15s" }}>
             {session.participants.map((p) => (
               <span
                 key={p.id}
-                className="px-3 py-1.5 bg-tg-secondary rounded-full text-sm"
+                className="px-3 py-1.5 bg-white/10 rounded-full text-sm border border-white/10"
               >
                 {p.displayName}
               </span>
             ))}
-          </div>
+          </GlassCard>
         )}
 
         {/* Waiting for confirmation banner - only show for requester */}
         {waitingForConfirmation && replayStatus.isRequester && (
-          <div className="card bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
+          <GlassCard className="bg-yellow-500/20 border border-yellow-500/40 animate-pulse">
             <div className="text-center">
               <div className="text-2xl mb-2">{RU.web.result.waitingConfirmTitle()}</div>
               <p className="font-medium">{RU.web.result.waitingConfirmBody}</p>
               <p className="text-sm text-tg-hint mt-1">{RU.web.result.waitingConfirmHint}</p>
             </div>
-          </div>
+          </GlassCard>
         )}
 
         {/* Actions */}
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
           {/* Delivery status */}
-          <div className="card text-center">
+          <GlassCard className="text-center">
             <p className="text-green-500">{RU.web.result.sendStatusAssumedSent}</p>
             {effectiveSendStatus === "rate_limited" &&
               retryAfterSeconds !== null &&
@@ -674,27 +693,27 @@ export default function ResultPage({ params }: PageProps) {
                 {`Last send-status poll: ${lastPollAt ? new Date(lastPollAt).toLocaleTimeString() : "never"}`}
               </p>
             )}
-          </div>
+          </GlassCard>
 
 
-                    <button
+          <button
             type="button"
             onClick={() => window.alert(RU.web.result.gameId(sessionId))}
             onPointerDown={handleDebugPressStart}
             onPointerUp={handleDebugPressEnd}
             onPointerLeave={handleDebugPressEnd}
             onPointerCancel={handleDebugPressEnd}
-            className="w-full btn-secondary"
+            className="w-full btn-glass"
           >
             {RU.web.result.showGameId}
           </button>
 
           {/* Replay buttons - disabled when waiting */}
           <div className="grid grid-cols-2 gap-3">
-            <button
+            <GradientButton
               onClick={() => handleReplay("sameScene")}
               disabled={replaying !== null}
-              className="btn-primary disabled:opacity-70"
+              className="disabled:opacity-70"
             >
               {replaying === "sameScene" ? (
                 <>
@@ -704,11 +723,11 @@ export default function ResultPage({ params }: PageProps) {
               ) : (
                 <>{RU.web.result.replaySame()}</>
               )}
-            </button>
-            <button
+            </GradientButton>
+            <GradientButton
               onClick={() => handleReplay("newScene")}
               disabled={replaying !== null}
-              className="btn-primary disabled:opacity-70"
+              className="disabled:opacity-70"
             >
               {replaying === "newScene" ? (
                 <>
@@ -718,7 +737,7 @@ export default function ResultPage({ params }: PageProps) {
               ) : (
                 <>{RU.web.result.replayNew()}</>
               )}
-            </button>
+            </GradientButton>
           </div>
         </div>
 
