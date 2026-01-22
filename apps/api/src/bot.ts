@@ -398,7 +398,11 @@ export function createBot(): Telegraf {
       await ctx.answerCbQuery();
       const userId = ctx.from?.id;
       if (!userId) return;
-      console.log("[Bot] callback join_game", { userId, chatId: ctx.chat?.id, callback: ctx.callbackQuery?.data });
+      const callbackData =
+        ctx.callbackQuery && "data" in ctx.callbackQuery
+          ? ctx.callbackQuery.data
+          : undefined;
+      console.log("[Bot] callback join_game", { userId, chatId: ctx.chat?.id, callback: callbackData });
       
       console.log("[Bot] join_game inline button clicked", { userId });
 
@@ -481,7 +485,11 @@ export function createBot(): Telegraf {
   // Handle "Suggest episode" inline button (legacy support)
   bot.action("suggest_episode", async (ctx) => {
     await ctx.answerCbQuery();
-    console.log("[Bot] callback suggest_episode", { userId: ctx.from?.id, callback: ctx.callbackQuery?.data, chatId: ctx.chat?.id });
+    const callbackData =
+      ctx.callbackQuery && "data" in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : undefined;
+    console.log("[Bot] callback suggest_episode", { userId: ctx.from?.id, callback: callbackData, chatId: ctx.chat?.id });
     await ctx.reply(
       RU.bot.suggestEpisode.info,
       {
@@ -769,7 +777,11 @@ export function createBot(): Telegraf {
 
   // Обработка callback для загрузки по URL
   bot.action(/^upload_url:(.+)$/, async (ctx) => {
-    console.log("[Bot] callback upload_url", { userId: ctx.from?.id, callback: ctx.callbackQuery?.data, chatId: ctx.chat?.id });
+    const callbackData =
+      ctx.callbackQuery && "data" in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : undefined;
+    console.log("[Bot] callback upload_url", { userId: ctx.from?.id, callback: callbackData, chatId: ctx.chat?.id });
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
       return ctx.answerCbQuery(RU.bot.errors.noAccess);
