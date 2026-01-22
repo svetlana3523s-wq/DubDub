@@ -37,6 +37,7 @@ model Session {
   participants    Participant[]
   takes           Take[]
   render          Render?
+  skipCount       Int           @default(0)
   
   // Replay request for multiplayer confirmation
   // JSON: { requestedBy: string, mode: "sameScene" | "newScene", requestedAt: string }
@@ -100,4 +101,3 @@ model RenderSend {
   @@index([renderId])
   @@index([telegramUserId])
 }
-

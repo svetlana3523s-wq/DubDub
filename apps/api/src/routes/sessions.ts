@@ -887,6 +887,178 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Skip current scene (before first take, limited)
+  fastify.post<{ Params: { id: string } }>(
+    "/sessions/:id/skip-scene",
+    { preHandler: authMiddleware },
+    async (request, reply): Promise<SessionStateResponse> => {
+      const { id } = request.params;
+      const user = request.tgUser;
+
+      const session = await prisma.session.findUnique({
+        where: { id },
+        include: {
+          scene: true,
+          participants: { orderBy: { roleIndex: "asc" } },
+          takes: { orderBy: { roleIndex: "asc" } },
+          render: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      const participant = session.participants.find((p) => p.tgUserId === user.id);
+      if (!participant) {
+        return reply.status(403).send({ error: "Not a participant" });
+      }
+
+      if (session.maxPlayers === 2 && session.createdByTgUserId !== user.id) {
+        return reply.status(403).send({
+          error: "Only the host can skip the scene",
+          code: "SKIP_HOST_ONLY",
+        });
+      }
+
+      if (session.takes.length > 0) {
+        return reply.status(409).send({
+          error: "Skip is only allowed before the first take",
+          code: "SKIP_NOT_ALLOWED_AFTER_FIRST_TAKE",
+        });
+      }
+
+      if (session.skipCount >= 5) {
+        return reply.status(400).send({
+          error: "Skip limit reached",
+          code: "SKIP_LIMIT_REACHED",
+        });
+      }
+
+      const updatedSession = await prisma.$transaction(async (tx) => {
+        const usedSessionsByCreator = await tx.session.findMany({
+          where: {
+            category: session.category,
+            createdByTgUserId: user.id,
+            status: { in: ["lobby", "recording", "rendering", "ready"] },
+          },
+          select: { sceneId: true },
+        });
+
+        const usedSessionsAsParticipant = await tx.session.findMany({
+          where: {
+            category: session.category,
+            status: { in: ["lobby", "recording", "rendering", "ready"] },
+            participants: {
+              some: { tgUserId: user.id },
+            },
+          },
+          select: { sceneId: true },
+        });
+
+        const allUsedSceneIds = new Set([
+          ...usedSessionsByCreator.map((s) => s.sceneId),
+          ...usedSessionsAsParticipant.map((s) => s.sceneId),
+        ]);
+
+        const usedSceneIds = Array.from(allUsedSceneIds);
+
+        const availableScenes = await tx.scene.findMany({
+          where: {
+            category: session.category,
+            id: { notIn: usedSceneIds.length > 0 ? usedSceneIds : ["__none__"] },
+          },
+        });
+
+        let newScene = availableScenes.length > 0
+          ? availableScenes[Math.floor(Math.random() * availableScenes.length)]
+          : null;
+
+        if (!newScene) {
+          const allOtherScenes = await tx.scene.findMany({
+            where: {
+              category: session.category,
+              id: { not: session.sceneId },
+            },
+          });
+          newScene = allOtherScenes.length > 0
+            ? allOtherScenes[Math.floor(Math.random() * allOtherScenes.length)]
+            : null;
+        }
+
+        if (!newScene) {
+          throw new Error(`No other scenes available in category "${session.category}"`);
+        }
+
+        return tx.session.update({
+          where: { id },
+          data: {
+            sceneId: newScene.id,
+            task: session.gameMode === "tasks" ? getRandomTask() : null,
+            skipCount: { increment: 1 },
+          },
+          include: {
+            scene: true,
+            participants: { orderBy: { roleIndex: "asc" } },
+            takes: { orderBy: { roleIndex: "asc" } },
+            render: true,
+          },
+        });
+      });
+
+      const sceneFilename = updatedSession.scene.s3Key.split("/").pop() || "";
+      const sceneUrl = getProxyUrl("scene", sceneFilename);
+
+      let sceneUrlCuts: string | undefined;
+      if (updatedSession.scene.s3KeyCuts) {
+        const cutsFilename = updatedSession.scene.s3KeyCuts.split("/").pop() || "";
+        sceneUrlCuts = getProxyUrl("scene", cutsFilename);
+      }
+
+      const sceneCues = parseCuesFromJson(updatedSession.scene.cueJson, updatedSession.scene.fps);
+      const sceneMeta: SceneMeta = buildSceneMeta(updatedSession.scene);
+      const isSolo = updatedSession.maxPlayers === 1;
+      const totalRoles = sceneCues.length;
+      const currentTurn = updatedSession.takes.length;
+      const myParticipant = updatedSession.participants.find(
+        (p) => p.tgUserId === user.id
+      );
+
+      return {
+        session: {
+          id: updatedSession.id,
+          category: updatedSession.category as Category,
+          gameMode: updatedSession.gameMode as GameMode,
+          task: updatedSession.task ?? null,
+          status: updatedSession.status as SessionStatus,
+          maxPlayers: updatedSession.maxPlayers,
+          createdByTgUserId: updatedSession.createdByTgUserId,
+          sceneMeta,
+        },
+        participants: updatedSession.participants.map((p) => ({
+          id: p.id,
+          tgUserId: p.tgUserId ?? null,
+          displayName: p.displayName,
+          roleIndex: p.roleIndex,
+        })),
+        myRoleIndex: isSolo
+          ? (currentTurn < totalRoles ? currentTurn : null)
+          : (myParticipant?.roleIndex ?? null),
+        currentTurn,
+        takes: updatedSession.takes.map((t) => ({
+          roleIndex: t.roleIndex,
+          durationSec: t.durationSec,
+        })),
+        render: updatedSession.render && updatedSession.render.status === "ready" && updatedSession.render.s3Key ? {
+          status: updatedSession.render.status as any,
+          videoUrl: getProxyUrl("render", updatedSession.render.s3Key.split("/").pop() || ""),
+        } : null,
+        sceneUrl,
+        sceneUrlCuts,
+      };
+    }
+  );
+
   // Request replay (for multiplayer - requires confirmation from other player)
   fastify.post<{ 
     Params: { id: string }; 
