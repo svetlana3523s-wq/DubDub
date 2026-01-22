@@ -6,6 +6,7 @@ import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { RU } from "@dubdub/shared";
 import type { SessionStateResponse, JoinSessionResponse } from "@dubdub/shared";
 
 interface PageProps {
@@ -94,6 +95,8 @@ export default function SessionPage({ params }: PageProps) {
   const [hasRecorded, setHasRecorded] = useState(false);
   const [retakeUsed, setRetakeUsed] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [skipError, setSkipError] = useState<string | null>(null);
+  const [skipInProgress, setSkipInProgress] = useState(false);
 
   const fetchSession = useCallback(async () => {
     if (!initData) return null;
@@ -307,6 +310,43 @@ export default function SessionPage({ params }: PageProps) {
     }
   };
 
+  const handleSkipScene = async () => {
+    if (!initData || !session || skipInProgress) return;
+
+    setSkipError(null);
+    setError(null);
+
+    if (session.takes.length > 0) {
+      setSkipError(RU.web.session.skipNotAllowedAfterFirstTake);
+      return;
+    }
+
+    if (session.session.maxPlayers === 2 && session.session.createdByTgUserId !== user?.id) {
+      setSkipError(RU.web.session.skipHostOnly);
+      return;
+    }
+
+    try {
+      setSkipInProgress(true);
+      const updated = await api.skipScene(initData, sessionId);
+      setSession(updated);
+      determineViewState(updated);
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "SKIP_NOT_ALLOWED_AFTER_FIRST_TAKE") {
+        setSkipError(RU.web.session.skipNotAllowedAfterFirstTake);
+      } else if (code === "SKIP_LIMIT_REACHED") {
+        setSkipError(RU.web.session.skipLimitReached);
+      } else if (code === "SKIP_HOST_ONLY") {
+        setSkipError(RU.web.session.skipHostOnly);
+      } else {
+        setSkipError(RU.web.session.skipFailed);
+      }
+    } finally {
+      setSkipInProgress(false);
+    }
+  };
+
   // Removed copyInviteLink - now using session code instead
 
   // Loading
@@ -374,6 +414,9 @@ export default function SessionPage({ params }: PageProps) {
 
   // Lobby
   if (viewState === "lobby" && session) {
+    const canSkipScene =
+      session.takes.length === 0 &&
+      (session.session.maxPlayers === 1 || session.session.createdByTgUserId === user?.id);
     return (
       <div className="flex-1 flex flex-col p-6">
         <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full space-y-6">
@@ -442,6 +485,21 @@ export default function SessionPage({ params }: PageProps) {
           {session.session.maxPlayers > 1 && (
             <SessionCodeCard sessionId={sessionId} />
           )}
+
+          {canSkipScene && (
+            <div className="space-y-2">
+              <button
+                onClick={handleSkipScene}
+                disabled={skipInProgress}
+                className="btn-secondary w-full disabled:opacity-70"
+              >
+                {skipInProgress ? "..." : RU.web.session.skipScene}
+              </button>
+              {skipError && (
+                <div className="text-red-400 text-sm text-center">{skipError}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -456,6 +514,9 @@ export default function SessionPage({ params }: PageProps) {
     const isSolo = session.session.maxPlayers === 1;
     const totalRoles = session.session.sceneMeta.cues.length;
     const currentRoleNum = (session.myRoleIndex ?? 0) + 1;
+    const canSkipScene =
+      session.takes.length === 0 &&
+      (session.session.maxPlayers === 1 || session.session.createdByTgUserId === user?.id);
 
     return (
       <div className="flex-1 flex flex-col p-6 overflow-y-auto">
@@ -475,6 +536,21 @@ export default function SessionPage({ params }: PageProps) {
             <div className="card text-center animate-fade-in">
               <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
+            </div>
+          )}
+
+          {canSkipScene && (
+            <div className="animate-fade-in" style={{ animationDelay: "0.03s" }}>
+              <button
+                onClick={handleSkipScene}
+                disabled={skipInProgress}
+                className="btn-secondary w-full disabled:opacity-70"
+              >
+                {skipInProgress ? "..." : RU.web.session.skipScene}
+              </button>
+              {skipError && (
+                <div className="text-red-400 text-sm text-center mt-2">{skipError}</div>
+              )}
             </div>
           )}
 

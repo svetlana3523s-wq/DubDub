@@ -173,6 +173,15 @@ export const api = {
       body: JSON.stringify({}),
     }),
 
+  skipScene: (
+    initData: string,
+    sessionId: string
+  ): Promise<SessionStateResponse> =>
+    request(initData, `/sessions/${sessionId}/skip-scene`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
   getRenderStatus: (
     initData: string,
     sessionId: string
