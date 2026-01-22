@@ -67,14 +67,14 @@ await fastify.register(metaRoutes);
 // Use webhook in production or polling in development
 const isProduction = process.env.NODE_ENV === "production";
 
-if (isProduction) {
-  // Webhook mode for production
-  const webhookPath = `/bot${config.botToken}`;
+  if (isProduction) {
+    // Webhook mode for production
+    const webhookPath = `/bot${config.botToken}`;
 
   fastify.post(webhookPath, async (request, reply) => {
-    // Reply immediately to Telegram to prevent timeout
-    reply.send({ ok: true });
-    
+      // Reply immediately to Telegram to prevent timeout
+      reply.send({ ok: true });
+      
     // Process update asynchronously
     bot.handleUpdate(request.body as any).catch((err) => {
       console.error("Webhook update processing error:", err);
@@ -84,8 +84,10 @@ if (isProduction) {
   // Set webhook after server starts
   fastify.addHook("onReady", async () => {
     const webhookUrl = `${config.apiBaseUrl}${webhookPath}`;
-    await bot.telegram.setWebhook(webhookUrl);
-    console.log(`Bot webhook set to: ${webhookUrl}`);
+    await bot.telegram.setWebhook(webhookUrl, {
+      allowed_updates: ["message", "callback_query"],
+    });
+    console.log(`Bot webhook set to: ${webhookUrl} (callback_query enabled)`);
   });
 } else {
   // Polling mode for development
