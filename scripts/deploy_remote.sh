@@ -66,11 +66,8 @@ if [ -d "prisma" ]; then
     exit 1
   fi
   pnpm db:generate
-  if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
-    pnpm db:migrate
-  else
-    echo "Warning: prisma/migrations is empty; skipping prisma migrate deploy"
-  fi
+  # Use db:push to avoid migrate baseline errors on existing prod DB.
+  pnpm db:push
 fi
 
 pnpm install --frozen-lockfile --prod --force
