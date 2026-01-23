@@ -111,6 +111,8 @@
       lobbyTitle: "Лобби",
       lobbyReady: "Все готовы! Скоро начнём...",
       lobbyWaiting: "Ожидаем игроков",
+      taskLabel: "📝 Задание",
+      improvLabel: "🎭 Импровизация",
       youLabel: "Это вы",
       waitingPlayer: "Ожидаем...",
       recordBadgeSolo: (current: number, total: number) =>

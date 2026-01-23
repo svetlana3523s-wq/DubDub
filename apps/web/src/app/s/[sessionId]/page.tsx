@@ -442,14 +442,14 @@ export default function SessionPage({ params }: PageProps) {
       <div className="flex-1 flex flex-col p-6">
         <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full space-y-6">
           <div className="text-center animate-slide-up">
-            <div className="badge mb-4">Лобби</div>
+            <div className="badge mb-4">{RU.web.session.lobbyTitle}</div>
             <h1 className="text-2xl font-bold mb-2">
               {session.participants.length} / {session.session.maxPlayers}
             </h1>
             <p className="text-tg-hint">
               {session.participants.length >= session.session.maxPlayers
-                ? "Все готовы! Скоро начнём..."
-                : "Ожидаем игроков"}
+                ? RU.web.session.lobbyReady
+                : RU.web.session.lobbyWaiting}
             </p>
           </div>
 
@@ -460,12 +460,12 @@ export default function SessionPage({ params }: PageProps) {
             </div>
             {session.session.gameMode === "tasks" && session.session.task && (
               <>
-                <div className="text-xs text-tg-hint mt-3 mb-1">📝 Задание</div>
+                <div className="text-xs text-tg-hint mt-3 mb-1">{RU.web.session.taskLabel}</div>
                 <div className="text-lg font-medium">{session.session.task}</div>
               </>
             )}
             {session.session.gameMode === "improv" && (
-              <div className="text-lg font-medium">🎭 Импровизация</div>
+              <div className="text-lg font-medium">{RU.web.session.improvLabel}</div>
             )}
           </Card>
 
@@ -482,7 +482,7 @@ export default function SessionPage({ params }: PageProps) {
                 <div className="flex-1">
                   <div className="font-medium">{p.displayName}</div>
                   {p.tgUserId === user?.id && (
-                    <div className="text-xs text-accent-primary">Это вы</div>
+                    <div className="text-xs text-accent-primary">{RU.web.session.youLabel}</div>
                   )}
                 </div>
               </div>
@@ -497,7 +497,7 @@ export default function SessionPage({ params }: PageProps) {
                 <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-tg-hint">
                   ?
                 </div>
-                <span className="text-tg-hint">Ожидаем...</span>
+                <span className="text-tg-hint">{RU.web.session.waitingPlayer}</span>
               </div>
             ))}
           </Card>
@@ -547,17 +547,21 @@ export default function SessionPage({ params }: PageProps) {
           {/* Header */}
           <div className="text-center animate-slide-up">
             <div className="badge mb-3">
-              {isSolo ? `Реплика ${currentRoleNum} из ${totalRoles}` : "Ваш ход"}
+              {isSolo
+                ? RU.web.session.recordBadgeSolo(currentRoleNum, totalRoles)
+                : RU.web.session.recordBadgeDuo}
             </div>
             <h1 className="text-xl font-bold">
-              {isSolo ? `Озвучьте роль ${currentRoleNum}` : `Игрок ${currentRoleNum}`}
+              {isSolo
+                ? RU.web.session.recordTitleSolo(currentRoleNum)
+                : RU.web.session.recordTitleDuo(currentRoleNum)}
             </h1>
           </div>
 
           {/* Task (only in tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
             <Card className="text-center animate-fade-in">
-              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+              <div className="text-sm text-tg-hint mb-1">{RU.web.session.taskLabel}</div>
               <div className="font-medium">{session.session.task}</div>
             </Card>
           )}
@@ -585,7 +589,7 @@ export default function SessionPage({ params }: PageProps) {
               srcCuts={session.sceneUrlCuts}
               muted={false}
               showTimeRange={false}
-              label="📺 Посмотри сцену:"
+              label={RU.web.session.fullSceneLabel}
               showAudioModeSwitch={true}
             />
           </Card>
@@ -593,7 +597,7 @@ export default function SessionPage({ params }: PageProps) {
           {/* Your fragment to dub */}
           <Card className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
-              🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
+              {RU.web.session.fragmentLabel(cueDuration.toFixed(1))}
             </div>
             <VideoPlayer
               key={`fragment-${session.myRoleIndex}`}
@@ -620,7 +624,7 @@ export default function SessionPage({ params }: PageProps) {
           {/* Retake */}
           {hasRecorded && !retakeUsed && (
             <Button variant="secondary" onClick={handleRetake}  className="w-full">
-              🔄 Перезаписать (1 раз)
+              {RU.web.session.retake}
             </Button>
           )}
 
@@ -646,16 +650,19 @@ export default function SessionPage({ params }: PageProps) {
           {/* Header */}
           <div className="text-center animate-slide-up">
             <div className="w-12 h-12 border-4 border-accent-secondary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-bold mb-2">Ожидаем других</h2>
+            <h2 className="text-xl font-bold mb-2">{RU.web.session.waitTitle}</h2>
             <p className="text-tg-hint">
-              Записано: {session.takes.length} / {session.session.maxPlayers}
+              {RU.web.session.waitSubtitle(
+                session.takes.length,
+                session.session.maxPlayers
+              )}
             </p>
           </div>
 
           {/* Task (if tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
             <Card className="text-center animate-fade-in">
-              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+              <div className="text-sm text-tg-hint mb-1">{RU.web.session.taskLabel}</div>
               <div className="font-medium">{session.session.task}</div>
             </Card>
           )}
@@ -668,7 +675,7 @@ export default function SessionPage({ params }: PageProps) {
               srcCuts={session.sceneUrlCuts}
               muted={false}
               showTimeRange={false}
-              label="📺 Посмотри сцену пока ждёшь:"
+              label={RU.web.session.waitSceneLabel}
               showAudioModeSwitch={true}
             />
           </Card>
@@ -677,7 +684,7 @@ export default function SessionPage({ params }: PageProps) {
           {myCue && (
             <Card className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
-                🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
+                {RU.web.session.fragmentLabel(myCue.durationSec.toFixed(1))}
               </div>
               <VideoPlayer
                 key={`wait-fragment`}
@@ -711,13 +718,13 @@ export default function SessionPage({ params }: PageProps) {
       <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <Card className="text-center space-y-6 animate-slide-up max-w-sm">
-          <div className="text-5xl">🎬</div>
+          <div className="text-5xl">{RU.web.session.finishEmoji}</div>
           <div>
-            <h2 className="text-2xl font-bold mb-2">Все записали!</h2>
+            <h2 className="text-2xl font-bold mb-2">{RU.web.session.finishTitle}</h2>
             <p className="text-tg-hint">
               {canStartRender
-                ? "Нажми, чтобы собрать видео"
-                : "Ждём, пока последний игрок запустит сборку"}
+                ? RU.web.session.finishHintCanStart
+                : RU.web.session.finishHintWait}
             </p>
           </div>
           {canStartRender && (
@@ -726,7 +733,9 @@ export default function SessionPage({ params }: PageProps) {
               disabled={finishing}
                className="text-lg px-8 py-4 disabled:opacity-70"
             >
-              {finishing ? "⏳ Собираем..." : "✨ Собрать видео"}
+              {finishing
+                ? RU.web.session.finishButtonLoading
+                : RU.web.session.finishButton}
             </Button>
           )}
         </Card>
@@ -744,12 +753,12 @@ export default function SessionPage({ params }: PageProps) {
           <div className="relative w-20 h-20 mx-auto">
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
-              🎥
+              {RU.web.session.renderingEmoji}
             </div>
           </div>
           <div>
-            <h2 className="text-xl font-bold mb-2">Рендерим видео</h2>
-            <p className="text-tg-hint">Это займёт минуту...</p>
+            <h2 className="text-xl font-bold mb-2">{RU.web.session.renderingTitle}</h2>
+            <p className="text-tg-hint">{RU.web.session.renderingSubtitle}</p>
           </div>
         </Card>
       </div>
