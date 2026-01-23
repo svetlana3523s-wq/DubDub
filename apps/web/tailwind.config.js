@@ -5,7 +5,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["'Space Grotesk'", "system-ui", "sans-serif"],
+        sans: ["'Noto Sans'", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Arial", "Helvetica Neue", "sans-serif"],
       },
       colors: {
         tg: {
