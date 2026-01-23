@@ -453,7 +453,7 @@ export default function SessionPage({ params }: PageProps) {
           <Card className="text-center animate-fade-in">
             <div className="text-sm text-tg-hint mb-2">
               {CATEGORY_LABELS[session.session.category] || session.session.category}
-            </Card>
+            </div>
             {session.session.gameMode === "tasks" && session.session.task && (
               <>
                 <div className="text-xs text-tg-hint mt-3 mb-1">📝 Задание</div>
@@ -463,7 +463,7 @@ export default function SessionPage({ params }: PageProps) {
             {session.session.gameMode === "improv" && (
               <div className="text-lg font-medium">🎭 Импровизация</div>
             )}
-          </div>
+          </Card>
 
           {/* Players */}
           <Card className="space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
@@ -474,7 +474,7 @@ export default function SessionPage({ params }: PageProps) {
               >
                 <div className="w-10 h-10 rounded-full bg-accent-primary/20 flex items-center justify-center font-bold text-accent-primary">
                   {i + 1}
-                </Card>
+                </div>
                 <div className="flex-1">
                   <div className="font-medium">{p.displayName}</div>
                   {p.tgUserId === user?.id && (
@@ -496,7 +496,7 @@ export default function SessionPage({ params }: PageProps) {
                 <span className="text-tg-hint">Ожидаем...</span>
               </div>
             ))}
-          </div>
+          </Card>
 
           {/* Session Code & Instructions */}
           {session.session.maxPlayers > 1 && (
@@ -553,9 +553,9 @@ export default function SessionPage({ params }: PageProps) {
           {/* Task (only in tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
             <Card className="text-center animate-fade-in">
-              <div className="text-sm text-tg-hint mb-1">📝 Задание</Card>
+              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
-            </div>
+            </Card>
           )}
 
           {canSkipScene && (
@@ -590,7 +590,7 @@ export default function SessionPage({ params }: PageProps) {
           <Card className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
-            </Card>
+            </div>
             <VideoPlayer
               key={`fragment-${session.myRoleIndex}`}
               src={session.sceneUrl}
@@ -601,7 +601,7 @@ export default function SessionPage({ params }: PageProps) {
               showTimeRange={true}
               showAudioModeSwitch={true}
             />
-          </div>
+          </Card>
 
           {/* Recorder */}
           <Card className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
@@ -651,9 +651,9 @@ export default function SessionPage({ params }: PageProps) {
           {/* Task (if tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
             <Card className="text-center animate-fade-in">
-              <div className="text-sm text-tg-hint mb-1">📝 Задание</Card>
+              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
-            </div>
+            </Card>
           )}
 
           {/* Full scene with original audio */}
@@ -674,7 +674,7 @@ export default function SessionPage({ params }: PageProps) {
             <Card className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
                 🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
-              </Card>
+              </div>
               <VideoPlayer
                 key={`wait-fragment`}
                 src={session.sceneUrl}
@@ -685,7 +685,7 @@ export default function SessionPage({ params }: PageProps) {
                 showTimeRange={true}
                 showAudioModeSwitch={true}
               />
-            </div>
+            </Card>
           )}
         </div>
       </div>
@@ -707,7 +707,7 @@ export default function SessionPage({ params }: PageProps) {
       <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <Card className="text-center space-y-6 animate-slide-up max-w-sm">
-          <div className="text-5xl">🎬</Card>
+          <div className="text-5xl">🎬</div>
           <div>
             <h2 className="text-2xl font-bold mb-2">Все записали!</h2>
             <p className="text-tg-hint">
@@ -725,7 +725,7 @@ export default function SessionPage({ params }: PageProps) {
               {finishing ? "⏳ Собираем..." : "✨ Собрать видео"}
             </Button>
           )}
-        </div>
+        </Card>
       </div>
       </PageShell>
     );

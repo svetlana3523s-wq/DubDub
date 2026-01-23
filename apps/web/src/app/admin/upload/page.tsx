@@ -260,7 +260,7 @@ export default function AdminUploadPage() {
                 Далее →
               </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Step 3: Cues */}
