@@ -16,7 +16,6 @@ interface PageProps {
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
-      <PageShell>
     <div className="min-h-screen text-white relative overflow-hidden">
       <div className="pointer-events-none absolute -top-32 -right-20 h-72 w-72 rounded-full bg-purple-600/30 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-blue-500/30 blur-3xl" />
