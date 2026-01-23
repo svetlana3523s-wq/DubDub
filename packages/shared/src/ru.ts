@@ -1,5 +1,32 @@
 ﻿export const RU = {
   web: {
+    create: {
+      back: "← Назад",
+      chooseCategoryTitle: "Выбери категорию",
+      chooseCategorySubtitle: "Что будем озвучивать?",
+      chooseModeTitle: "Выбери режим",
+      chooseModeSubtitle: "Как будем играть?",
+      choosePlayersTitle: "Сколько игроков?",
+      playersSubtitle: (categoryLabel: string, modeLabel: string) =>
+        `${categoryLabel} • ${modeLabel}`,
+      soloHint: "🎭 Соло: озвучь все реплики сам",
+      duoHint: "👥 Дуэт: вдвоём веселее!",
+      createButton: "Создать игру →",
+      creating: "Создание...",
+      createErrorMissing: "Выбери все параметры",
+      createErrorGeneric: "Ошибка создания",
+      categories: {
+        movies: "Кино/сериалы",
+        memes: "Мемы",
+        politics: "Политика",
+      },
+      modes: {
+        improv: "Импровизация",
+        tasks: "С заданиями",
+        improvDesc: "Свобода творчества",
+        tasksDesc: "Выполни задание",
+      },
+    },
     result: {
       sendTimeout: "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0437\u0430\u043d\u0438\u043c\u0430\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u043d\u043e\u0433\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.",
       sendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432\u0438\u0434\u0435\u043e. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.",
@@ -52,6 +79,62 @@
       replayEmoji: () => "\u{1F3AE}",
     },
     session: {
+      categoryLabels: {
+        movies: "🎬 Кино/сериалы",
+        memes: "😂 Мемы",
+        politics: "🏛 Политика",
+      },
+      shareText:
+        "🎬 Присоединяйся к озвучке!\n\nНажми на ссылку выше 👇",
+      codeTitle: "Код для присоединения",
+      copyTitle: "Нажми, чтобы скопировать",
+      copied: "✅ Скопировано!",
+      copyHint: "👇 нажми, чтобы скопировать",
+      sendToFriend: "📤 Отправить другу",
+      joinInitDataMissing:
+        "Telegram WebApp не инициализирован. Обновите страницу.",
+      joinError: "Ошибка входа",
+      initDataMissing:
+        "Не удалось получить данные авторизации. Откройте приложение через бота.",
+      uploadError: "Ошибка загрузки",
+      finishError: "Ошибка",
+      loading: "Загрузка...",
+      errorTitle: "Что-то пошло не так",
+      yes: "да",
+      no: "нет",
+      has: "есть",
+      authErrorButton: "Не удалось загрузить игру",
+      authErrorHint:
+        "Проверь интернет или открой веб-приложение ещё раз.",
+      backHome: "На главную",
+      lobbyTitle: "Лобби",
+      lobbyReady: "Все готовы! Скоро начнём...",
+      lobbyWaiting: "Ожидаем игроков",
+      youLabel: "Это вы",
+      waitingPlayer: "Ожидаем...",
+      recordBadgeSolo: (current: number, total: number) =>
+        `Реплика ${current} из ${total}`,
+      recordBadgeDuo: "Ваш ход",
+      recordTitleSolo: (current: number) => `Озвучьте роль ${current}`,
+      recordTitleDuo: (current: number) => `Игрок ${current}`,
+      fullSceneLabel: "📺 Посмотри сцену:",
+      fragmentLabel: (duration: string) =>
+        `🎬 Твой фрагмент для озвучки (${duration} сек):`,
+      retake: "🔄 Перезаписать (1 раз)",
+      waitTitle: "Ожидаем других",
+      waitSubtitle: (takes: number, maxPlayers: number) =>
+        `Записано: ${takes} / ${maxPlayers}`,
+      waitSceneLabel: "📺 Посмотри сцену пока ждёшь:",
+      finishTitle: "Все записали!",
+      finishHintCanStart: "Нажми, чтобы собрать видео",
+      finishHintWait:
+        "Ждём, пока последний игрок запустит сборку",
+      finishButton: "✨ Собрать видео",
+      finishButtonLoading: "⏳ Собираем...",
+      renderingTitle: "Рендерим видео",
+      renderingSubtitle: "Это займёт минуту...",
+      finishEmoji: "🎬",
+      renderingEmoji: "🎥",
       skipScene: "\u{23ED} \u041f\u0440\u043e\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0441\u0446\u0435\u043d\u0443",
       skipNotAllowedAfterFirstTake:
         "\u041f\u0440\u043e\u043f\u0443\u0441\u043a \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0442\u043e\u043b\u044c\u043a\u043e \u0434\u043e \u043f\u0435\u0440\u0432\u043e\u0439 \u0437\u0430\u043f\u0438\u0441\u0438.",
@@ -61,6 +144,41 @@
         "\u0422\u043e\u043b\u044c\u043a\u043e \u0441\u043e\u0437\u0434\u0430\u0442\u0435\u043b\u044c \u043c\u043e\u0436\u0435\u0442 \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u0442\u044c \u0441\u0446\u0435\u043d\u0443.",
       skipFailed:
         "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0441\u0446\u0435\u043d\u0443. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.",
+    },
+    admin: {
+      scenes: {
+        categoryAll: "Все",
+        categoryMovies: "🎬 Кино/сериалы",
+        categoryMemes: "😂 Мемы",
+        categoryPolitics: "🏛 Политика",
+        noAccessTitle: "Нет доступа",
+        noAccessBody:
+          "Админка доступна только через Telegram Mini App. Откройте бота и используйте кнопку для входа в приложение.",
+        noAccessShort: "У вас нет прав администратора",
+        adminCheckError: "Ошибка проверки прав администратора",
+        title: "Управление сценами",
+        totalLabel: (total: number) => `Всего сцен: ${total}`,
+        newScene: "➕ Новая сцена",
+        searchLabel: "Поиск по названию",
+        searchPlaceholder: "Введите название...",
+        searchButton: "🔍 Найти",
+        categoryLabel: "Категория",
+        emptyTitle: "Сцен не найдено",
+        emptyButton: "➕ Загрузить первую сцену",
+        durationLabel: (seconds: string) => `⏱ Длительность: ${seconds}s`,
+        rolesLabel: (count: number) => `🎭 Ролей: ${count}`,
+        editButton: "Редактировать",
+        deleteButton: "Удалить",
+        prevPage: "← Назад",
+        nextPage: "Вперёд →",
+        deleteConfirm:
+          "Удалить эту сцену? Это действие нельзя отменить.",
+        deleteForceConfirm:
+          "⚠️ Принудительное удаление! Все связанные сессии тоже будут удалены. Продолжить?",
+        deleteForcePrompt: "Удалить принудительно?",
+        deleteError: "Ошибка удаления",
+        loadError: "Ошибка загрузки",
+      },
     },
   },
   worker: {

@@ -17,11 +17,7 @@ interface PageProps {
 
 type ViewState = "loading" | "error" | "lobby" | "record" | "wait" | "finish" | "rendering";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  movies: "???? ????????/??????????????",
-  memes: "???? ????????",
-  politics: "??????? ????????????????",
-};
+const CATEGORY_LABELS: Record<string, string> = RU.web.session.categoryLabels;
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
@@ -44,7 +40,7 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   
   // Simple share text - the link itself contains the join info
   // Note: Telegram share API doesn't support Markdown, so code can't be monospace in the message
-  const shareText = `🎬 Присоединяйся к озвучке!\n\nНажми на ссылку выше 👆`;
+  const shareText = RU.web.session.shareText;
 
   const [copied, setCopied] = useState(false);
   
@@ -72,16 +68,17 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
     <Card className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
       <div className="text-center space-y-4">
         <div>
-          <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
+          <div className="text-xs text-tg-hint mb-2">{RU.web.session.codeTitle}</div>
           <button
             onClick={handleCopyCode}
             className="font-mono text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 cursor-pointer transition-colors"
-            title="Нажми, чтобы скопировать"
+            title={RU.web.session.copyTitle}
           >
-            {copied ? "✅ Скопировано!" : sessionCode}
+            {copied ? RU.web.session.copied : sessionCode}
           </button>
           <div className="text-xs text-tg-hint mt-1">
-            👆 нажми, чтобы скопировать</div>
+            {RU.web.session.copyHint}
+          </div>
         </div>
 
         <Button
@@ -89,7 +86,8 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
           onClick={handleSendToFriend}
           className="w-full"
         >
-          📤 Отправить другу</Button>
+          {RU.web.session.sendToFriend}
+        </Button>
       </div>
     </Card>
   );
@@ -125,7 +123,7 @@ export default function SessionPage({ params }: PageProps) {
   const joinSession = useCallback(async () => {
     if (!initData) {
       console.error("[Join] No initData available", { isReady, initData: !!initData });
-      setError("Telegram WebApp не инициализирован. Обновите страницу.");
+      setError(RU.web.session.joinInitDataMissing);
       setViewState("error");
       return;
     }
@@ -137,7 +135,7 @@ export default function SessionPage({ params }: PageProps) {
       return data;
     } catch (err) {
       console.error("[Join] Failed:", err);
-      setError(err instanceof Error ? err.message : "Ошибка входа");
+      setError(err instanceof Error ? err.message : RU.web.session.joinError);
       setViewState("error");
     }
   }, [initData, sessionId, isReady]);
@@ -221,7 +219,7 @@ export default function SessionPage({ params }: PageProps) {
 
     if (!initData) {
       console.error("[Init] Telegram ready but no initData!", { isReady, initData });
-      setError("Не удалось получить данные авторизации. Откройте приложение через бота.");
+      setError(RU.web.session.initDataMissing);
       setViewState("error");
       return;
     }
@@ -298,7 +296,7 @@ export default function SessionPage({ params }: PageProps) {
       }
     } catch (err) {
       console.error("Upload failed:", err);
-      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      setError(err instanceof Error ? err.message : RU.web.session.uploadError);
     }
   };
 
@@ -317,7 +315,7 @@ export default function SessionPage({ params }: PageProps) {
       setViewState("rendering");
     } catch (err) {
       console.error("Finish failed:", err);
-      setError(err instanceof Error ? err.message : "Ошибка");
+      setError(err instanceof Error ? err.message : RU.web.session.finishError);
       setFinishing(false); // Reset on error
     }
   };
@@ -368,7 +366,7 @@ export default function SessionPage({ params }: PageProps) {
         <div className="flex-1 flex items-center justify-center min-h-[70vh]">
           <Card className="text-center space-y-4">
             <div className="w-12 h-12 border-3 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-tg-hint">????????????????...</p>
+            <p className="text-tg-hint">{RU.web.session.loading}</p>
           </Card>
         </div>
       </PageShell>
@@ -377,23 +375,29 @@ export default function SessionPage({ params }: PageProps) {
 
   // Error  // Error
   if (viewState === "error") {
-    const isAuthError = error?.includes("??????????????????????") || error?.includes("initData");
+    const isAuthError =
+      error?.includes(RU.web.session.initDataMissing) || error?.includes("initData");
     const tgAvailable = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
 
     return (
       <PageShell>
         <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[70vh]">
           <Card className="text-center space-y-4">
-            <div className="text-5xl">????</div>
-            <h2 className="text-xl font-bold">????????????</h2>
+            <div className="text-5xl">{RU.web.result.warningEmoji()}</div>
+            <h2 className="text-xl font-bold">{RU.web.session.errorTitle}</h2>
             <p className="text-tg-hint">{error}</p>
 
             {/* Diagnostic info */}
             <div className="text-xs text-tg-hint bg-white/5 p-3 rounded-2xl text-left border border-white/10">
-              <p>TG WebApp: {tgAvailable ? '???' : '???'}</p>
-              <p>initData: {initData ? '???' : '???'}</p>
+              <p>TG WebApp: {tgAvailable ? RU.web.session.has : RU.web.session.no}</p>
+              <p>initData: {initData ? RU.web.session.has : RU.web.session.no}</p>
               <p>Session: {sessionId.slice(-8)}</p>
-              <p>window.Telegram: {typeof window !== 'undefined' && 'Telegram' in window ? '???' : '???'}</p>
+              <p>
+                window.Telegram:{" "}
+                {typeof window !== 'undefined' && 'Telegram' in window
+                  ? RU.web.session.has
+                  : RU.web.session.no}
+              </p>
               <p>URL: {typeof window !== 'undefined' ? window.location.pathname : '?'}</p>
             </div>
 
@@ -408,10 +412,10 @@ export default function SessionPage({ params }: PageProps) {
                       setError(null);
                     }}
                   >
-                    ???? ?????????????????????? ??????????
+                    {RU.web.session.authErrorButton}
                   </Button>
                   <p className="text-xs text-tg-hint mt-2">
-                    ???????? ???? ????????????????, ???????????????? ???????????????????? ?? ???????????????? ???????????? ?????????? ????????
+                    {RU.web.session.authErrorHint}
                   </p>
                 </>
               )}
@@ -419,7 +423,7 @@ export default function SessionPage({ params }: PageProps) {
                 variant="secondary"
                 onClick={() => router.push("/")}
               >
-                ???? ??????????????
+                {RU.web.session.backHome}
               </Button>
             </div>
           </Card>

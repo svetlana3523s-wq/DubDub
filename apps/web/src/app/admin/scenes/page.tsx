@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -6,13 +6,14 @@ import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { RU } from "@dubdub/shared";
 import type { SceneListItem, Category } from "@dubdub/shared";
 
 const CATEGORIES: { id: Category | ""; label: string }[] = [
-  { id: "", label: "Все" },
-  { id: "movies", label: "🎬 Кино/сериалы" },
-  { id: "memes", label: "😂 Мемы" },
-  { id: "politics", label: "🏛️ Политика" },
+  { id: "", label: RU.web.admin.scenes.categoryAll },
+  { id: "movies", label: RU.web.admin.scenes.categoryMovies },
+  { id: "memes", label: RU.web.admin.scenes.categoryMemes },
+  { id: "politics", label: RU.web.admin.scenes.categoryPolitics },
 ];
 
 export default function AdminScenesPage() {
@@ -38,7 +39,7 @@ export default function AdminScenesPage() {
 
     if (!initData) {
       // Not opened in Telegram Mini App
-      setError("Админка доступна только через Telegram Mini App. Откройте бота и нажмите кнопку для открытия приложения.");
+      setError(RU.web.admin.scenes.noAccessBody);
       setIsAdmin(false);
       return;
     }
@@ -47,14 +48,14 @@ export default function AdminScenesPage() {
       try {
         const result = await api.checkAdmin(initData);
         if (!result.isAdmin) {
-          setError("У вас нет прав администратора");
+          setError(RU.web.admin.scenes.noAccessShort);
           setIsAdmin(false);
           return;
         }
         setIsAdmin(true);
       } catch (err) {
         console.error("Failed to check admin:", err);
-        setError("Ошибка проверки прав администратора");
+        setError(RU.web.admin.scenes.adminCheckError);
         setIsAdmin(false);
       }
     };
@@ -80,7 +81,7 @@ export default function AdminScenesPage() {
       setTotal(result.total);
     } catch (err: any) {
       console.error("Failed to load scenes:", err);
-      setError(err.message || "Ошибка загрузки");
+      setError(err.message || RU.web.admin.scenes.loadError);
     } finally {
       setLoading(false);
     }
@@ -97,11 +98,11 @@ export default function AdminScenesPage() {
 
   const handleDelete = async (sceneId: string, force: boolean = false) => {
     if (!initData) return;
-    
-    const confirmMsg = force 
-      ? "⚠️ Принудительное удаление! Все связанные сессии тоже будут удалены. Продолжить?"
-      : "Удалить эту сцену? Это действие нельзя отменить.";
-    
+
+    const confirmMsg = force
+      ? RU.web.admin.scenes.deleteForceConfirm
+      : RU.web.admin.scenes.deleteConfirm;
+
     if (!confirm(confirmMsg)) {
       return;
     }
@@ -110,10 +111,10 @@ export default function AdminScenesPage() {
       await api.deleteScene(initData, sceneId, force);
       loadScenes();
     } catch (err: any) {
-      const msg = err.message || "Ошибка удаления";
+      const msg = err.message || RU.web.admin.scenes.deleteError;
       // If error mentions active sessions, offer force delete
       if (msg.includes("active session") && !force) {
-        if (confirm(`${msg}\n\nУдалить принудительно?`)) {
+        if (confirm(`${msg}\n\n${RU.web.admin.scenes.deleteForcePrompt}`)) {
           handleDelete(sceneId, true);
         }
       } else {
@@ -134,17 +135,13 @@ export default function AdminScenesPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="text-5xl mb-4">🔒</div>
-        <h2 className="text-2xl font-bold mb-4">Нет доступа</h2>
+        <h2 className="text-2xl font-bold mb-4">{RU.web.admin.scenes.noAccessTitle}</h2>
         {error ? (
           <p className="text-tg-hint mb-6">{error}</p>
         ) : (
-          <p className="text-tg-hint mb-6">
-            Админка доступна только через Telegram Mini App.<br />
-            Откройте бота и используйте кнопку для входа в приложение.
-          </p>
+          <p className="text-tg-hint mb-6">{RU.web.admin.scenes.noAccessBody}</p>
         )}
-        <Button variant="primary" onClick={() => router.push("/")}>
-          На главную
+        <Button variant="primary" onClick={() => router.push("/")}>            {RU.web.session.backHome}
         </Button>
       </div>
     );
@@ -157,34 +154,33 @@ export default function AdminScenesPage() {
       <div className="max-w-4xl mx-auto w-full space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Управление сценами</h1>
-            <p className="text-tg-hint text-sm">Всего сцен: {total}</p>
+            <h1 className="text-2xl font-bold mb-1">{RU.web.admin.scenes.title}</h1>
+            <p className="text-tg-hint text-sm">{RU.web.admin.scenes.totalLabel(total)}</p>
           </div>
-          <Button variant="primary" onClick={() => router.push("/admin/upload")}>
-            ➕ Новая сцена
+          <Button variant="primary" onClick={() => router.push("/admin/upload")}>            {RU.web.admin.scenes.newScene}
           </Button>
         </div>
 
         {/* Filters */}
         <Card className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Поиск по названию</label>
+            <label className="block text-sm font-medium mb-2">{RU.web.admin.scenes.searchLabel}</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Введите название..."
+                placeholder={RU.web.admin.scenes.searchPlaceholder}
                 className="flex-1 px-4 py-2 rounded-lg bg-tg-secondary text-white placeholder-tg-hint focus:outline-none focus:ring-2 focus:ring-accent-primary"
               />
               <Button variant="secondary" onClick={handleSearch}>
-                🔍 Найти
+                {RU.web.admin.scenes.searchButton}
               </Button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Категория</label>
+            <label className="block text-sm font-medium mb-2">{RU.web.admin.scenes.categoryLabel}</label>
             <div className="grid grid-cols-4 gap-2">
               {CATEGORIES.map((cat) => (
                 <Button
@@ -220,9 +216,9 @@ export default function AdminScenesPage() {
           </div>
         ) : scenes.length === 0 ? (
           <Card className="text-center py-12">
-            <div className="text-tg-hint">Сцен не найдено</div>
+            <div className="text-tg-hint">{RU.web.admin.scenes.emptyTitle}</div>
             <Button variant="primary" onClick={() => router.push("/admin/upload")} className="mt-4">
-              ➕ Загрузить первую сцену
+              {RU.web.admin.scenes.emptyButton}
             </Button>
           </Card>
         ) : (
@@ -238,18 +234,19 @@ export default function AdminScenesPage() {
                       </span>
                     </div>
                     <div className="text-sm text-tg-hint space-y-1">
-                      <div>⏱ Длительность: {scene.durationSec.toFixed(1)}s</div>
-                      <div>🎭 Ролей: {scene.rolesCount}</div>
+                      <div>{RU.web.admin.scenes.durationLabel(scene.durationSec.toFixed(1))}</div>
+                      <div>{RU.web.admin.scenes.rolesLabel(scene.rolesCount)}</div>
                       <div>📅 {new Date(scene.createdAt).toLocaleDateString("ru-RU")}</div>
                     </div>
-                  </div>                  <div className="flex gap-2">
+                  </div>
+                  <div className="flex gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => router.push(`/admin/scenes/${scene.id}/edit`)}
                       className="px-4 py-2"
                     >
-                      ?????? ??????????????????????????
+                      {RU.web.admin.scenes.editButton}
                     </Button>
                     <Button
                       variant="danger"
@@ -257,7 +254,7 @@ export default function AdminScenesPage() {
                       onClick={() => handleDelete(scene.id)}
                       className="px-4 py-2"
                     >
-                      ???? ??????????????
+                      {RU.web.admin.scenes.deleteButton}
                     </Button>
                   </div>
                 </div>
@@ -266,25 +263,27 @@ export default function AdminScenesPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2">                <Button
+              <div className="flex items-center justify-center gap-2">
+                <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className="px-4 py-2"
                 >
-                  ??? ??????????
+                  {RU.web.admin.scenes.prevPage}
                 </Button>
                 <div className="text-sm text-tg-hint">
                   Страница {page} из {totalPages}
-                </div>                <Button
+                </div>
+                <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
                   className="px-4 py-2"
                 >
-                  ???????????? ???
+                  {RU.web.admin.scenes.nextPage}
                 </Button>
               </div>
             )}
@@ -294,5 +293,3 @@ export default function AdminScenesPage() {
     </div>
   );
 }
-
-

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,19 +6,30 @@ import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { RU } from "@dubdub/shared";
 import type { Category, GameMode } from "@dubdub/shared";
 
 type Step = "category" | "mode" | "players";
 
 const CATEGORIES: { id: Category; label: string; emoji: string }[] = [
-  { id: "movies", label: "Кино/сериалы", emoji: "🎬" },
-  { id: "memes", label: "Мемы", emoji: "😂" },
-  { id: "politics", label: "Политика", emoji: "🏛️" },
+  { id: "movies", label: RU.web.create.categories.movies, emoji: "🎬" },
+  { id: "memes", label: RU.web.create.categories.memes, emoji: "😂" },
+  { id: "politics", label: RU.web.create.categories.politics, emoji: "🏛" },
 ];
 
 const MODES: { id: GameMode; label: string; emoji: string; desc: string }[] = [
-  { id: "improv", label: "Импровизация", emoji: "🎭", desc: "Свобода творчества" },
-  { id: "tasks", label: "С заданиями", emoji: "📝", desc: "Выполни задание" },
+  {
+    id: "improv",
+    label: RU.web.create.modes.improv,
+    emoji: "🎭",
+    desc: RU.web.create.modes.improvDesc,
+  },
+  {
+    id: "tasks",
+    label: RU.web.create.modes.tasks,
+    emoji: "📝",
+    desc: RU.web.create.modes.tasksDesc,
+  },
 ];
 
 export default function CreatePage() {
@@ -33,7 +44,7 @@ export default function CreatePage() {
 
   const handleCreate = async () => {
     if (!initData || !category || !gameMode) {
-      setError("Выбери все параметры");
+      setError(RU.web.create.createErrorMissing);
       return;
     }
 
@@ -41,15 +52,15 @@ export default function CreatePage() {
     setError(null);
 
     try {
-      const result = await api.createSession(initData, { 
-        maxPlayers: maxPlayers as 1 | 2, 
-        category, 
-        gameMode 
+      const result = await api.createSession(initData, {
+        maxPlayers: maxPlayers as 1 | 2,
+        category,
+        gameMode,
       });
       router.push(`/s/${result.sessionId}`);
     } catch (err) {
       console.error("Create failed:", err);
-      setError(err instanceof Error ? err.message : "Ошибка создания");
+      setError(err instanceof Error ? err.message : RU.web.create.createErrorGeneric);
     } finally {
       setLoading(false);
     }
@@ -81,7 +92,6 @@ export default function CreatePage() {
   return (
     <div className="flex-1 flex flex-col p-6">
       <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full space-y-8">
-        
         {/* Back button */}
         {step !== "category" && (
           <Button
@@ -90,7 +100,7 @@ export default function CreatePage() {
             size="sm"
             className="absolute top-4 left-4"
           >
-            в†ђ РќР°Р·Р°Рґ
+            {RU.web.create.back}
           </Button>
         )}
 
@@ -98,8 +108,8 @@ export default function CreatePage() {
         {step === "category" && (
           <>
             <div className="text-center animate-slide-up">
-              <h1 className="text-3xl font-bold mb-2">Выбери категорию</h1>
-              <p className="text-tg-hint">Что будем озвучивать?</p>
+              <h1 className="text-3xl font-bold mb-2">{RU.web.create.chooseCategoryTitle}</h1>
+              <p className="text-tg-hint">{RU.web.create.chooseCategorySubtitle}</p>
             </div>
 
             <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
@@ -122,8 +132,8 @@ export default function CreatePage() {
         {step === "mode" && (
           <>
             <div className="text-center animate-slide-up">
-              <h1 className="text-3xl font-bold mb-2">Выбери режим</h1>
-              <p className="text-tg-hint">Как будем играть?</p>
+              <h1 className="text-3xl font-bold mb-2">{RU.web.create.chooseModeTitle}</h1>
+              <p className="text-tg-hint">{RU.web.create.chooseModeSubtitle}</p>
             </div>
 
             <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
@@ -149,11 +159,12 @@ export default function CreatePage() {
         {step === "players" && (
           <>
             <div className="text-center animate-slide-up">
-              <h1 className="text-3xl font-bold mb-2">Сколько игроков?</h1>
+              <h1 className="text-3xl font-bold mb-2">{RU.web.create.choosePlayersTitle}</h1>
               <p className="text-tg-hint">
-                {CATEGORIES.find(c => c.id === category)?.emoji}{" "}
-                {CATEGORIES.find(c => c.id === category)?.label} •{" "}
-                {MODES.find(m => m.id === gameMode)?.label}
+                {RU.web.create.playersSubtitle(
+                  CATEGORIES.find((c) => c.id === category)?.label || "",
+                  MODES.find((m) => m.id === gameMode)?.label || ""
+                )}
               </p>
             </div>
 
@@ -175,9 +186,7 @@ export default function CreatePage() {
                 ))}
               </div>
               <p className="text-tg-hint text-sm mt-4 text-center">
-                {maxPlayers === 1
-                  ? "🎭 Соло: озвучь все реплики сам"
-                  : "👥 Дуэт: вдвоём веселее!"}
+                {maxPlayers === 1 ? RU.web.create.soloHint : RU.web.create.duoHint}
               </p>
             </Card>
 
@@ -198,10 +207,10 @@ export default function CreatePage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Создание...
+                  {RU.web.create.creating}
                 </span>
               ) : (
-                "Создать игру →"
+                RU.web.create.createButton
               )}
             </Button>
           </>
