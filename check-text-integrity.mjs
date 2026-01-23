@@ -14,8 +14,9 @@ const EXCLUDE_DIRS = new Set([
   ".git",
 ]);
 
-const mojibakeRe = /ЁЯ|╨|тА|گ\?|�/;
+const mojibakeRe = /ЁЯ|╨|тА|گ\?|�|Р’С|РќР|РІвЂ|в†ђ/;
 const tsxBadEscapeRe = /\\u[0-9a-fA-F]{4}|\\u1f/i;
+const questionMarkRunRe = /\?{3,}/;
 
 const findings = [];
 
@@ -73,6 +74,13 @@ function checkFile(filePath, ext) {
         file: filePath,
         line: i + 1,
         reason: "tsx_raw_escape",
+      });
+    }
+    if (questionMarkRunRe.test(line) && /["'`]/.test(line)) {
+      findings.push({
+        file: filePath,
+        line: i + 1,
+        reason: "question_marks_literal",
       });
     }
   }
