@@ -69,10 +69,10 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <Card className=" animate-fade-in" style={{ animationDelay: "0.2s" }}>
+    <Card className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
       <div className="text-center space-y-4">
         <div>
-          <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
+          <div className="text-xs text-tg-hint mb-2">Код для присоединения</Card>
           <button
             onClick={handleCopyCode}
             className="font-mono text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 cursor-pointer transition-colors"
@@ -82,12 +82,12 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
           </Button>
           <div className="text-xs text-tg-hint mt-1">
             👆 нажми, чтобы скопировать
-          </Card>
+          </div>
         </div>
         
-        <button
+        <Button variant="primary"
           onClick={handleSendToFriend}
-          variant="primary" className=" w-full"
+           className="w-full"
         >
           📤 Отправить другу
         </Button>
@@ -402,6 +402,7 @@ export default function SessionPage({ params }: PageProps) {
               {isAuthError && (
                 <>
                   <Button
+                    variant="primary"
                     onClick={() => {
                       retry();
                       setViewState("loading");
@@ -415,9 +416,9 @@ export default function SessionPage({ params }: PageProps) {
                   </p>
                 </>
               )}
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => router.push("/")}
-                variant="secondary" className=""
               >
                 ???? ??????????????
               </Button>
@@ -450,7 +451,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Category + Task */}
-          <Card className=" text-center animate-fade-in">
+          <Card className="text-center animate-fade-in">
             <div className="text-sm text-tg-hint mb-2">
               {CATEGORY_LABELS[session.session.category] || session.session.category}
             </Card>
@@ -466,7 +467,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Players */}
-          <Card className=" space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className="space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
             {session.participants.map((p, i) => (
               <div
                 key={p.id}
@@ -505,10 +506,10 @@ export default function SessionPage({ params }: PageProps) {
 
           {canSkipScene && (
             <div className="space-y-2">
-              <button
+              <Button variant="secondary"
                 onClick={handleSkipScene}
                 disabled={skipInProgress}
-                variant="secondary" className=" w-full disabled:opacity-70"
+                 className="w-full disabled:opacity-70"
               >
                 {skipInProgress ? "..." : RU.web.session.skipScene}
               </Button>
@@ -552,18 +553,18 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Task (only in tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
-            <Card className=" text-center animate-fade-in">
-              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+            <Card className="text-center animate-fade-in">
+              <div className="text-sm text-tg-hint mb-1">📝 Задание</Card>
               <div className="font-medium">{session.session.task}</div>
-            </Card>
+            </div>
           )}
 
           {canSkipScene && (
             <div className="animate-fade-in" style={{ animationDelay: "0.03s" }}>
-              <button
+              <Button variant="secondary"
                 onClick={handleSkipScene}
                 disabled={skipInProgress}
-                variant="secondary" className=" w-full disabled:opacity-70"
+                 className="w-full disabled:opacity-70"
               >
                 {skipInProgress ? "..." : RU.web.session.skipScene}
               </Button>
@@ -574,7 +575,7 @@ export default function SessionPage({ params }: PageProps) {
           )}
 
           {/* Full scene with original audio */}
-          <Card className=" animate-fade-in" style={{ animationDelay: "0.05s" }}>
+          <Card className="animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <VideoPlayer
               key={`full-${session.myRoleIndex}`}
               src={session.sceneUrl}
@@ -587,7 +588,7 @@ export default function SessionPage({ params }: PageProps) {
           </Card>
 
           {/* Your fragment to dub */}
-          <Card className=" animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
             </Card>
@@ -604,7 +605,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Recorder */}
-          <Card className=" animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <Card className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
             <VoiceRecorder
               key={`recorder-${session.myRoleIndex}`}
               maxDuration={cueDuration}
@@ -615,7 +616,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Retake */}
           {hasRecorded && !retakeUsed && (
-            <Button onClick={handleRetake} variant="secondary" className=" w-full">
+            <Button variant="secondary" onClick={handleRetake}  className="w-full">
               🔄 Перезаписать (1 раз)
             </Button>
           )}
@@ -650,14 +651,14 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Task (if tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
-            <Card className=" text-center animate-fade-in">
-              <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
+            <Card className="text-center animate-fade-in">
+              <div className="text-sm text-tg-hint mb-1">📝 Задание</Card>
               <div className="font-medium">{session.session.task}</div>
-            </Card>
+            </div>
           )}
 
           {/* Full scene with original audio */}
-          <Card className=" animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <VideoPlayer
               key={`wait-full`}
               src={session.sceneUrl}
@@ -671,7 +672,7 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Your fragment to dub */}
           {myCue && (
-            <Card className=" animate-fade-in" style={{ animationDelay: "0.15s" }}>
+            <Card className="animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
                 🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
               </Card>
@@ -706,8 +707,8 @@ export default function SessionPage({ params }: PageProps) {
     return (
       <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <Card className=" text-center space-y-6 animate-slide-up max-w-sm">
-          <div className="text-5xl">🎬</div>
+        <Card className="text-center space-y-6 animate-slide-up max-w-sm">
+          <div className="text-5xl">🎬</Card>
           <div>
             <h2 className="text-2xl font-bold mb-2">Все записали!</h2>
             <p className="text-tg-hint">
@@ -715,12 +716,12 @@ export default function SessionPage({ params }: PageProps) {
                 ? "Нажми, чтобы собрать видео"
                 : "Ждём, пока последний игрок запустит сборку"}
             </p>
-          </Card>
+          </div>
           {canStartRender && (
-            <button 
+            <Button variant="primary" 
               onClick={handleFinish} 
               disabled={finishing}
-              variant="primary" className=" text-lg px-8 py-4 disabled:opacity-70"
+               className="text-lg px-8 py-4 disabled:opacity-70"
             >
               {finishing ? "⏳ Собираем..." : "✨ Собрать видео"}
             </Button>
@@ -736,7 +737,7 @@ export default function SessionPage({ params }: PageProps) {
     return (
       <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <Card className=" text-center space-y-6 animate-slide-up">
+        <Card className="text-center space-y-6 animate-slide-up">
           <div className="relative w-20 h-20 mx-auto">
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
