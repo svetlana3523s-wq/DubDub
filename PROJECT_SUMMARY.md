@@ -58,6 +58,12 @@ Debug:
   - post-deploy HTTP checks (`/health`, `/meta/version`)
   - post-deploy proof step (prints `CURRENT_SYMLINK`, `RELEASE_SHA`, and `:3001` listener)
 
+## Guardrails (text integrity)
+
+- All user-facing RU strings must be defined in `packages/shared/src/ru.ts` and used via `RU`.
+- Avoid typing Russian literals in `.tsx` during large UI refactors.
+- After UI work: run `node check-text-integrity.mjs` and scan for `\\?{3,}` in `apps/web/src`.
+
 ## Operational rules
 
 - No manual edits on VPS via SSH/PowerShell.

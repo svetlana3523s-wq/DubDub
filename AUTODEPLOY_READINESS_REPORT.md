@@ -44,6 +44,7 @@ STATUS: PASS - Deploy Prod workflow exists and is the primary deployment mechani
 ## Proof checklist (what "OK" means)
 
 From GitHub Actions logs (preferred):
+- Text integrity guard step is green.
 - "Post-deploy check" shows:
   - `GET /health` -> 200
   - `GET /meta/version` -> 200

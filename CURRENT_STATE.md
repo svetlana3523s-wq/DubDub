@@ -45,6 +45,9 @@ Last updated: 2026-01-21
 ## Guardrails
 - Text integrity guard is enabled in CI: `check-text-integrity.mjs` + workflow step.
 - User-facing Telegram bot texts are centralized under shared `RU` exports.
+- Rule: all user-facing RU strings must come from `ru.ts` (no hardcoded RU in UI).
+- Do not type Russian directly in `.tsx` during large UI refactors; use `RU` keys.
+- After UI refactor: run `node check-text-integrity.mjs` and `rg -n "\\?{3,}" apps/web/src`.
 
 ## Current Top Issue (P0)
 - Verify send-status updates without reload in Telegram WebView (after proxy + no-store + polling start on render ready).

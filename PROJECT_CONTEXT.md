@@ -65,6 +65,11 @@ Current workaround:
 Debug tooling:
 - Result page has an in-app debug toggle (long-press on "Show game ID") to show last API error and last poll timestamp.
 
+## UI/Text guardrails
+
+- Keep UI changes UI-only (no logic changes mixed into visual refactors).
+- Centralize user-facing RU strings in `packages/shared/src/ru.ts` and use `RU` imports in web.
+
 ## Deployment (summary)
 
 - Primary deploy: GitHub Actions `.github/workflows/deploy-prod.yml`.

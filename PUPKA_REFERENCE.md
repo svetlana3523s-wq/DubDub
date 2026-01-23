@@ -48,6 +48,14 @@ Single source of truth for the PUPKA coordination assistant. Update this file fi
   - screenshot with the debug line visible (if present)
   - whether it was inside Telegram WebView (iOS/Android) or external browser
 
+## Quick text checks (before UI deploy)
+
+```
+node check-text-integrity.mjs
+rg -n "\\?{3,}" apps/web/src
+rg -n "Р’С|РќР|РІвЂ|в†ђ" apps/web/src
+```
+
 ## Deploy verification (preferred)
 
 - GitHub Actions "Deploy Prod" logs:
