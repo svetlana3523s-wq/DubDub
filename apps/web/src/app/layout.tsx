@@ -1,6 +1,13 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans } from "next/font/google";
 import { TelegramProvider } from "@/components/TelegramProvider";
+
+const notoSans = Noto_Sans({
+  subsets: ["latin", "cyrillic"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-sans",
+});
 
 export const metadata: Metadata = {
   title: "DubDub — Озвучь это!",
@@ -21,12 +28,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className="dark" suppressHydrationWarning>
+    <html
+      lang="ru"
+      className={`${notoSans.variable} dark`}
+      suppressHydrationWarning
+    >
       <head>
         <script src="https://telegram.org/js/telegram-web-app.js" />
         <meta name="color-scheme" content="dark" />
       </head>
-      <body className="antialiased bg-black text-white">
+      <body className="antialiased bg-black text-white font-sans">
         <TelegramProvider>
           <main className="min-h-screen min-h-dvh flex flex-col safe-top safe-bottom">
             {children}
