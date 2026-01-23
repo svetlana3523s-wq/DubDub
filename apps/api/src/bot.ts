@@ -15,11 +15,10 @@ import os from "os";
 import { SCENE_CATEGORIES, CATEGORY_LABELS, type SceneCategory } from "./config/categories.js";
 import { RU } from "@dubdub/shared";
 
-// Состояние диалога для добавления сцен
 interface PendingScene {
   userId: number;
-  fileId?: string; // Telegram file_id (если загружено через Telegram)
-  fileUrl?: string; // Прямая ссылка на файл (если загружено по URL)
+  fileId?: string;
+  fileUrl?: string;
   duration: number;
   fps: number;
   totalFrames: number;
@@ -28,7 +27,6 @@ interface PendingScene {
   category?: SceneCategory;
 }
 
-// Состояние диалога для редактирования сцен
 interface PendingEdit {
   userId: number;
   sceneId: string;
@@ -64,14 +62,11 @@ async function downloadTelegramFile(
   bot: Telegraf,
   fileId: string
 ): Promise<{ buffer: Buffer; path: string }> {
-  // Получаем информацию о файле
   const file = await bot.telegram.getFile(fileId);
   
-  // Строим URL для скачивания (для больших файлов нужно использовать токен бота)
   const botToken = config.botToken;
   const fileUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
   
-  // Скачиваем файл
   const response = await fetch(fileUrl);
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
@@ -93,11 +88,9 @@ async function downloadTelegramFile(
  */
 async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; path: string }> {
   
-  // Проверяем, что это валидный URL
   try {
     const url = new URL(fileUrl);
     
-    // Проверяем, что это не ссылка на страницу (например, Яндекс.Диск)
     if (url.hostname.includes('yandex.ru') || url.hostname.includes('disk.yandex')) {
       throw new Error("Yandex.Disk link detected. Please provide direct download link. For Yandex.Disk: right-click on file > 'Get link' > copy direct link, or use /d/ link.");
     }
@@ -112,7 +105,6 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
     throw new Error("Invalid URL");
   }
   
-  // Скачиваем файл
   const response = await fetch(fileUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -124,12 +116,10 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
     throw new Error(`Failed to download file from URL: ${response.status} ${response.statusText}`);
   }
   
-  // Проверяем Content-Type (должен быть video или octet-stream)
   const contentType = response.headers.get('content-type') || '';
   const contentLength = response.headers.get('content-length');
   
   
-  // Если это HTML - значит скачалась страница, а не файл
   if (contentType.includes('text/html')) {
     const buffer = Buffer.from(await response.arrayBuffer());
     const htmlPreview = buffer.toString('utf-8', 0, Math.min(500, buffer.length));
@@ -141,15 +131,12 @@ async function downloadFileFromUrl(fileUrl: string): Promise<{ buffer: Buffer; p
     console.warn(`[Bot] Warning: Unexpected content-type: ${contentType}`);
   }
   
-  // Скачиваем файл
   const buffer = Buffer.from(await response.arrayBuffer());
   
-  // Проверяем минимальный размер (видео должно быть хотя бы несколько KB)
   if (buffer.length < 1024) {
     throw new Error(`Downloaded file is too small (${buffer.length} bytes). This might be an error page or redirect. Please check the link.`);
   }
   
-  // Проверяем, что это действительно бинарный файл (не HTML)
   const fileStart = buffer.toString('utf-8', 0, Math.min(100, buffer.length));
   if (fileStart.toLowerCase().includes('<!doctype') || fileStart.toLowerCase().includes('<html')) {
     throw new Error("The link points to an HTML page, not a video file. Please provide a direct download link to the video file.");
@@ -189,8 +176,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
 
   for (const line of lines) {
     
-    // Формат 1: "Игрок N — startFrame - endFrame" или "Игрок N — startFrame - endFrame"
-    // Поддерживаем разные типы дефисов: — (em-dash), – (en-dash), - (hyphen)
     let match = line.match(/(?:Игрок|Player|Роль|Реплика|Ролик)\s*\d+\s*[—–\-]\s*(\d+)\s*[—–\-]\s*(\d+)/i);
     if (match) {
       const startFrame = parseInt(match[1]!, 10);
@@ -201,7 +186,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       continue;
     }
 
-    // Формат 2: Просто "startFrame - endFrame" или "startFrame-endFrame" (без префикса "Игрок")
     match = line.match(/^(\d+)\s*[—–\-]\s*(\d+)$/);
     if (match) {
       const startFrame = parseInt(match[1]!, 10);
@@ -212,7 +196,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       continue;
     }
 
-    // Формат 3: "0-125" или "0-125, 150-275" (обычный формат через запятую)
     const parts = line.split(/[,\s]+/).filter(Boolean);
     for (const part of parts) {
       const match2 = part.match(/^(\d+)-(\d+)$/);
@@ -225,7 +208,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
       }
     }
 
-    // Формат 4: "0 125" (кадры через пробел, без дефиса)
     const spaceMatch = line.match(/^(\d+)\s+(\d+)$/);
     if (spaceMatch) {
       const startFrame = parseInt(spaceMatch[1]!, 10);
@@ -236,7 +218,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
     }
   }
 
-  // Сортировать по startFrame
   cues.sort((a, b) => a.startFrame - b.startFrame);
 
   return cues.length > 0 ? cues : null;
@@ -245,7 +226,6 @@ function parseCuesFrames(text: string): Array<{ startFrame: number; endFrame: nu
 export function createBot(): Telegraf {
   const bot = new Telegraf(config.botToken);
 
-  // Main menu keyboard - всегда отображается внизу
   // For admins, will include admin panel button
   const getMainMenuKeyboard = (userId?: number) => {
     const baseKeyboard = [
@@ -268,9 +248,30 @@ export function createBot(): Telegraf {
     return {
       keyboard: baseKeyboard,
       resize_keyboard: true,
-      persistent: true, // Постоянная клавиатура
+      persistent: true,
     };
   };
+
+  bot.use(async (ctx, next) => {
+    await next();
+    if (ctx.updateType !== "callback_query") {
+      return;
+    }
+    if (ctx.state?.callbackHandled) {
+      return;
+    }
+    const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
+    console.log("[Bot] callback_query unhandled", {
+      userId: ctx.from?.id,
+      chatId: ctx.chat?.id,
+      callback: callbackData,
+    });
+    try {
+      await ctx.answerCbQuery(RU.bot.errors.generic);
+    } catch {
+      // Ignore callback query ack errors
+    }
+  });
 
   const mainMenuKeyboard = getMainMenuKeyboard();
 
@@ -396,6 +397,7 @@ export function createBot(): Telegraf {
   bot.action("join_game", async (ctx) => {
     try {
       await ctx.answerCbQuery().catch(() => {});
+      ctx.state.callbackHandled = true;
       const userId = ctx.from?.id;
       if (!userId) return;
       const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
@@ -479,13 +481,14 @@ export function createBot(): Telegraf {
   // Handle "Suggest episode" button (from text menu)
   bot.hears(RU.bot.mainMenu.suggestEpisode, async (ctx) => {
     await ctx.reply(RU.bot.suggestEpisode.info, {
-      reply_markup: getMainMenuKeyboard(ctx.from?.id), // Вернуть главное меню
+      reply_markup: getMainMenuKeyboard(ctx.from?.id),
     });
   });
 
   // Handle "Suggest episode" inline button (legacy support)
   bot.action("suggest_episode", async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
+    ctx.state.callbackHandled = true;
     const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
     console.log("[Bot] callback suggest_episode", {
       userId: ctx.from?.id,
@@ -536,7 +539,6 @@ export function createBot(): Telegraf {
     });
   });
 
-  // /scenes - список сцен (только админ)
   bot.command("scenes", async (ctx) => {
     if (!isAdmin(ctx.from?.id ?? 0)) {
       return ctx.reply(RU.bot.errors.noAccess);
@@ -559,7 +561,6 @@ export function createBot(): Telegraf {
     await ctx.reply(`${RU.bot.scenes.listTitle(scenes.length)}\n\n${list}`);
   });
 
-  // /stats - статистика (только админ)
   bot.command("stats", async (ctx) => {
     if (!isAdmin(ctx.from?.id ?? 0)) {
       return ctx.reply(RU.bot.errors.noAccess);
@@ -592,7 +593,6 @@ export function createBot(): Telegraf {
     );
   });
 
-  // /cancel - отмена текущей операции
   bot.command("cancel", async (ctx) => {
     const userId = ctx.from?.id;
     if (userId) {
@@ -607,10 +607,9 @@ export function createBot(): Telegraf {
       
       if (hadPending) {
         await ctx.reply(RU.bot.cancelFlow.cancelled, {
-          reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
+          reply_markup: getMainMenuKeyboard(ctx.from?.id),
         });
       } else {
-        // Даже если нет активных операций, показываем главное меню
         await ctx.reply(RU.bot.cancelFlow.mainMenu, {
           reply_markup: getMainMenuKeyboard(ctx.from?.id),
         });
@@ -641,18 +640,15 @@ export function createBot(): Telegraf {
     });
   });
 
-  // /edit_cues - редактирование таймингов сцены (только админ)
   bot.command("edit_cues", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
       return ctx.reply(RU.bot.errors.noAccess);
     }
 
-    // Получаем ID сцены из аргумента или показываем список
     const args = ctx.message.text.split(" ").slice(1);
     
     if (args.length === 0) {
-      // Показываем список сцен для выбора
       const scenes = await prisma.scene.findMany({
         orderBy: { createdAt: "desc" },
         take: 10,
@@ -688,12 +684,10 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // ID сцены передан в команде
     const sceneId = args[0]!;
     await startCueEditing(ctx, userId, sceneId);
   });
 
-  // Helper: начать редактирование cues
   async function startCueEditing(ctx: Context, userId: number, sceneId: string) {
     const scene = await prisma.scene.findUnique({ where: { id: sceneId } });
 
@@ -749,7 +743,6 @@ export function createBot(): Telegraf {
     );
   }
 
-  // Команда для загрузки видео по URL
   bot.command("upload_url", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
@@ -777,9 +770,9 @@ export function createBot(): Telegraf {
     await handleVideoUrl(ctx, userId, fileUrl);
   });
 
-  // Обработка callback для загрузки по URL
   bot.action(/^upload_url:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
+    ctx.state.callbackHandled = true;
     const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
     console.log("[Bot] callback upload_url", {
       userId: ctx.from?.id,
@@ -801,13 +794,11 @@ export function createBot(): Telegraf {
     await handleVideoUrl(ctx, userId, fileUrl);
   });
 
-  // Helper: обработка загрузки видео по URL
   async function handleVideoUrl(ctx: Context, userId: number, fileUrl: string) {
     let tmpPath: string | null = null;
     try {
       await ctx.reply(RU.bot.uploadUrl.downloading);
 
-      // Скачиваем файл по URL
       const result = await downloadFileFromUrl(fileUrl);
       tmpPath = result.path;
       const buffer = result.buffer;
@@ -822,20 +813,17 @@ export function createBot(): Telegraf {
       await ctx.reply(RU.bot.uploadUrl.fileDownloaded(fileSizeMb.toFixed(2)));
 
       try {
-        // Получаем информацию о видео
         const { duration, fps } = await getVideoInfo(tmpPath);
         const totalFrames = Math.round(duration * fps);
         
         console.log(`[Bot] Video info extracted: duration=${duration}s, fps=${fps}, frames=${totalFrames}`);
         
-        // Удаляем временный файл (он больше не нужен, т.к. будем скачивать заново при сохранении)
         await unlink(tmpPath).catch(() => {});
         tmpPath = null;
 
-        // Сохраняем состояние (используем fileUrl вместо fileId)
         await botState.setPendingScene(userId, {
           userId,
-          fileUrl, // Сохраняем URL для последующего скачивания
+          fileUrl,
           duration: Math.round(duration * 10) / 10,
           fps,
           totalFrames,
@@ -879,7 +867,6 @@ export function createBot(): Telegraf {
     } catch (err: any) {
       console.error("[Bot] Video URL download error:", err);
       
-      // Удаляем временный файл при ошибке
       if (tmpPath) {
         await unlink(tmpPath).catch(() => {});
       }
@@ -894,7 +881,6 @@ export function createBot(): Telegraf {
       } else if (errorMsg.includes("403") || errorMsg.includes("Forbidden")) {
         userMsg += `\n\n${RU.bot.uploadUrl.errorForbidden}`;
       } else if (errorMsg.includes("ffprobe") || errorMsg.includes("Invalid video")) {
-        // Уже обработано выше
         return;
       } else {
         userMsg += `\n\n${RU.bot.uploadUrl.errorDetails(errorMsg.substring(0, 200))}`;
@@ -904,16 +890,14 @@ export function createBot(): Telegraf {
     }
   }
 
-  // Обработка видео от админа
   bot.on(message("video"), async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId || !isAdmin(userId)) {
-      return; // Игнорируем видео от не-админов
+      return;
     }
 
     const video = ctx.message.video;
     
-    // Проверка размера файла (Telegram ограничивает до ~20MB для прямого скачивания)
     const fileSizeMb = (video.file_size || 0) / (1024 * 1024);
     if (fileSizeMb > 50) {
       await ctx.reply(
@@ -925,7 +909,6 @@ export function createBot(): Telegraf {
     try {
       await ctx.reply(RU.bot.video.processing);
 
-      // Скачиваем и получаем информацию
       let tmpPath: string;
       let buffer: Buffer;
       
@@ -936,7 +919,6 @@ export function createBot(): Telegraf {
       } catch (downloadErr: any) {
         console.error("Download error:", downloadErr);
         
-        // Если ошибка "file is too big", попробуем через файл напрямую
         if (downloadErr.response?.error_code === 400 && downloadErr.description?.includes("too big")) {
           await ctx.reply(
             RU.bot.video.tooLargeToDownload(fileSizeMb.toFixed(1))
@@ -950,10 +932,8 @@ export function createBot(): Telegraf {
         const { duration, fps } = await getVideoInfo(tmpPath);
         const totalFrames = Math.round(duration * fps);
         
-        // Удаляем временный файл
         await unlink(tmpPath).catch(() => {});
 
-        // Сохраняем состояние
         await botState.setPendingScene(userId, {
           userId,
           fileId: video.file_id,
@@ -994,14 +974,12 @@ export function createBot(): Telegraf {
     }
   });
 
-  // Обработка текстовых сообщений (для диалога добавления/редактирования сцены и присоединения)
   bot.on(message("text"), async (ctx) => {
     const userId = ctx.from?.id;
     const text = ctx.message.text;
 
     if (!userId) return;
 
-    // Отмена
     if (text === RU.bot.mainMenu.cancel || text.toLowerCase() === RU.bot.mainMenu.cancelPlain) {
       const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
         botState.getPendingScene(userId),
@@ -1014,17 +992,15 @@ export function createBot(): Telegraf {
       
       console.log(`[Bot] User ${userId} cancelled operation. Had pending:`, hadPending);
       
-      // Всегда возвращаем главное меню после отмены
       await ctx.reply(
         hadPending ? RU.bot.cancelFlow.cancelled : RU.bot.cancelFlow.mainMenu,
         {
-          reply_markup: getMainMenuKeyboard(ctx.from?.id), // Всегда возвращаем главное меню
+          reply_markup: getMainMenuKeyboard(ctx.from?.id),
         }
       );
       return;
     }
 
-    // Если это админ и текст похож на URL, и нет активного диалога - предлагаем загрузить видео по URL
     const [hasPendingScene, hasPendingEdit, hasPendingJoin] = await Promise.all([
       botState.getPendingScene(userId),
       botState.getPendingEdit(userId),
@@ -1042,30 +1018,24 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // Проверяем, есть ли активный диалог редактирования
     const pendingEdit = hasPendingEdit || await botState.getPendingEdit(userId);
     if (pendingEdit) {
       await handleEditDialog(ctx, userId, text, pendingEdit);
       return;
     }
 
-    // Проверяем, есть ли активный диалог добавления сцены ПЕРЕД проверкой присоединения
-    // Это важно, чтобы тайминги обрабатывались правильно
     let pending = hasPendingScene || await botState.getPendingScene(userId);
     if (pending) {
-      // Есть активный диалог добавления сцены, обрабатываем его (продолжим ниже)
       console.log(`[Bot] User ${userId} has pending scene, step: ${pending.step}`);
     } else if (hasPendingJoin || await botState.getPendingJoin(userId)) {
-      // Только если нет активного диалога добавления сцены, обрабатываем присоединение
       const sessionCode = text.trim().toLowerCase();
       
       console.log("[Bot] Searching for session with code:", sessionCode);
       
-      // Ищем сессию по ID (полному совпадению) - только активные сессии
       let session = await prisma.session.findFirst({
         where: { 
           id: sessionCode,
-          status: { in: ["lobby", "recording"] }, // Только активные сессии
+          status: { in: ["lobby", "recording"] },
         },
         include: {
           participants: true,
@@ -1073,13 +1043,12 @@ export function createBot(): Telegraf {
         },
       });
 
-      // Если не нашли по полному ID, ищем по последним символам (case-insensitive)
       if (!session && sessionCode.length >= 6) {
         console.log("[Bot] Full ID not found, searching by suffix...");
         // Get all active sessions and filter in memory (Prisma doesn't support case-insensitive endsWith)
         const allSessions = await prisma.session.findMany({
           where: {
-            status: { in: ["lobby", "recording"] }, // Только активные сессии
+            status: { in: ["lobby", "recording"] },
           },
           include: {
             participants: true,
@@ -1102,7 +1071,6 @@ export function createBot(): Telegraf {
       console.log("[Bot] Session search result:", session ? { id: session.id, status: session.status, participants: session.participants.length } : "not found");
 
       if (!session) {
-        // Проверяем, может сессия существует, но уже завершена
         const completedSession = await prisma.session.findFirst({
           where: { 
             id: sessionCode,
@@ -1124,7 +1092,6 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Проверяем, не присоединился ли уже
       const alreadyJoined = session.participants.some(p => p.tgUserId === String(userId));
       if (alreadyJoined) {
         await ctx.reply(
@@ -1145,7 +1112,6 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Проверяем, есть ли место
       if (session.participants.length >= session.maxPlayers) {
         await ctx.reply(
           RU.bot.join.full(session.maxPlayers),
@@ -1154,8 +1120,6 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Проверяем статус - для "recording" можно присоединиться, если еще есть место
-      // Но лучше разрешить только для "lobby"
       if (session.status !== "lobby" && session.status !== "recording") {
         await ctx.reply(
           RU.bot.join.closed(session.status),
@@ -1164,8 +1128,6 @@ export function createBot(): Telegraf {
         return;
       }
       
-      // Если статус "recording", но еще есть место - можно присоединиться
-      // Но для "recording" лучше не разрешать присоединение (игра уже идет)
       if (session.status === "recording") {
         await ctx.reply(
           RU.bot.join.recording,
@@ -1174,8 +1136,6 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Всё ок, открываем Mini App через ссылку (не inline web_app button)
-      // Inline web_app buttons имеют баг на iOS - открывают WebView вместо Mini App
       const botUsername = getNormalizedBotUsername();
       const joinLink = `https://t.me/${botUsername}?startapp=s_${session.id}`;
       await ctx.reply(
@@ -1193,20 +1153,17 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // Обработка диалога добавления сцены (если pending уже определен выше)
-    // Переопределяем pending на случай, если он был определен выше, но мог быть изменен
     if (!pending) {
       pending = await botState.getPendingScene(userId);
     }
     
     if (!pending) {
       console.log(`[Bot] No pending scene for user ${userId}, text:`, text);
-      return; // Нет активного диалога
+      return;
     }
     
     console.log(`[Bot] Processing pending scene for user ${userId}, step: ${pending.step}, text:`, text);
 
-    // Шаг 1: Получаем название
     if (pending.step === "awaiting_title") {
       pending.title = text.trim();
       pending.step = "awaiting_category";
@@ -1230,7 +1187,6 @@ export function createBot(): Telegraf {
       return;
     }
 
-    // Шаг 2: Получаем категорию
     if (pending.step === "awaiting_category") {
       console.log(`[Bot] User ${userId} selecting category, text:`, text);
       console.log(`[Bot] Pending before category selection:`, { step: pending.step, title: pending.title });
@@ -1275,19 +1231,17 @@ export function createBot(): Telegraf {
           reply_markup: {
             keyboard: [[{ text: RU.bot.mainMenu.cancel }]],
             resize_keyboard: true,
-            one_time_keyboard: false, // Постоянная клавиатура
+            one_time_keyboard: false,
           },
         }
       );
       
-      // Проверяем, что состояние сохранилось
       const savedPending = await botState.getPendingScene(userId);
       console.log(`[Bot] Pending after save:`, savedPending ? { step: savedPending.step, category: savedPending.category } : "null");
       
       return;
     }
 
-    // Шаг 3: Получаем тайминги В КАДРАХ
     if (pending.step === "awaiting_cues") {
       console.log(`[Bot] User ${userId} entered cues text:`, text);
       console.log(`[Bot] Pending state:`, { step: pending.step, title: pending.title, category: pending.category });
@@ -1312,7 +1266,6 @@ export function createBot(): Telegraf {
 
       console.log(`[Bot] Successfully parsed ${cues.length} cues:`, cues);
 
-      // Проверяем, что тайминги в пределах видео
       const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
       if (maxEndFrame > pending.totalFrames + pending.fps) {
         await ctx.reply(
@@ -1324,15 +1277,12 @@ export function createBot(): Telegraf {
       await ctx.reply(RU.bot.pendingScene.uploading);
 
       try {
-        // Скачиваем видео (либо из Telegram, либо по URL)
         let buffer: Buffer;
         if (pending.fileUrl) {
-          // Загружаем по URL
           console.log(`[Bot] Downloading video from URL: ${pending.fileUrl}`);
           const result = await downloadFileFromUrl(pending.fileUrl);
           buffer = result.buffer;
         } else if (pending.fileId) {
-          // Загружаем из Telegram
           console.log(`[Bot] Downloading video from Telegram: ${pending.fileId}`);
           const result = await downloadTelegramFile(bot, pending.fileId);
           buffer = result.buffer;
@@ -1340,14 +1290,11 @@ export function createBot(): Telegraf {
           throw new Error("No file source specified (fileId or fileUrl)");
         }
 
-        // Генерируем ID сцены
         const sceneId = `scene_${Date.now()}`;
         const s3Key = `scenes/${sceneId}.mp4`;
 
-        // Загружаем в S3
         await storage.upload(s3Key, buffer, "video/mp4");
 
-        // Формируем cueJson В КАДРАХ (новый формат!)
         const cueJson = JSON.stringify(
           cues.map((c, i) => ({
             roleIndex: i,
@@ -1356,7 +1303,6 @@ export function createBot(): Telegraf {
           }))
         );
 
-        // Создаём запись в базе
         await prisma.scene.create({
           data: {
             id: sceneId,
@@ -1370,10 +1316,8 @@ export function createBot(): Telegraf {
           },
         });
 
-        // Очищаем состояние
         await botState.deletePendingScene(userId);
 
-        // Показываем и кадры и секунды
         const fps = pending.fps;
         const cueInfo = cues.map((c, i) => {
           const startSec = (c.startFrame / fps).toFixed(2);
@@ -1410,16 +1354,13 @@ export function createBot(): Telegraf {
     }
   });
 
-  // Helper: обработка диалога редактирования
   async function handleEditDialog(ctx: Context, userId: number, text: string, pendingEdit: PendingEdit) {
-    // Шаг 1: Выбор сцены по ID
     if (pendingEdit.step === "awaiting_sceneId") {
       const sceneId = text.trim();
       await startCueEditing(ctx, userId, sceneId);
       return;
     }
 
-    // Шаг 2: Новые тайминги В КАДРАХ
     if (pendingEdit.step === "awaiting_new_cues" && pendingEdit.scene) {
       const cues = parseCuesFrames(text);
 
@@ -1431,7 +1372,6 @@ export function createBot(): Telegraf {
         return;
       }
 
-      // Проверяем, что тайминги в пределах видео
       const maxEndFrame = Math.max(...cues.map(c => c.endFrame));
       if (maxEndFrame > pendingEdit.scene.totalFrames + pendingEdit.scene.fps) {
         await ctx.reply(
@@ -1441,7 +1381,6 @@ export function createBot(): Telegraf {
       }
 
       try {
-        // Формируем новый cueJson В КАДРАХ
         const cueJson = JSON.stringify(
           cues.map((c, i) => ({
             roleIndex: i,
@@ -1450,7 +1389,6 @@ export function createBot(): Telegraf {
           }))
         );
 
-        // Обновляем сцену
         await prisma.scene.update({
           where: { id: pendingEdit.sceneId },
           data: {
@@ -1461,7 +1399,6 @@ export function createBot(): Telegraf {
 
         await botState.deletePendingEdit(userId);
 
-        // Показываем и кадры и секунды
         const fps = pendingEdit.scene.fps;
         const cueInfo = cues.map((c, i) => {
           const startSec = (c.startFrame / fps).toFixed(2);
