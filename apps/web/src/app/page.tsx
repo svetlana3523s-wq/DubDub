@@ -96,7 +96,7 @@ export default function HomePage() {
           <div className="text-4xl">😕</div>
           <h2 className="text-xl font-bold">Не удалось присоединиться</h2>
           <p className="text-tg-hint">{joinError}</p>
-          <Link href="/create" className="btn-primary inline-block">
+          <Link href="/create" className="inline-flex items-center justify-center gap-2 font-medium transition active:scale-[0.98] bg-gradient-to-r from-fuchsia-500 via-purple-500 to-blue-500 text-white shadow-[0_12px_30px_-16px_rgba(99,102,241,0.8)] px-5 py-3 text-base rounded-3xl">
             🎬 Создать свою игру
           </Link>
         </div>
@@ -133,7 +133,7 @@ export default function HomePage() {
         {/* CTA */}
         <Link
           href="/create"
-          className="btn-primary text-lg px-8 py-4 inline-flex items-center gap-2"
+          className="inline-flex items-center justify-center gap-2 font-medium transition active:scale-[0.98] bg-gradient-to-r from-fuchsia-500 via-purple-500 to-blue-500 text-white shadow-[0_12px_30px_-16px_rgba(99,102,241,0.8)] px-6 py-4 text-lg rounded-3xl"
         >
           <span>🎬</span>
           <span>Создать дубляж</span>

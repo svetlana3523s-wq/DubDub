@@ -6,8 +6,8 @@ import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { GlassCard } from "@/components/GlassCard";
-import { GradientButton } from "@/components/GradientButton";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { RU } from "@dubdub/shared";
 import type { SessionStateResponse, JoinSessionResponse } from "@dubdub/shared";
 
@@ -69,7 +69,7 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <div className="glass-card animate-fade-in" style={{ animationDelay: "0.2s" }}>
+    <Card className=" animate-fade-in" style={{ animationDelay: "0.2s" }}>
       <div className="text-center space-y-4">
         <div>
           <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
@@ -79,18 +79,18 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
             title="Нажми, чтобы скопировать"
           >
             {copied ? "✅ Скопировано!" : sessionCode}
-          </button>
+          </Button>
           <div className="text-xs text-tg-hint mt-1">
             👆 нажми, чтобы скопировать
-          </div>
+          </Card>
         </div>
         
         <button
           onClick={handleSendToFriend}
-          className="btn-gradient w-full"
+          variant="primary" className=" w-full"
         >
           📤 Отправить другу
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -367,10 +367,10 @@ export default function SessionPage({ params }: PageProps) {
     return (
       <PageShell>
         <div className="flex-1 flex items-center justify-center min-h-[70vh]">
-          <GlassCard className="text-center space-y-4">
+          <Card className="text-center space-y-4">
             <div className="w-12 h-12 border-3 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-tg-hint">????????????????...</p>
-          </GlassCard>
+          </Card>
         </div>
       </PageShell>
     );
@@ -384,7 +384,7 @@ export default function SessionPage({ params }: PageProps) {
     return (
       <PageShell>
         <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[70vh]">
-          <GlassCard className="text-center space-y-4">
+          <Card className="text-center space-y-4">
             <div className="text-5xl">????</div>
             <h2 className="text-xl font-bold">????????????</h2>
             <p className="text-tg-hint">{error}</p>
@@ -401,7 +401,7 @@ export default function SessionPage({ params }: PageProps) {
             <div className="flex flex-col gap-2">
               {isAuthError && (
                 <>
-                  <GradientButton
+                  <Button
                     onClick={() => {
                       retry();
                       setViewState("loading");
@@ -409,7 +409,7 @@ export default function SessionPage({ params }: PageProps) {
                     }}
                   >
                     ???? ?????????????????????? ??????????
-                  </GradientButton>
+                  </Button>
                   <p className="text-xs text-tg-hint mt-2">
                     ???????? ???? ????????????????, ???????????????? ???????????????????? ?? ???????????????? ???????????? ?????????? ????????
                   </p>
@@ -417,12 +417,12 @@ export default function SessionPage({ params }: PageProps) {
               )}
               <button
                 onClick={() => router.push("/")}
-                className="btn-glass"
+                variant="secondary" className=""
               >
                 ???? ??????????????
-              </button>
+              </Button>
             </div>
-          </GlassCard>
+          </Card>
         </div>
       </PageShell>
     );
@@ -450,10 +450,10 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Category + Task */}
-          <div className="glass-card text-center animate-fade-in">
+          <Card className=" text-center animate-fade-in">
             <div className="text-sm text-tg-hint mb-2">
               {CATEGORY_LABELS[session.session.category] || session.session.category}
-            </div>
+            </Card>
             {session.session.gameMode === "tasks" && session.session.task && (
               <>
                 <div className="text-xs text-tg-hint mt-3 mb-1">📝 Задание</div>
@@ -466,7 +466,7 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Players */}
-          <div className="glass-card space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className=" space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
             {session.participants.map((p, i) => (
               <div
                 key={p.id}
@@ -474,7 +474,7 @@ export default function SessionPage({ params }: PageProps) {
               >
                 <div className="w-10 h-10 rounded-full bg-accent-primary/20 flex items-center justify-center font-bold text-accent-primary">
                   {i + 1}
-                </div>
+                </Card>
                 <div className="flex-1">
                   <div className="font-medium">{p.displayName}</div>
                   {p.tgUserId === user?.id && (
@@ -508,10 +508,10 @@ export default function SessionPage({ params }: PageProps) {
               <button
                 onClick={handleSkipScene}
                 disabled={skipInProgress}
-                className="btn-glass w-full disabled:opacity-70"
+                variant="secondary" className=" w-full disabled:opacity-70"
               >
                 {skipInProgress ? "..." : RU.web.session.skipScene}
-              </button>
+              </Button>
               {skipError && (
                 <div className="text-red-400 text-sm text-center">{skipError}</div>
               )}
@@ -552,10 +552,10 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Task (only in tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
-            <div className="glass-card text-center animate-fade-in">
+            <Card className=" text-center animate-fade-in">
               <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
-            </div>
+            </Card>
           )}
 
           {canSkipScene && (
@@ -563,10 +563,10 @@ export default function SessionPage({ params }: PageProps) {
               <button
                 onClick={handleSkipScene}
                 disabled={skipInProgress}
-                className="btn-glass w-full disabled:opacity-70"
+                variant="secondary" className=" w-full disabled:opacity-70"
               >
                 {skipInProgress ? "..." : RU.web.session.skipScene}
-              </button>
+              </Button>
               {skipError && (
                 <div className="text-red-400 text-sm text-center mt-2">{skipError}</div>
               )}
@@ -574,7 +574,7 @@ export default function SessionPage({ params }: PageProps) {
           )}
 
           {/* Full scene with original audio */}
-          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.05s" }}>
+          <Card className=" animate-fade-in" style={{ animationDelay: "0.05s" }}>
             <VideoPlayer
               key={`full-${session.myRoleIndex}`}
               src={session.sceneUrl}
@@ -584,13 +584,13 @@ export default function SessionPage({ params }: PageProps) {
               label="📺 Посмотри сцену:"
               showAudioModeSwitch={true}
             />
-          </div>
+          </Card>
 
           {/* Your fragment to dub */}
-          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className=" animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <div className="text-sm text-tg-hint mb-2">
               🎬 Твой фрагмент для озвучки ({cueDuration.toFixed(1)} сек):
-            </div>
+            </Card>
             <VideoPlayer
               key={`fragment-${session.myRoleIndex}`}
               src={session.sceneUrl}
@@ -604,20 +604,20 @@ export default function SessionPage({ params }: PageProps) {
           </div>
 
           {/* Recorder */}
-          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <Card className=" animate-fade-in" style={{ animationDelay: "0.15s" }}>
             <VoiceRecorder
               key={`recorder-${session.myRoleIndex}`}
               maxDuration={cueDuration}
               onRecordComplete={handleRecordComplete}
               disabled={hasRecorded && retakeUsed}
             />
-          </div>
+          </Card>
 
           {/* Retake */}
           {hasRecorded && !retakeUsed && (
-            <button onClick={handleRetake} className="btn-glass w-full">
+            <Button onClick={handleRetake} variant="secondary" className=" w-full">
               🔄 Перезаписать (1 раз)
-            </button>
+            </Button>
           )}
 
           {error && (
@@ -650,14 +650,14 @@ export default function SessionPage({ params }: PageProps) {
 
           {/* Task (if tasks mode) */}
           {session.session.gameMode === "tasks" && session.session.task && (
-            <div className="glass-card text-center animate-fade-in">
+            <Card className=" text-center animate-fade-in">
               <div className="text-sm text-tg-hint mb-1">📝 Задание</div>
               <div className="font-medium">{session.session.task}</div>
-            </div>
+            </Card>
           )}
 
           {/* Full scene with original audio */}
-          <div className="glass-card animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <Card className=" animate-fade-in" style={{ animationDelay: "0.1s" }}>
             <VideoPlayer
               key={`wait-full`}
               src={session.sceneUrl}
@@ -667,14 +667,14 @@ export default function SessionPage({ params }: PageProps) {
               label="📺 Посмотри сцену пока ждёшь:"
               showAudioModeSwitch={true}
             />
-          </div>
+          </Card>
 
           {/* Your fragment to dub */}
           {myCue && (
-            <div className="glass-card animate-fade-in" style={{ animationDelay: "0.15s" }}>
+            <Card className=" animate-fade-in" style={{ animationDelay: "0.15s" }}>
               <div className="text-sm text-tg-hint mb-2">
                 🎬 Твой фрагмент для озвучки ({myCue.durationSec.toFixed(1)} сек):
-              </div>
+              </Card>
               <VideoPlayer
                 key={`wait-fragment`}
                 src={session.sceneUrl}
@@ -706,7 +706,7 @@ export default function SessionPage({ params }: PageProps) {
     return (
       <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="glass-card text-center space-y-6 animate-slide-up max-w-sm">
+        <Card className=" text-center space-y-6 animate-slide-up max-w-sm">
           <div className="text-5xl">🎬</div>
           <div>
             <h2 className="text-2xl font-bold mb-2">Все записали!</h2>
@@ -715,15 +715,15 @@ export default function SessionPage({ params }: PageProps) {
                 ? "Нажми, чтобы собрать видео"
                 : "Ждём, пока последний игрок запустит сборку"}
             </p>
-          </div>
+          </Card>
           {canStartRender && (
             <button 
               onClick={handleFinish} 
               disabled={finishing}
-              className="btn-gradient text-lg px-8 py-4 disabled:opacity-70"
+              variant="primary" className=" text-lg px-8 py-4 disabled:opacity-70"
             >
               {finishing ? "⏳ Собираем..." : "✨ Собрать видео"}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -736,12 +736,12 @@ export default function SessionPage({ params }: PageProps) {
     return (
       <PageShell>
       <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="glass-card text-center space-y-6 animate-slide-up">
+        <Card className=" text-center space-y-6 animate-slide-up">
           <div className="relative w-20 h-20 mx-auto">
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
               🎥
-            </div>
+            </Card>
           </div>
           <div>
             <h2 className="text-xl font-bold mb-2">Рендерим видео</h2>

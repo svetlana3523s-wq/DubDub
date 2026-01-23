@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { CueEditor } from "@/components/CueEditor";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import type { Category, Cue } from "@dubdub/shared";
 
 const CATEGORIES: { id: Category; label: string }[] = [
@@ -173,14 +175,14 @@ export default function AdminUploadPage() {
         </div>
 
         {error && (
-          <div className="card bg-red-500/20 border-red-500/50">
+          <Card className="bg-red-500/20 border-red-500/50">
             <div className="text-red-500 text-sm">{error}</div>
-          </div>
+          </Card>
         )}
 
         {/* Step 1: Upload Video */}
         {step === "upload" && (
-          <div className="card">
+          <Card>
             <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
@@ -208,12 +210,12 @@ export default function AdminUploadPage() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Step 2: Details */}
         {step === "details" && (
-          <div className="card space-y-4">
+          <Card className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Название сцены</label>
               <input
@@ -228,7 +230,8 @@ export default function AdminUploadPage() {
               <label className="block text-sm font-medium mb-2">Категория</label>
               <div className="grid grid-cols-3 gap-2">
                 {CATEGORIES.map((cat) => (
-                  <button
+                  <Button
+                    variant="secondary"
                     key={cat.id}
                     onClick={() => setCategory(cat.id)}
                     className={`px-4 py-2 rounded-lg text-sm transition-colors ${
@@ -238,23 +241,24 @@ export default function AdminUploadPage() {
                     }`}
                   >
                     {cat.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => {
                   setStep("upload");
                   setError(null);
                 }}
-                className="flex-1 btn-tg"
+                className="flex-1"
               >
                 ← Назад
-              </button>
-              <button onClick={handleNext} className="flex-1 btn-tg">
+              </Button>
+              <Button variant="primary" onClick={handleNext} className="flex-1">
                 Далее →
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -270,22 +274,24 @@ export default function AdminUploadPage() {
               onChange={setCues}
             />
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => {
                   setStep("details");
                   setError(null);
                 }}
-                className="flex-1 btn-tg"
+                className="flex-1"
               >
                 ← Назад
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleSubmit}
                 disabled={loading || cues.length === 0}
-                className="flex-1 btn-tg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1"
               >
                 {loading ? "Загрузка..." : "✅ Загрузить сцену"}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -293,4 +299,3 @@ export default function AdminUploadPage() {
     </div>
   );
 }
-

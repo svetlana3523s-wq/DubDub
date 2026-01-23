@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import type { Category, GameMode } from "@dubdub/shared";
 
 type Step = "category" | "mode" | "players";
@@ -82,12 +84,14 @@ export default function CreatePage() {
         
         {/* Back button */}
         {step !== "category" && (
-          <button 
+          <Button
             onClick={handleBack}
-            className="absolute top-4 left-4 text-tg-hint hover:text-white transition-colors"
+            variant="ghost"
+            size="sm"
+            className="absolute top-4 left-4"
           >
-            ← Назад
-          </button>
+            в†ђ РќР°Р·Р°Рґ
+          </Button>
         )}
 
         {/* Step 1: Category */}
@@ -100,14 +104,15 @@ export default function CreatePage() {
 
             <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               {CATEGORIES.map((cat) => (
-                <button
+                <Button
                   key={cat.id}
                   onClick={() => handleCategorySelect(cat.id)}
-                  className="w-full card hover:bg-white/10 transition-colors flex items-center gap-4 py-5"
+                  variant="secondary"
+                  className="w-full justify-start gap-4 py-5 text-left"
                 >
                   <span className="text-4xl">{cat.emoji}</span>
                   <span className="text-xl font-medium">{cat.label}</span>
-                </button>
+                </Button>
               ))}
             </div>
           </>
@@ -123,17 +128,18 @@ export default function CreatePage() {
 
             <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               {MODES.map((mode) => (
-                <button
+                <Button
                   key={mode.id}
                   onClick={() => handleModeSelect(mode.id)}
-                  className="w-full card hover:bg-white/10 transition-colors flex items-center gap-4 py-5"
+                  variant="secondary"
+                  className="w-full justify-start gap-4 py-5 text-left"
                 >
                   <span className="text-4xl">{mode.emoji}</span>
                   <div className="text-left">
                     <div className="text-xl font-medium">{mode.label}</div>
                     <div className="text-sm text-tg-hint">{mode.desc}</div>
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
           </>
@@ -151,20 +157,21 @@ export default function CreatePage() {
               </p>
             </div>
 
-            <div className="card animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            <Card className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <div className="grid grid-cols-2 gap-3">
                 {[1, 2].map((n) => (
-                  <button
+                  <Button
                     key={n}
                     onClick={() => setMaxPlayers(n)}
-                    className={`py-6 rounded-xl border-2 transition-all font-bold text-3xl ${
+                    variant="secondary"
+                    className={`py-6 text-3xl font-bold ${
                       maxPlayers === n
                         ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                         : "border-white/10 text-tg-hint hover:border-white/20"
                     }`}
                   >
                     {n}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <p className="text-tg-hint text-sm mt-4 text-center">
@@ -172,7 +179,7 @@ export default function CreatePage() {
                   ? "🎭 Соло: озвучь все реплики сам"
                   : "👥 Дуэт: вдвоём веселее!"}
               </p>
-            </div>
+            </Card>
 
             {/* Error */}
             {error && (
@@ -182,10 +189,10 @@ export default function CreatePage() {
             )}
 
             {/* Create Button */}
-            <button
+            <Button
               onClick={handleCreate}
               disabled={loading}
-              className="btn-primary text-lg py-4 w-full animate-fade-in"
+              className="text-lg py-4 w-full animate-fade-in"
               style={{ animationDelay: "0.2s" }}
             >
               {loading ? (
@@ -196,7 +203,7 @@ export default function CreatePage() {
               ) : (
                 "Создать игру →"
               )}
-            </button>
+            </Button>
           </>
         )}
       </div>

@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { useTelegram } from "@/components/TelegramProvider";
 import { api } from "@/lib/api";
 import { CueEditor } from "@/components/CueEditor";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import type { SceneDetail, Category, Cue } from "@dubdub/shared";
 
 const CATEGORIES: { id: Category; label: string }[] = [
@@ -156,22 +158,23 @@ export default function AdminSceneEditPage() {
             <h1 className="text-2xl font-bold mb-1">Редактирование сцены</h1>
             <p className="text-tg-hint text-sm">ID: {sceneId}</p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => router.push("/admin/scenes")}
-            className="text-tg-hint hover:text-white transition-colors"
           >
             ← Назад к списку
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div className="card bg-red-500/20 border-red-500/50">
+          <Card className="bg-red-500/20 border-red-500/50">
             <div className="text-red-500 text-sm">{error}</div>
-          </div>
+          </Card>
         )}
 
         {/* Details */}
-        <div className="card space-y-4">
+        <Card className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2">Название сцены</label>
             <input
@@ -186,7 +189,8 @@ export default function AdminSceneEditPage() {
             <label className="block text-sm font-medium mb-2">Категория</label>
             <div className="grid grid-cols-3 gap-2">
               {CATEGORIES.map((cat) => (
-                <button
+                <Button
+                  variant="secondary"
                   key={cat.id}
                   onClick={() => setCategory(cat.id)}
                   className={`px-4 py-2 rounded-lg text-sm transition-colors ${
@@ -196,7 +200,7 @@ export default function AdminSceneEditPage() {
                   }`}
                 >
                   {cat.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -207,27 +211,30 @@ export default function AdminSceneEditPage() {
                 <div className="text-sm text-tg-hint">
                   Новое видео: {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setVideoFile(null);
                     setVideoUrl(scene.videoUrl);
                   }}
-                  className="text-sm text-red-500 hover:text-red-400"
+                  className="text-red-400 hover:text-red-300"
                 >
                   Отменить замену
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="text-sm text-tg-hint">
                   Текущее видео: {scene.videoUrl.split("/").pop()}
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  className="btn-tg text-sm"
                 >
                   🔄 Заменить видео
-                </button>
+                </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -241,7 +248,7 @@ export default function AdminSceneEditPage() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Cue Editor */}
         <CueEditor
@@ -254,28 +261,31 @@ export default function AdminSceneEditPage() {
 
         {/* Actions */}
         <div className="flex gap-2">
-          <button
+          <Button
+            variant="secondary"
             onClick={() => router.push("/admin/scenes")}
-            className="flex-1 btn-tg"
+            className="flex-1"
           >
             Отмена
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
             onClick={() => handleDelete()}
-            className="px-4 py-2 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors"
+            className="px-4 py-2"
           >
             🗑 Удалить
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleSave}
             disabled={saving || cues.length === 0}
-            className="flex-1 btn-tg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1"
           >
             {saving ? "Сохранение..." : "💾 Сохранить изменения"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
   );
 }
-
