@@ -692,6 +692,11 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(403).send({ error: "Not a participant" });
       }
 
+      // Multiplayer: only host can start replay
+      if (session.maxPlayers > 1 && session.createdByTgUserId !== user.id) {
+        return reply.status(403).send({ error: "Only the host can start replay" });
+      }
+
       // Check if session is in ready state (can only replay finished sessions)
       if (session.status !== "ready") {
         return reply.status(400).send({ 
@@ -1099,25 +1104,15 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // For multiplayer, create replay request
-      const replayRequest = {
-        requestedBy: user.id,
-        requestedByName: user.firstName,
-        mode,
-        requestedAt: new Date().toISOString(),
-      };
+      // Multiplayer: allow only host to initiate replay, no confirmation flow
+      if (session.createdByTgUserId !== user.id) {
+        return reply.status(403).send({ error: "Only the host can start replay" });
+      }
 
-      await prisma.session.update({
-        where: { id },
-        data: { replayRequest: JSON.stringify(replayRequest) },
+      return reply.status(200).send({
+        directReplay: true,
+        message: "Host replay - direct",
       });
-
-      console.log(`[ReplayRequest] User ${user.id} requested ${mode} for session ${id}`);
-
-      return { 
-        requested: true,
-        waitingForConfirmation: true,
-      };
     }
   );
 

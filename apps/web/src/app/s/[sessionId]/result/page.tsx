@@ -35,7 +35,7 @@ interface ReplayStatus {
 export default function ResultPage({ params }: PageProps) {
   const { sessionId } = params;
   const router = useRouter();
-  const { isReady, initData } = useTelegram();
+  const { isReady, initData, user } = useTelegram();
   const [render, setRender] = useState<RenderStatusResponse | null>(null);
   const [session, setSession] = useState<SessionStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +62,9 @@ export default function ResultPage({ params }: PageProps) {
 
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
+  const isHost =
+    !!session && !!user && String(session.session.createdByTgUserId) === String(user.id);
+  const canReplay = !isMultiplayer || isHost;
 
   // Track render error count for retry logic
   const [renderErrorCount, setRenderErrorCount] = useState(0);
@@ -487,32 +490,19 @@ export default function ResultPage({ params }: PageProps) {
 
   const handleReplay = async (mode: "sameScene" | "newScene") => {
     if (!initData || replaying) return;
+    if (!canReplay) {
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("warning");
+      return;
+    }
     
     setReplaying(mode);
     
     try {
-      // For multiplayer, request confirmation from other player
-      if (isMultiplayer) {
-        const result = await api.requestReplay(initData, sessionId, mode);
-        
-        if (result.directReplay) {
-          // Solo game - do direct replay
-          await api.replaySession(initData, sessionId, mode);
-          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-          setSent(false);
-          window.location.href = `/s/${sessionId}`;
-        } else if (result.waitingForConfirmation) {
-          // Multiplayer - waiting for confirmation
-          setWaitingForConfirmation(true);
-          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-        }
-      } else {
-        // Solo - direct replay
-        await api.replaySession(initData, sessionId, mode);
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-        setSent(false);
-        window.location.href = `/s/${sessionId}`;
-      }
+      // Direct replay (host-only in multiplayer, always in solo)
+      await api.replaySession(initData, sessionId, mode);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+      setSent(false);
+      window.location.href = `/s/${sessionId}`;
     } catch (err) {
       console.error("Replay failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -712,7 +702,7 @@ export default function ResultPage({ params }: PageProps) {
           <div className="grid grid-cols-2 gap-3">
             <Button
               onClick={() => handleReplay("sameScene")}
-              disabled={replaying !== null}
+              disabled={replaying !== null || !canReplay}
               className="disabled:opacity-70"
             >
               {replaying === "sameScene" ? (
@@ -726,7 +716,7 @@ export default function ResultPage({ params }: PageProps) {
             </Button>
             <Button
               onClick={() => handleReplay("newScene")}
-              disabled={replaying !== null}
+              disabled={replaying !== null || !canReplay}
               className="disabled:opacity-70"
             >
               {replaying === "newScene" ? (
@@ -739,6 +729,11 @@ export default function ResultPage({ params }: PageProps) {
               )}
             </Button>
           </div>
+          {!canReplay && (
+            <p className="text-sm text-tg-hint text-center">
+              {RU.web.result.replayHostOnlyHint}
+            </p>
+          )}
         </div>
 
       </div>

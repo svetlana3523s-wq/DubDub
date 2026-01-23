@@ -72,6 +72,7 @@
       replayConfirmNo: "\u041d\u0435\u0442",
       replayConfirmYes: "\u0414\u0430, \u043f\u043e\u0435\u0445\u0430430\u043b\u0438!",
       replayConfirmLoading: "...",
+      replayHostOnlyHint: "Только создатель может начать новую игру.",
       renderFailEmoji: () => "\u{1F622}",
       renderEmoji: () => "\u{1F3A5}",
       readyEmoji: () => "\u{1F389}",
