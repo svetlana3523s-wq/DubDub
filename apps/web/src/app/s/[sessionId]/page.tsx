@@ -741,13 +741,13 @@ export default function SessionPage({ params }: PageProps) {
             <div className="w-full h-full border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-2xl">
               🎥
-            </Card>
+            </div>
           </div>
           <div>
             <h2 className="text-xl font-bold mb-2">Рендерим видео</h2>
             <p className="text-tg-hint">Это займёт минуту...</p>
           </div>
-        </div>
+        </Card>
       </div>
       </PageShell>
     );
