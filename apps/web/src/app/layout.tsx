@@ -21,11 +21,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru">
+    <html lang="ru" className="dark" suppressHydrationWarning>
       <head>
         <script src="https://telegram.org/js/telegram-web-app.js" />
+        <meta name="color-scheme" content="dark" />
       </head>
-      <body className="antialiased">
+      <body className="antialiased bg-black text-white">
         <TelegramProvider>
           <main className="min-h-screen min-h-dvh flex flex-col safe-top safe-bottom">
             {children}
