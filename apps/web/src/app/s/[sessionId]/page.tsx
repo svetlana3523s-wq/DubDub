@@ -72,27 +72,26 @@ function SessionCodeCard({ sessionId }: { sessionId: string }) {
     <Card className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
       <div className="text-center space-y-4">
         <div>
-          <div className="text-xs text-tg-hint mb-2">Код для присоединения</Card>
+          <div className="text-xs text-tg-hint mb-2">Код для присоединения</div>
           <button
             onClick={handleCopyCode}
             className="font-mono text-3xl font-bold tracking-wider text-accent-primary hover:text-accent-primary/80 cursor-pointer transition-colors"
             title="Нажми, чтобы скопировать"
           >
             {copied ? "✅ Скопировано!" : sessionCode}
-          </Button>
+          </button>
           <div className="text-xs text-tg-hint mt-1">
-            👆 нажми, чтобы скопировать
-          </div>
+            👆 нажми, чтобы скопировать</div>
         </div>
-        
-        <Button variant="primary"
+
+        <Button
+          variant="primary"
           onClick={handleSendToFriend}
-           className="w-full"
+          className="w-full"
         >
-          📤 Отправить другу
-        </Button>
+          📤 Отправить другу</Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
