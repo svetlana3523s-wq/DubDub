@@ -58,8 +58,12 @@ export default function CreatePage() {
         gameMode,
       });
       router.push(`/s/${result.sessionId}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Create failed:", err);
+      if (err?.code === "TASKS_EMPTY") {
+        setError(RU.web.create.tasksEmpty);
+        return;
+      }
       setError(err instanceof Error ? err.message : RU.web.create.createErrorGeneric);
     } finally {
       setLoading(false);

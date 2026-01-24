@@ -9,6 +9,8 @@ import type {
   SceneListItem,
   SceneDetail,
   ScenesListResponse,
+  TaskItem,
+  TasksListResponse,
 } from "@dubdub/shared";
 
 const apiBaseUrlRaw =
@@ -518,6 +520,41 @@ export const api = {
   deleteScene: (initData: string, sceneId: string, force: boolean = false): Promise<{ success: true }> =>
     request(initData, `/admin/scenes/${sceneId}${force ? "?force=true" : ""}`, {
       method: "DELETE",
+    }),
+
+  getTasks: (
+    initData: string,
+    params?: { page?: number; limit?: number; search?: string; isActive?: boolean }
+  ): Promise<TasksListResponse> => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append("page", String(params.page));
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.search) query.append("search", params.search);
+    if (params?.isActive !== undefined) query.append("isActive", String(params.isActive));
+    const queryStr = query.toString();
+    return request(initData, `/admin/tasks${queryStr ? `?${queryStr}` : ""}`);
+  },
+
+  createTask: (initData: string, text: string): Promise<TaskItem> =>
+    request(initData, "/admin/tasks", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  updateTask: (
+    initData: string,
+    taskId: string,
+    data: { text?: string; isActive?: boolean }
+  ): Promise<TaskItem> =>
+    request(initData, `/admin/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  archiveTask: (initData: string, taskId: string): Promise<TaskItem> =>
+    request(initData, `/admin/tasks/${taskId}/archive`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
 };
 

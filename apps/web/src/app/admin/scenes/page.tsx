@@ -157,8 +157,14 @@ export default function AdminScenesPage() {
             <h1 className="text-2xl font-bold mb-1">{RU.web.admin.scenes.title}</h1>
             <p className="text-tg-hint text-sm">{RU.web.admin.scenes.totalLabel(total)}</p>
           </div>
-          <Button variant="primary" onClick={() => router.push("/admin/upload")}>            {RU.web.admin.scenes.newScene}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => router.push("/admin/tasks")}>
+              {RU.web.admin.tasks.title}
+            </Button>
+            <Button variant="primary" onClick={() => router.push("/admin/upload")}>
+              {RU.web.admin.scenes.newScene}
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
