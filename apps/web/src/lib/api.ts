@@ -137,12 +137,7 @@ export const api = {
     initData: string,
     sessionId: string
   ): Promise<SessionStateResponse> =>
-    request(initData, `/sessions/${sessionId}`, {
-      cache: "no-store",
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    }),
+    request(initData, `/sessions/${sessionId}`),
 
   uploadTake: async (
     initData: string,
