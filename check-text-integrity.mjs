@@ -76,7 +76,7 @@ function checkFile(filePath, ext) {
         reason: "tsx_raw_escape",
       });
     }
-    if (questionMarkRunRe.test(line)) {
+    if (questionMarkRunRe.test(line) && /["'`]/.test(line)) {
       findings.push({
         file: filePath,
         line: i + 1,
