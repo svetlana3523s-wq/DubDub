@@ -68,6 +68,33 @@ export const storage = {
   },
 
   /**
+   * Get object as stream with Range (for partial content)
+   */
+  async getStreamRange(
+    key: string,
+    range: string
+  ): Promise<{
+    stream: Readable;
+    contentLength?: number;
+    contentRange?: string;
+    contentType?: string;
+  }> {
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Range: range,
+      })
+    );
+    return {
+      stream: response.Body as Readable,
+      contentLength: response.ContentLength,
+      contentRange: response.ContentRange,
+      contentType: response.ContentType,
+    };
+  },
+
+  /**
    * Get object as buffer
    */
   async download(key: string): Promise<Buffer> {
@@ -129,4 +156,3 @@ export const storage = {
     render: (sessionId: string) => `renders/${sessionId}.mp4`,
   },
 };
-

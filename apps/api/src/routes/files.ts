@@ -17,21 +17,68 @@ export const filesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { filename } = request.params;
       const key = `scenes/${filename}`;
+      const rangeHeader = request.headers.range;
 
       try {
+        if (rangeHeader) {
+          const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+          if (!match) {
+            return reply.status(416).send({ error: "Invalid Range" });
+          }
+          const start = match[1] ? Number.parseInt(match[1], 10) : undefined;
+          const end = match[2] ? Number.parseInt(match[2], 10) : undefined;
+          if (
+            (match[1] && Number.isNaN(start)) ||
+            (match[2] && Number.isNaN(end))
+          ) {
+            return reply.status(416).send({ error: "Invalid Range" });
+          }
+          if (start === undefined && end === undefined) {
+            return reply.status(416).send({ error: "Invalid Range" });
+          }
+          if (
+            Number.isFinite(start) &&
+            Number.isFinite(end) &&
+            (start as number) > (end as number)
+          ) {
+            return reply.status(416).send({ error: "Invalid Range" });
+          }
+          const rangeValue = `bytes=${start ?? ""}-${end ?? ""}`;
+          const { stream, contentLength, contentRange, contentType } =
+            await storage.getStreamRange(key, rangeValue);
+
+          reply
+            .code(206)
+            .header("Content-Type", contentType || "video/mp4")
+            .header("Cache-Control", "public, max-age=86400")
+            .header("Accept-Ranges", "bytes");
+
+          if (contentRange) {
+            reply.header("Content-Range", contentRange);
+          }
+          if (contentLength) {
+            reply.header("Content-Length", contentLength);
+          }
+
+          return reply.send(stream);
+        }
+
         const { stream, contentLength } = await storage.getStream(key);
-        
+
         reply
           .header("Content-Type", "video/mp4")
           .header("Cache-Control", "public, max-age=86400")
           .header("Accept-Ranges", "bytes");
-        
+
         if (contentLength) {
           reply.header("Content-Length", contentLength);
         }
-        
+
         return reply.send(stream);
       } catch (err: any) {
+        if (err.$metadata?.httpStatusCode === 416) {
+          return reply.status(416).send({ error: "Range Not Satisfiable" });
+        }
         if (err.name === "NoSuchKey") {
           return reply.status(404).send({ error: "File not found" });
         }
