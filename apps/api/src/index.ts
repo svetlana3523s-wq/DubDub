@@ -27,7 +27,7 @@ const fastify = Fastify({
 await fastify.register(cors, {
   origin: true,
   credentials: true,
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
   allowedHeaders: ["Content-Type", "X-TG-INIT-DATA", "x-tg-init-data"],
   exposedHeaders: ["Retry-After"],
   maxAge: 600,
@@ -35,6 +35,20 @@ await fastify.register(cors, {
 
 fastify.addHook("onRequest", async (request, reply) => {
   if (request.method === "OPTIONS") {
+    const origin = request.headers.origin || "*";
+    reply
+      .header("Access-Control-Allow-Origin", origin)
+      .header(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+      )
+      .header(
+        "Access-Control-Allow-Headers",
+        "Content-Type, X-TG-INIT-DATA, x-tg-init-data"
+      )
+      .header("Access-Control-Allow-Credentials", "true")
+      .header("Access-Control-Max-Age", "600")
+      .header("Vary", "Origin");
     return reply.code(204).send();
   }
 });
