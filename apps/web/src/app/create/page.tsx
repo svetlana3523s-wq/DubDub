@@ -177,8 +177,8 @@ export default function CreatePage() {
                     variant="secondary"
                     className={`py-6 text-3xl font-bold ${
                       maxPlayers === n
-                        ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
-                        : "border-white/10 text-tg-hint hover:border-white/20"
+                        ? "border-accent-primary bg-accent-primary/20 text-white ring-2 ring-accent-primary/70 shadow-glow"
+                        : "border-white/10 text-tg-hint hover:border-white/20 hover:text-white"
                     }`}
                   >
                     {n}
