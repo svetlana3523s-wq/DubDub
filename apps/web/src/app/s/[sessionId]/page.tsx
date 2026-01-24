@@ -18,6 +18,8 @@ interface PageProps {
 type ViewState = "loading" | "error" | "lobby" | "record" | "wait" | "finish" | "rendering";
 
 const CATEGORY_LABELS: Record<string, string> = RU.web.session.categoryLabels;
+const JOIN_FAILED_TEXT =
+  "Не удалось присоединиться. Нажмите /start в боте и откройте игру заново.";
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
@@ -122,23 +124,39 @@ export default function SessionPage({ params }: PageProps) {
 
   const joinSession = useCallback(async () => {
     if (!initData) {
-      console.error("[Join] No initData available", { isReady, initData: !!initData });
+      console.error("[Join] No initData available", {
+        isReady,
+        initData: !!initData,
+        tgUserId: user?.id,
+      });
       setError(RU.web.session.joinInitDataMissing);
       setViewState("error");
       return;
     }
     try {
-      console.log("[Join] Attempting to join session", { sessionId });
+      console.log("[Join] Attempting to join session", {
+        sessionId,
+        tgUserId: user?.id,
+      });
       const data = await api.joinSession(initData, sessionId);
-      console.log("[Join] Successfully joined", { participant: data.participant });
+      console.log("[Join] Successfully joined", {
+        participantId: data.participant?.id,
+        sessionId,
+      });
       setJoinData(data);
       return data;
     } catch (err) {
-      console.error("[Join] Failed:", err);
-      setError(err instanceof Error ? err.message : RU.web.session.joinError);
+      console.error("[Join] Failed:", {
+        sessionId,
+        tgUserId: user?.id,
+        status: (err as { status?: number }).status,
+        code: (err as { code?: string }).code,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      setError(JOIN_FAILED_TEXT);
       setViewState("error");
     }
-  }, [initData, sessionId, isReady]);
+  }, [initData, sessionId, isReady, user?.id]);
 
   const determineViewState = useCallback(
     (data: SessionStateResponse) => {
@@ -236,6 +254,16 @@ export default function SessionPage({ params }: PageProps) {
       console.log("[Init] Fetching session state...");
       const data = await fetchSession();
       if (data) {
+        if (user?.id && !data.participants.some((p) => p.tgUserId === user.id)) {
+          console.error("[Join] Session fetched but user not in participants", {
+            sessionId,
+            tgUserId: user.id,
+            participants: data.participants.length,
+          });
+          setError(JOIN_FAILED_TEXT);
+          setViewState("error");
+          return;
+        }
         console.log("[Init] Session state received", {
           status: data.session.status,
           participants: data.participants.length,
