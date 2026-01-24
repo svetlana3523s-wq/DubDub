@@ -105,6 +105,77 @@ async function request<T>(
   return data as T;
 }
 
+async function requestProxy<T>(
+  initData: string,
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  const url = path;
+  let res: Response;
+
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-TG-INIT-DATA": initData,
+        ...options?.headers,
+      },
+      cache: "no-store",
+    });
+  } catch (err) {
+    const errorName = err instanceof Error ? err.name : "FetchError";
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    lastApiError = {
+      ts: Date.now(),
+      path,
+      url,
+      errorName,
+      errorMessage,
+    };
+    console.error("[API] Proxy request failed", {
+      path,
+      url,
+      errorName,
+      errorMessage,
+    });
+    throw err;
+  }
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const retryAfterRaw = res.headers.get("retry-after");
+    const retryAfterSeconds = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : undefined;
+    console.error("[API] Proxy request error", {
+      path,
+      url,
+      status: res.status,
+      code: data.code,
+      error: data.error,
+      retryAfterSeconds,
+      body: data,
+    });
+    lastApiError = {
+      ts: Date.now(),
+      path,
+      status: res.status,
+      code: data.code,
+      error: data.error,
+      errorMessage: data.error || `HTTP ${res.status}`,
+      retryAfterSeconds,
+    };
+    throw new ApiError(
+      data.error || `HTTP ${res.status}`,
+      data.code,
+      res.status,
+      retryAfterSeconds
+    );
+  }
+
+  return data as T;
+}
+
 export const api = {
   createSession: (
     initData: string,
@@ -298,10 +369,14 @@ export const api = {
     confirmed?: boolean;
     directReplay?: boolean;
   }> =>
-    request(initData, `/sessions/${sessionId}/request-replay?mode=${mode}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    }),
+    requestProxy(
+      initData,
+      `/api/replay/${sessionId}/request?mode=${mode}`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    ),
 
   // Confirm replay (second player confirms or declines)
   confirmReplay: (
@@ -309,10 +384,14 @@ export const api = {
     sessionId: string,
     confirm: boolean
   ): Promise<{ confirmed?: boolean; declined?: boolean; mode?: string }> =>
-    request(initData, `/sessions/${sessionId}/confirm-replay?confirm=${confirm}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    }),
+    requestProxy(
+      initData,
+      `/api/replay/${sessionId}/confirm?confirm=${confirm}`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    ),
 
   // Get replay status
   getReplayStatus: (
@@ -326,14 +405,14 @@ export const api = {
     isRequester?: boolean;
     confirmed?: boolean;
   }> =>
-    request(initData, `/sessions/${sessionId}/replay-status`),
+    requestProxy(initData, `/api/replay/${sessionId}/status`),
 
   // Execute confirmed replay
   executeReplay: (
     initData: string,
     sessionId: string
   ): Promise<SessionStateResponse> =>
-    request(initData, `/sessions/${sessionId}/execute-replay`, {
+    requestProxy(initData, `/api/replay/${sessionId}/execute`, {
       method: "POST",
       body: JSON.stringify({}),
     }),
