@@ -14,7 +14,7 @@ const EXCLUDE_DIRS = new Set([
   ".git",
 ]);
 
-const mojibakeRe = /ЁЯ|╨|тА|گ\?|�|Р’С|РќР|РІвЂ|в†ђ/;
+const mojibakeRe = /\u0401\u042F|\u2568|\u0442\u0410|\u06AF\?|\uFFFD|\u0420\u2019\u0421|\u0420\u045C\u0420|\u0420\u0406\u0432\u0402|\u0432\u2020\u0452/;
 const tsxBadEscapeRe = /\\u[0-9a-fA-F]{4}|\\u1f/i;
 const questionMarkRunRe = /\?{3,}/;
 
