@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -7,12 +7,13 @@ import { api } from "@/lib/api";
 import { CueEditor } from "@/components/CueEditor";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { RU } from "@dubdub/shared";
 import type { SceneDetail, Category, Cue } from "@dubdub/shared";
 
 const CATEGORIES: { id: Category; label: string }[] = [
-  { id: "movies", label: "🎬 Кино/сериалы" },
-  { id: "memes", label: "😂 Мемы" },
-  { id: "politics", label: "🏛️ Политика" },
+  { id: "movies", label: RU.web.admin.scenes.categoryMovies },
+  { id: "memes", label: RU.web.admin.scenes.categoryMemes },
+  { id: "politics", label: RU.web.admin.scenes.categoryPolitics },
 ];
 
 export default function AdminSceneEditPage() {
@@ -57,7 +58,7 @@ export default function AdminSceneEditPage() {
         setVideoUrl(sceneData.videoUrl);
       } catch (err: any) {
         console.error("Failed to load:", err);
-        setError(err.message || "Ошибка загрузки");
+        setError(err.message || RU.web.admin.edit.errorLoad);
         router.push("/admin/scenes");
       } finally {
         setLoading(false);
@@ -69,7 +70,7 @@ export default function AdminSceneEditPage() {
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith("video/")) {
-      setError("Выберите видео файл");
+      setError(RU.web.admin.edit.errorSelectVideo);
       return;
     }
 
@@ -80,12 +81,12 @@ export default function AdminSceneEditPage() {
 
   const handleSave = async () => {
     if (!initData || !scene || !title.trim()) {
-      setError("Заполните все поля");
+      setError(RU.web.admin.edit.errorNeedFields);
       return;
     }
 
     if (cues.length === 0) {
-      setError("Добавьте хотя бы один тайминг");
+      setError(RU.web.admin.edit.errorNeedCues);
       return;
     }
 
@@ -105,7 +106,7 @@ export default function AdminSceneEditPage() {
       router.push("/admin/scenes");
     } catch (err: any) {
       console.error("Save failed:", err);
-      setError(err.message || "Ошибка сохранения");
+      setError(err.message || RU.web.admin.edit.errorSave);
     } finally {
       setSaving(false);
     }
@@ -113,11 +114,11 @@ export default function AdminSceneEditPage() {
 
   const handleDelete = async (force: boolean = false) => {
     if (!initData) return;
-    
-    const confirmMsg = force 
-      ? "⚠️ Принудительное удаление! Все связанные сессии тоже будут удалены. Продолжить?"
-      : "Удалить эту сцену? Это действие нельзя отменить.";
-    
+
+    const confirmMsg = force
+      ? RU.web.admin.scenes.deleteForceConfirm
+      : RU.web.admin.scenes.deleteConfirm;
+
     if (!confirm(confirmMsg)) {
       return;
     }
@@ -126,10 +127,10 @@ export default function AdminSceneEditPage() {
       await api.deleteScene(initData, sceneId, force);
       router.push("/admin/scenes");
     } catch (err: any) {
-      const msg = err.message || "Ошибка удаления";
+      const msg = err.message || RU.web.admin.edit.errorDelete;
       // If error mentions active sessions, offer force delete
       if (msg.includes("active session") && !force) {
-        if (confirm(`${msg}\n\nУдалить принудительно?`)) {
+        if (confirm(`${msg}\n\n${RU.web.admin.scenes.deleteForcePrompt}`)) {
           handleDelete(true);
         }
       } else {
@@ -155,7 +156,7 @@ export default function AdminSceneEditPage() {
       <div className="max-w-2xl mx-auto w-full space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Редактирование сцены</h1>
+            <h1 className="text-2xl font-bold mb-1">{RU.web.admin.edit.title}</h1>
             <p className="text-tg-hint text-sm">ID: {sceneId}</p>
           </div>
           <Button
@@ -163,7 +164,7 @@ export default function AdminSceneEditPage() {
             size="sm"
             onClick={() => router.push("/admin/scenes")}
           >
-            ← Назад к списку
+            {RU.web.admin.edit.backToList}
           </Button>
         </div>
 
@@ -176,17 +177,21 @@ export default function AdminSceneEditPage() {
         {/* Details */}
         <Card className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Название сцены</label>
+            <label className="block text-sm font-medium mb-2">
+              {RU.web.admin.edit.nameLabel}
+            </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Например: Классика мемов"
+              placeholder={RU.web.admin.edit.namePlaceholder}
               className="w-full px-4 py-2 rounded-lg bg-tg-secondary text-white placeholder-tg-hint focus:outline-none focus:ring-2 focus:ring-accent-primary"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Категория</label>
+            <label className="block text-sm font-medium mb-2">
+              {RU.web.admin.edit.categoryLabel}
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {CATEGORIES.map((cat) => (
                 <Button
@@ -205,11 +210,16 @@ export default function AdminSceneEditPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Видео</label>
+            <label className="block text-sm font-medium mb-2">
+              {RU.web.admin.edit.videoLabel}
+            </label>
             {videoFile ? (
               <div className="space-y-2">
                 <div className="text-sm text-tg-hint">
-                  Новое видео: {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  {RU.web.admin.edit.newVideo(
+                    videoFile.name,
+                    (videoFile.size / (1024 * 1024)).toFixed(2)
+                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -220,20 +230,20 @@ export default function AdminSceneEditPage() {
                   }}
                   className="text-red-400 hover:text-red-300"
                 >
-                  Отменить замену
+                  {RU.web.admin.edit.cancelReplace}
                 </Button>
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="text-sm text-tg-hint">
-                  Текущее видео: {scene.videoUrl.split("/").pop()}
+                  {RU.web.admin.edit.currentVideo(scene.videoUrl.split("/").pop() || "")}
                 </div>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  🔄 Заменить видео
+                  {RU.web.admin.edit.replaceVideo}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -266,7 +276,7 @@ export default function AdminSceneEditPage() {
             onClick={() => router.push("/admin/scenes")}
             className="flex-1"
           >
-            Отмена
+            {RU.web.admin.edit.cancel}
           </Button>
           <Button
             variant="danger"
@@ -274,7 +284,7 @@ export default function AdminSceneEditPage() {
             onClick={() => handleDelete()}
             className="px-4 py-2"
           >
-            🗑 Удалить
+            {RU.web.admin.edit.delete}
           </Button>
           <Button
             variant="primary"
@@ -282,7 +292,7 @@ export default function AdminSceneEditPage() {
             disabled={saving || cues.length === 0}
             className="flex-1"
           >
-            {saving ? "Сохранение..." : "💾 Сохранить изменения"}
+            {saving ? RU.web.admin.edit.saving : RU.web.admin.edit.save}
           </Button>
         </div>
       </div>

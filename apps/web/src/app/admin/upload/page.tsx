@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -7,12 +7,13 @@ import { api } from "@/lib/api";
 import { CueEditor } from "@/components/CueEditor";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { RU } from "@dubdub/shared";
 import type { Category, Cue } from "@dubdub/shared";
 
 const CATEGORIES: { id: Category; label: string }[] = [
-  { id: "movies", label: "🎬 Кино/сериалы" },
-  { id: "memes", label: "😂 Мемы" },
-  { id: "politics", label: "🏛️ Политика" },
+  { id: "movies", label: RU.web.admin.scenes.categoryMovies },
+  { id: "memes", label: RU.web.admin.scenes.categoryMemes },
+  { id: "politics", label: RU.web.admin.scenes.categoryPolitics },
 ];
 
 type Step = "upload" | "details" | "cues";
@@ -57,14 +58,19 @@ export default function AdminUploadPage() {
   // Handle video file selection
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith("video/")) {
-      setError("Выберите видео файл");
+      setError(RU.web.admin.upload.errorSelectVideo);
       return;
     }
 
     // Check file size (500 MB limit)
     const maxSize = 500 * 1024 * 1024; // 500 MB
     if (file.size > maxSize) {
-      setError(`Файл слишком большой (${(file.size / 1024 / 1024).toFixed(2)} MB). Максимум: ${(maxSize / 1024 / 1024).toFixed(0)} MB`);
+      setError(
+        RU.web.admin.upload.errorTooLarge(
+          (file.size / 1024 / 1024).toFixed(2),
+          (maxSize / 1024 / 1024).toFixed(0)
+        )
+      );
       return;
     }
 
@@ -85,7 +91,7 @@ export default function AdminUploadPage() {
       setStep("details");
     };
     video.onerror = () => {
-      setError("Не удалось загрузить видео");
+      setError(RU.web.admin.upload.errorLoadVideo);
       setVideoFile(null);
       setVideoUrl(null);
     };
@@ -104,13 +110,13 @@ export default function AdminUploadPage() {
   const handleNext = () => {
     if (step === "upload") {
       if (!videoFile) {
-        setError("Загрузите видео");
+        setError(RU.web.admin.upload.errorNeedVideo);
         return;
       }
       setStep("details");
     } else if (step === "details") {
       if (!title.trim()) {
-        setError("Введите название");
+        setError(RU.web.admin.upload.errorNeedTitle);
         return;
       }
       setStep("cues");
@@ -119,7 +125,7 @@ export default function AdminUploadPage() {
 
   const handleSubmit = async () => {
     if (!initData || !videoFile || !title.trim() || cues.length === 0) {
-      setError("Заполните все поля и добавьте хотя бы один тайминг");
+      setError(RU.web.admin.upload.errorNeedFields);
       return;
     }
 
@@ -143,12 +149,12 @@ export default function AdminUploadPage() {
       console.log("[Upload] FormData created, calling api.uploadScene...");
 
       const result = await api.uploadScene(initData, formData);
-      
+
       console.log("[Upload] Upload successful:", result);
       router.push(`/admin/scenes/${result.sceneId}/edit`);
     } catch (err: any) {
       console.error("[Upload] Upload failed:", err);
-      setError(err.message || "Ошибка загрузки");
+      setError(err.message || RU.web.admin.upload.errorUpload);
     } finally {
       setLoading(false);
     }
@@ -170,8 +176,8 @@ export default function AdminUploadPage() {
     <div className="flex-1 flex flex-col p-6 pb-8">
       <div className="max-w-2xl mx-auto w-full space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-1">Загрузка новой сцены</h1>
-          <p className="text-tg-hint text-sm">Создайте новую сцену для озвучки</p>
+          <h1 className="text-2xl font-bold mb-1">{RU.web.admin.upload.title}</h1>
+          <p className="text-tg-hint text-sm">{RU.web.admin.upload.subtitle}</p>
         </div>
 
         {error && (
@@ -200,13 +206,14 @@ export default function AdminUploadPage() {
                 }}
               />
               <div className="text-4xl mb-4">📹</div>
-              <div className="text-lg font-medium mb-2">Загрузите видео</div>
-              <div className="text-tg-hint text-sm">
-                Перетащите файл сюда или нажмите для выбора
-              </div>
+              <div className="text-lg font-medium mb-2">{RU.web.admin.upload.selectVideo}</div>
+              <div className="text-tg-hint text-sm">{RU.web.admin.upload.dropHint}</div>
               {videoFile && (
                 <div className="mt-4 text-sm text-accent-primary">
-                  Выбрано: {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  {RU.web.admin.upload.selected(
+                    videoFile.name,
+                    (videoFile.size / (1024 * 1024)).toFixed(2)
+                  )}
                 </div>
               )}
             </div>
@@ -217,17 +224,21 @@ export default function AdminUploadPage() {
         {step === "details" && (
           <Card className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Название сцены</label>
+              <label className="block text-sm font-medium mb-2">
+                {RU.web.admin.upload.nameLabel}
+              </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Например: Классика мемов"
+                placeholder={RU.web.admin.upload.namePlaceholder}
                 className="w-full px-4 py-2 rounded-lg bg-tg-secondary text-white placeholder-tg-hint focus:outline-none focus:ring-2 focus:ring-accent-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Категория</label>
+              <label className="block text-sm font-medium mb-2">
+                {RU.web.admin.upload.categoryLabel}
+              </label>
               <div className="grid grid-cols-3 gap-2">
                 {CATEGORIES.map((cat) => (
                   <Button
@@ -254,10 +265,10 @@ export default function AdminUploadPage() {
                 }}
                 className="flex-1"
               >
-                ← Назад
+                {RU.web.admin.upload.back}
               </Button>
               <Button variant="primary" onClick={handleNext} className="flex-1">
-                Далее →
+                {RU.web.admin.upload.next}
               </Button>
             </div>
           </Card>
@@ -282,7 +293,7 @@ export default function AdminUploadPage() {
                 }}
                 className="flex-1"
               >
-                ← Назад
+                {RU.web.admin.upload.back}
               </Button>
               <Button
                 variant="primary"
@@ -290,7 +301,7 @@ export default function AdminUploadPage() {
                 disabled={loading || cues.length === 0}
                 className="flex-1"
               >
-                {loading ? "Загрузка..." : "✅ Загрузить сцену"}
+                {loading ? RU.web.admin.upload.uploading : RU.web.admin.upload.uploadButton}
               </Button>
             </div>
           </div>
