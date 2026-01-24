@@ -107,12 +107,15 @@ export default function SessionPage({ params }: PageProps) {
   const [finishing, setFinishing] = useState(false);
   const [skipError, setSkipError] = useState<string | null>(null);
   const [skipInProgress, setSkipInProgress] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
+  const [lastSessionPollAt, setLastSessionPollAt] = useState<number | null>(null);
 
   const fetchSession = useCallback(async () => {
     if (!initData) return null;
     try {
       const data = await api.getSession(initData, sessionId);
       setSession(data);
+      setLastSessionPollAt(Date.now());
       return data;
     } catch (err) {
       console.error("Fetch session failed:", err);
@@ -209,6 +212,12 @@ export default function SessionPage({ params }: PageProps) {
   );
 
   // Initial load
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setDebugMode(new URLSearchParams(window.location.search).has("debug"));
+    }
+  }, []);
+
   useEffect(() => {
     console.log("[Init] Component mounted/updated", { isReady, hasInitData: !!initData, sessionId });
     
@@ -505,6 +514,13 @@ export default function SessionPage({ params }: PageProps) {
           {/* Session Code & Instructions */}
           {session.session.maxPlayers > 1 && (
             <SessionCodeCard sessionId={sessionId} />
+          )}
+
+          {debugMode && (
+            <div className="text-xs text-tg-hint text-center">
+              debug: participants {session.participants.length}/{session.session.maxPlayers} •
+              lastPoll {lastSessionPollAt ? new Date(lastSessionPollAt).toLocaleTimeString("ru-RU") : "—"}
+            </div>
           )}
 
           {canSkipScene && (
