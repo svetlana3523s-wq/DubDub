@@ -59,6 +59,7 @@ export default function ResultPage({ params }: PageProps) {
   const [replayStatus, setReplayStatus] = useState<ReplayStatus>({ pending: false });
   const [waitingForConfirmation, setWaitingForConfirmation] = useState(false);
   const [confirmingReplay, setConfirmingReplay] = useState(false);
+  const [replayResponseSent, setReplayResponseSent] = useState(false);
 
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
@@ -237,6 +238,9 @@ export default function ResultPage({ params }: PageProps) {
       console.log("[ReplayStatus] Received:", status);
       setReplayStatus(status);
       setWaitingForConfirmation(!!status.pending && !!status.isRequester);
+      if (!status.pending) {
+        setReplayResponseSent(false);
+      }
       
       // If confirmed and we're the requester, execute the replay
       if (status.confirmed && status.isRequester) {
@@ -346,6 +350,7 @@ export default function ResultPage({ params }: PageProps) {
     fetchData();
 
     // Poll for replay status (for multiplayer) and render status
+    const intervalMs = replayStatus.pending ? 2000 : 5000;
     const interval = setInterval(async () => {
       if (Date.now() < sessionRateLimitUntilRef.current) {
         return;
@@ -392,14 +397,14 @@ export default function ResultPage({ params }: PageProps) {
         }
         // ignore other network errors
       }
-    }, 5000); // 5 seconds to avoid rate limit and give FFmpeg time
+    }, intervalMs);
 
     return () => {
       clearInterval(interval);
       // Cleanup send status polling on unmount
       stopSendStatusPolling();
     };
-  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus, stopSendStatusPolling, getRetryAfterSeconds]);
+  }, [isReady, initData, sessionId, session?.session.maxPlayers, fetchReplayStatus, stopSendStatusPolling, getRetryAfterSeconds, replayStatus.pending]);
 
   useEffect(() => {
     if (!isReady || !initData) return;
@@ -524,6 +529,7 @@ export default function ResultPage({ params }: PageProps) {
           confirmed: result.confirmed,
         });
         setWaitingForConfirmation(!!result.isRequester);
+        setReplayResponseSent(false);
         return;
       }
     } catch (err) {
@@ -543,10 +549,12 @@ export default function ResultPage({ params }: PageProps) {
       
       if (result.confirmed) {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        setReplayResponseSent(true);
         await fetchReplayStatus();
       } else {
         setReplayStatus({ pending: false });
         setWaitingForConfirmation(false);
+        setReplayResponseSent(false);
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("warning");
       }
     } catch (err) {
@@ -676,15 +684,23 @@ export default function ResultPage({ params }: PageProps) {
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   onClick={() => handleConfirmReplay(false)}
-                  disabled={confirmingReplay}
+                  disabled={confirmingReplay || replayResponseSent}
                   variant="secondary"
                 >
                   {RU.web.result.replayConfirmNo}
                 </Button>
-                <Button onClick={() => handleConfirmReplay(true)} disabled={confirmingReplay}>
+                <Button
+                  onClick={() => handleConfirmReplay(true)}
+                  disabled={confirmingReplay || replayResponseSent}
+                >
                   {confirmingReplay ? RU.web.result.replayConfirmLoading : RU.web.result.replayConfirmYes}
                 </Button>
               </div>
+              {replayResponseSent && (
+                <p className="text-sm text-tg-hint">
+                  {RU.web.result.replayConfirmSent}
+                </p>
+              )}
             </div>
           </Card>
         )}
