@@ -39,6 +39,7 @@ Single source of truth for the PUPKA coordination assistant. Update this file fi
 - Telegram iOS WebView: send-status must update without manual reload.
 - Workaround: same-origin proxy for send-status under `https://app.tvotototo.ru/api/render-send-status/:id`.
 - Ensure polling + no-store are working so status flips to `sent` automatically.
+- Duo replay confirm uses same-origin replay proxies under `/api/replay/:sessionId/*`.
 
 ## Debug shortcuts
 
@@ -47,6 +48,10 @@ Single source of truth for the PUPKA coordination assistant. Update this file fi
   - sessionId (from "Show game ID")
   - screenshot with the debug line visible (if present)
   - whether it was inside Telegram WebView (iOS/Android) or external browser
+
+## Replay confirm checks (duo)
+- If confirm prompt feels slow, confirm polling interval is active (pending state = 2s polling).
+- Responder should see a short “confirmation sent” message after clicking Yes.
 
 ## Quick text checks (before UI deploy)
 

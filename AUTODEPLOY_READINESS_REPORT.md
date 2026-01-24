@@ -54,6 +54,10 @@ From GitHub Actions logs (preferred):
   - `ss -ltnp | grep :3001` shows API listening
   - local `curl http://127.0.0.1:3001/health` returns 200
 
+Web sanity (manual spot check after deploy):
+- Result page replay confirm prompt appears and responds in duo (no dead clicks).
+- Web uses same-origin replay proxies (`/api/replay/:sessionId/*`) for request/confirm/status/execute.
+
 From VPS (AUTO diagnostics only, no edits):
 - `readlink -f /var/www/dubdub/current`
 - `cat /var/www/dubdub/current/RELEASE_SHA` (if present)

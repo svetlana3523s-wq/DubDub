@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-01-21
+Last updated: 2026-01-24
 
 ## Deployment
 - Primary deploy: GitHub Actions workflow `.github/workflows/deploy-prod.yml` (push to `main` + manual dispatch).
@@ -32,6 +32,12 @@ Last updated: 2026-01-21
   - Otherwise fallback to Telegram upload.
   - 429 => `rate_limited` with `retryAfterSeconds` + delayed retry.
 
+## Duo replay confirm (current)
+- Replay confirm is enabled for duo and uses a single pending request stored on the session.
+- Web uses same-origin proxy endpoints for replay (`/api/replay/:id/*`) to avoid iOS WebView CORS.
+- When a replay request is pending, polling interval is 2s; responder sees a confirm prompt.
+- After pressing “Yes”, UI shows “confirmation sent” until replay starts.
+
 ## Bot invite links
 - Source of truth: `BOT_USERNAME` from env (no hardcoded bot name).
 - Example invite: `https://t.me/zlomem_bot?startapp=s_<sessionId>` (no leading `@` in URL).
@@ -50,9 +56,7 @@ Last updated: 2026-01-21
 - After UI refactor: run `node check-text-integrity.mjs` and `rg -n "\\?{3,}" apps/web/src`.
 
 ## Current Top Issue (P0)
-- Verify send-status updates without reload in Telegram WebView (after proxy + no-store + polling start on render ready).
-- If it still stalls, capture debug line (Last API error + Last send-status poll).
+- Monitor replay confirm latency in duo; if confirm prompt appears late, capture debug line + sessionId.
 
 ## Next Actions (small steps)
-- CODEX: ensure proxy route returns `Cache-Control: no-store` and client polling runs on `render=ready` and updates UI without reload.
-- AUTO: confirm status flips in Telegram WebView for a fresh session (no reload needed) and capture debug line if it still stalls.
+- AUTO: confirm replay prompt and “confirmation sent” show within ~2s polling window for a fresh duo session.

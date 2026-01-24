@@ -47,6 +47,10 @@ Mitigation:
 Debug:
 - In-app debug line (long-press on "Show game ID") shows the last API error and last poll timestamp.
 
+## Duo replay confirm (current)
+- Multiplayer replay uses a confirm flow (Yes/No) with a single pending replay request per session.
+- Web calls replay endpoints via same-origin proxy routes under `/api/replay/:sessionId/*` to avoid WebView CORS.
+
 ## Deployment (production)
 
 - Primary deploy is GitHub Actions: `.github/workflows/deploy-prod.yml`.

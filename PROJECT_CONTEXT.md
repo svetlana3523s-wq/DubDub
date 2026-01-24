@@ -65,6 +65,10 @@ Current workaround:
 Debug tooling:
 - Result page has an in-app debug toggle (long-press on "Show game ID") to show last API error and last poll timestamp.
 
+## Duo replay confirm (current)
+- Replay confirm for duo uses a single pending replay request stored on the session.
+- Web uses same-origin proxy routes under `/api/replay/:sessionId/*` for request/confirm/status/execute.
+
 ## UI/Text guardrails
 
 - Keep UI changes UI-only (no logic changes mixed into visual refactors).
