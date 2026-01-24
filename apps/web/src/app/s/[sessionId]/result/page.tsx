@@ -62,9 +62,7 @@ export default function ResultPage({ params }: PageProps) {
 
   // Check if this is a multiplayer session
   const isMultiplayer = session && session.session.maxPlayers > 1;
-  const isHost =
-    !!session && !!user && String(session.session.createdByTgUserId) === String(user.id);
-  const canReplay = !isMultiplayer || isHost;
+  const canReplay = !isMultiplayer || !replayStatus.pending;
 
   // Track render error count for retry logic
   const [renderErrorCount, setRenderErrorCount] = useState(0);
@@ -238,6 +236,7 @@ export default function ResultPage({ params }: PageProps) {
       const status = await api.getReplayStatus(initData, sessionId);
       console.log("[ReplayStatus] Received:", status);
       setReplayStatus(status);
+      setWaitingForConfirmation(!!status.pending && !!status.isRequester);
       
       // If confirmed and we're the requester, execute the replay
       if (status.confirmed && status.isRequester) {
@@ -498,11 +497,35 @@ export default function ResultPage({ params }: PageProps) {
     setReplaying(mode);
     
     try {
-      // Direct replay (host-only in multiplayer, always in solo)
-      await api.replaySession(initData, sessionId, mode);
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-      setSent(false);
-      window.location.href = `/s/${sessionId}`;
+      if (!isMultiplayer) {
+        // Direct replay for solo
+        await api.replaySession(initData, sessionId, mode);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        setSent(false);
+        window.location.href = `/s/${sessionId}`;
+        return;
+      }
+
+      const result = await api.requestReplay(initData, sessionId, mode);
+      if (result.directReplay) {
+        await api.replaySession(initData, sessionId, mode);
+        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        setSent(false);
+        window.location.href = `/s/${sessionId}`;
+        return;
+      }
+
+      if (result.pending) {
+        setReplayStatus({
+          pending: true,
+          mode: result.mode,
+          requestedByName: result.requestedByName,
+          isRequester: result.isRequester,
+          confirmed: result.confirmed,
+        });
+        setWaitingForConfirmation(!!result.isRequester);
+        return;
+      }
     } catch (err) {
       console.error("Replay failed:", err);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
@@ -518,15 +541,12 @@ export default function ResultPage({ params }: PageProps) {
     try {
       const result = await api.confirmReplay(initData, sessionId, confirm);
       
-      if (result.confirmed && result.mode) {
-        // Confirmed - execute replay directly (using the original replay API)
+      if (result.confirmed) {
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
-        await api.replaySession(initData, sessionId, result.mode as "sameScene" | "newScene");
-        // Use window.location for clean navigation (avoids caching issues)
-        window.location.href = `/s/${sessionId}`;
+        await fetchReplayStatus();
       } else {
-        // Declined - just reset state
         setReplayStatus({ pending: false });
+        setWaitingForConfirmation(false);
         window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("warning");
       }
     } catch (err) {
@@ -638,6 +658,37 @@ export default function ResultPage({ params }: PageProps) {
           </Card>
         )}
 
+        {/* Replay confirmation prompt - shown to responder */}
+        {replayStatus.pending && !replayStatus.isRequester && (
+          <Card className="bg-white/5 border border-white/10">
+            <div className="text-center space-y-3">
+              <div className="text-lg font-semibold">
+                {replayStatus.mode === "newScene"
+                  ? RU.web.result.replayRequestTitleNew
+                  : RU.web.result.replayRequestTitleSame}
+              </div>
+              <p className="text-sm text-tg-hint">
+                {RU.web.result.replayRequestBody(
+                  replayStatus.requestedByName || RU.web.result.readyTitle,
+                  (replayStatus.mode as "newScene" | "sameScene") || "newScene"
+                )}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={() => handleConfirmReplay(false)}
+                  disabled={confirmingReplay}
+                  variant="secondary"
+                >
+                  {RU.web.result.replayConfirmNo}
+                </Button>
+                <Button onClick={() => handleConfirmReplay(true)} disabled={confirmingReplay}>
+                  {confirmingReplay ? RU.web.result.replayConfirmLoading : RU.web.result.replayConfirmYes}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Actions */}
         <div className="space-y-3 animate-fade-in" style={{ animationDelay: "0.2s" }}>
           {/* Delivery status */}
@@ -729,11 +780,6 @@ export default function ResultPage({ params }: PageProps) {
               )}
             </Button>
           </div>
-          {!canReplay && (
-            <p className="text-sm text-tg-hint text-center">
-              {RU.web.result.replayHostOnlyHint}
-            </p>
-          )}
         </div>
 
       </div>

@@ -1095,6 +1095,13 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(403).send({ error: "Not a participant" });
       }
 
+      // Check if session is in ready state (can only replay finished sessions)
+      if (session.status !== "ready") {
+        return reply.status(400).send({
+          error: `Session must be finished to replay. Current status: ${session.status}`,
+        });
+      }
+
       // For solo games, just trigger replay directly
       if (session.maxPlayers === 1) {
         // Redirect to regular replay
@@ -1104,14 +1111,72 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Multiplayer: allow only host to initiate replay, no confirmation flow
-      if (session.createdByTgUserId !== user.id) {
-        return reply.status(403).send({ error: "Only the host can start replay" });
+      // If there's already a pending request, return it (idempotent)
+      if (session.replayRequest) {
+        const replayReq = JSON.parse(session.replayRequest) as {
+          requestedBy: string;
+          requestedByName: string;
+          mode: "sameScene" | "newScene";
+          requestedAt: string;
+          confirmedBy?: string;
+          confirmedAt?: string;
+        };
+        return reply.status(200).send({
+          pending: true,
+          mode: replayReq.mode,
+          requestedBy: replayReq.requestedBy,
+          requestedByName: replayReq.requestedByName,
+          isRequester: String(replayReq.requestedBy) === String(user.id),
+          confirmed: !!replayReq.confirmedBy,
+        });
+      }
+
+      const requestedByName = user.firstName || user.username || `ID ${user.id}`;
+      const requestedAt = new Date().toISOString();
+      const payload = JSON.stringify({
+        requestedBy: String(user.id),
+        requestedByName,
+        mode,
+        requestedAt,
+      });
+
+      const updateResult = await prisma.session.updateMany({
+        where: { id, replayRequest: null },
+        data: { replayRequest: payload },
+      });
+
+      if (updateResult.count === 0) {
+        const current = await prisma.session.findUnique({
+          where: { id },
+          select: { replayRequest: true },
+        });
+        if (current?.replayRequest) {
+          const replayReq = JSON.parse(current.replayRequest) as {
+            requestedBy: string;
+            requestedByName: string;
+            mode: "sameScene" | "newScene";
+            requestedAt: string;
+            confirmedBy?: string;
+            confirmedAt?: string;
+          };
+          return reply.status(200).send({
+            pending: true,
+            mode: replayReq.mode,
+            requestedBy: replayReq.requestedBy,
+            requestedByName: replayReq.requestedByName,
+            isRequester: String(replayReq.requestedBy) === String(user.id),
+            confirmed: !!replayReq.confirmedBy,
+          });
+        }
       }
 
       return reply.status(200).send({
-        directReplay: true,
-        message: "Host replay - direct",
+        pending: true,
+        mode,
+        requestedBy: String(user.id),
+        requestedByName,
+        isRequester: true,
+        confirmed: false,
       });
     }
   );

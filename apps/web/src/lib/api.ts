@@ -289,7 +289,15 @@ export const api = {
     initData: string,
     sessionId: string,
     mode: "sameScene" | "newScene"
-  ): Promise<{ requested?: boolean; directReplay?: boolean; waitingForConfirmation?: boolean }> =>
+  ): Promise<{
+    pending?: boolean;
+    mode?: string;
+    requestedBy?: string;
+    requestedByName?: string;
+    isRequester?: boolean;
+    confirmed?: boolean;
+    directReplay?: boolean;
+  }> =>
     request(initData, `/sessions/${sessionId}/request-replay?mode=${mode}`, {
       method: "POST",
       body: JSON.stringify({}),
@@ -310,7 +318,14 @@ export const api = {
   getReplayStatus: (
     initData: string,
     sessionId: string
-  ): Promise<{ pending: boolean; mode?: string; requestedByName?: string; isRequester?: boolean; confirmed?: boolean }> =>
+  ): Promise<{
+    pending: boolean;
+    mode?: string;
+    requestedBy?: string;
+    requestedByName?: string;
+    isRequester?: boolean;
+    confirmed?: boolean;
+  }> =>
     request(initData, `/sessions/${sessionId}/replay-status`),
 
   // Execute confirmed replay
