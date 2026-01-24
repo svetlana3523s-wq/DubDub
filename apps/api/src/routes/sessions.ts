@@ -22,7 +22,7 @@ import {
 import { spawn } from "child_process";
 import { promisify } from "util";
 import { pipeline as pipelineCallback } from "stream";
-import { getRandomTask } from "../config/tasks.js";
+import type { Prisma } from "@prisma/client";
 
 const pipeline = promisify(pipelineCallback);
 
@@ -44,6 +44,20 @@ function buildSceneMeta(scene: {
     rolesCount: scene.rolesCount,
     cues: parseCuesFromJson(scene.cueJson, scene.fps),
   };
+}
+
+async function getRandomTaskFromDb(
+  db: Prisma.TransactionClient | typeof prisma
+): Promise<string | null> {
+  const tasks = await db.task.findMany({
+    where: { isActive: true },
+    select: { text: true },
+  });
+  if (tasks.length === 0) {
+    return null;
+  }
+  const task = tasks[Math.floor(Math.random() * tasks.length)];
+  return task?.text ?? null;
 }
 
 async function getAudioDuration(buffer: Buffer): Promise<number> {
@@ -177,7 +191,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (allScenes.length === 0) {
-        return reply.status(400).send({ error: `Нет сцен в категории "${body.category}"` });
+        return reply.status(400).send({ error: `No scenes in category "${body.category}"` });
       }
 
       // Pick a RANDOM scene - always random, no tracking
@@ -186,7 +200,16 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       console.log(`[Session] User ${user.id} gets RANDOM scene ${scene.id} (category: ${body.category}, total: ${allScenes.length})`);
 
       // Set task only in "tasks" mode
-      const task = body.gameMode === "tasks" ? getRandomTask() : null;
+      let task: string | null = null;
+      if (body.gameMode === "tasks") {
+        task = await getRandomTaskFromDb(prisma);
+        if (!task) {
+          return reply.status(400).send({
+            error: "No active tasks. Add tasks in admin.",
+            code: "TASKS_EMPTY",
+          });
+        }
+      }
 
       const session = await prisma.session.create({
         data: {
@@ -705,7 +728,18 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Use transaction to ensure atomicity
-      const updatedSession = await prisma.$transaction(async (tx) => {
+      let updatedSession: any;
+      try {
+        updatedSession = await prisma.$transaction(async (tx) => {
+        let newTask: string | null = null;
+        if (session.gameMode === "tasks") {
+          newTask = await getRandomTaskFromDb(tx);
+          if (!newTask) {
+            const err = new Error("TASKS_EMPTY");
+            (err as any).code = "TASKS_EMPTY";
+            throw err;
+          }
+        }
         // 1. Delete all takes
         await tx.take.deleteMany({
           where: { sessionId: id },
@@ -819,7 +853,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           data: {
             sceneId: newSceneId,
             status: "recording", // Start recording immediately
-            task: session.gameMode === "tasks" ? getRandomTask() : null,
+            task: newTask,
             // Keep: category, gameMode, task, maxPlayers, createdByTgUserId
           },
           include: {
@@ -832,6 +866,15 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         return updated;
       });
+      } catch (err: any) {
+        if (err?.code === "TASKS_EMPTY" || err?.message === "TASKS_EMPTY") {
+          return reply.status(400).send({
+            error: "No active tasks. Add tasks in admin.",
+            code: "TASKS_EMPTY",
+          });
+        }
+        throw err;
+      }
 
       // Get scene URL
       const sceneFilename = updatedSession.scene.s3Key.split("/").pop() || "";
@@ -940,7 +983,9 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const updatedSession = await prisma.$transaction(async (tx) => {
+      let updatedSession: any;
+      try {
+        updatedSession = await prisma.$transaction(async (tx) => {
         const usedSessionsByCreator = await tx.session.findMany({
           where: {
             category: session.category,
@@ -995,11 +1040,21 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           throw new Error(`No other scenes available in category "${session.category}"`);
         }
 
+        let newTask: string | null = null;
+        if (session.gameMode === "tasks") {
+          newTask = await getRandomTaskFromDb(tx);
+          if (!newTask) {
+            const err = new Error("TASKS_EMPTY");
+            (err as any).code = "TASKS_EMPTY";
+            throw err;
+          }
+        }
+
         return tx.session.update({
           where: { id },
           data: {
             sceneId: newScene.id,
-            task: session.gameMode === "tasks" ? getRandomTask() : null,
+            task: newTask,
             skipCount: { increment: 1 },
           },
           include: {
@@ -1010,6 +1065,15 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       });
+      } catch (err: any) {
+        if (err?.code === "TASKS_EMPTY" || err?.message === "TASKS_EMPTY") {
+          return reply.status(400).send({
+            error: "No active tasks. Add tasks in admin.",
+            code: "TASKS_EMPTY",
+          });
+        }
+        throw err;
+      }
 
       const sceneFilename = updatedSession.scene.s3Key.split("/").pop() || "";
       const sceneUrl = getProxyUrl("scene", sceneFilename);
@@ -1367,7 +1431,9 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Execute the replay (same logic as original /replay endpoint)
-      const updatedSession = await prisma.$transaction(async (tx) => {
+      let updatedSession: any;
+      try {
+        updatedSession = await prisma.$transaction(async (tx) => {
         // Delete takes and render
         await tx.take.deleteMany({ where: { sessionId: id } });
         await tx.render.deleteMany({ where: { sessionId: id } });
@@ -1427,6 +1493,16 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        let newTask: string | null = null;
+        if (session.gameMode === "tasks") {
+          newTask = await getRandomTaskFromDb(tx);
+          if (!newTask) {
+            const err = new Error("TASKS_EMPTY");
+            (err as any).code = "TASKS_EMPTY";
+            throw err;
+          }
+        }
+
         // Update session - for multiplayer, all players are already in, so go to recording
         const allPlayersReady = session.participants.length >= session.maxPlayers;
         return await tx.session.update({
@@ -1435,7 +1511,7 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
             sceneId: newSceneId,
             status: allPlayersReady ? "recording" : "lobby",
             replayRequest: null, // Clear the request
-            task: session.gameMode === "tasks" ? getRandomTask() : null,
+            task: newTask,
           },
           include: {
             scene: true,
@@ -1445,6 +1521,15 @@ export const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       });
+      } catch (err: any) {
+        if (err?.code === "TASKS_EMPTY" || err?.message === "TASKS_EMPTY") {
+          return reply.status(400).send({
+            error: "No active tasks. Add tasks in admin.",
+            code: "TASKS_EMPTY",
+          });
+        }
+        throw err;
+      }
 
       // Build response (same as original)
       const sceneMeta = buildSceneMeta(updatedSession.scene);

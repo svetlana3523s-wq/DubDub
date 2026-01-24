@@ -101,3 +101,13 @@ model RenderSend {
   @@index([renderId])
   @@index([telegramUserId])
 }
+
+model Task {
+  id        String   @id @default(cuid())
+  text      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}

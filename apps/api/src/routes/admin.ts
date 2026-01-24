@@ -12,8 +12,17 @@ import { writeFile, unlink, mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
-import { parseCuesFromJson, cuesToFrames, validateCues, type Cue } from "@dubdub/shared";
-import type { SceneListItem, SceneDetail, ScenesListResponse } from "@dubdub/shared";
+import {
+  parseCuesFromJson,
+  cuesToFrames,
+  validateCues,
+  type Cue,
+  type TaskItem,
+  type TasksListResponse,
+  type SceneListItem,
+  type SceneDetail,
+  type ScenesListResponse,
+} from "@dubdub/shared";
 
 // Helper function to create video with audio cut at specified ranges using FFmpeg
 async function createCutsVideo(
@@ -720,6 +729,165 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       console.log(`[Admin] Scene deleted: ${id}${force ? " (forced)" : ""}`);
 
       return { success: true };
+    }
+  );
+
+  // GET /admin/tasks - list tasks
+  fastify.get<{
+    Querystring: { page?: string; limit?: string; search?: string; isActive?: string };
+  }>(
+    "/admin/tasks",
+    { preHandler: [authMiddleware, adminMiddleware] },
+    async (request, reply) => {
+      const page = Math.max(1, parseInt(request.query.page || "1", 10));
+      const limit = Math.min(100, Math.max(1, parseInt(request.query.limit || "20", 10)));
+      const search = request.query.search?.trim();
+      const isActiveParam = request.query.isActive;
+
+      const skip = (page - 1) * limit;
+      const where: { text?: any; isActive?: boolean } = {};
+
+      if (search) {
+        where.text = { contains: search, mode: "insensitive" };
+      }
+      if (isActiveParam === "true") {
+        where.isActive = true;
+      }
+      if (isActiveParam === "false") {
+        where.isActive = false;
+      }
+
+      const total = await prisma.task.count({ where });
+      const tasks = await prisma.task.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      const items: TaskItem[] = tasks.map((task) => ({
+        id: task.id,
+        text: task.text,
+        isActive: task.isActive,
+        createdAt: task.createdAt.toISOString(),
+        updatedAt: task.updatedAt.toISOString(),
+      }));
+
+      return {
+        tasks: items,
+        total,
+        page,
+        limit,
+      } as TasksListResponse;
+    }
+  );
+
+  // POST /admin/tasks - create task
+  fastify.post<{ Body: { text?: string } }>(
+    "/admin/tasks",
+    { preHandler: [authMiddleware, adminMiddleware] },
+    async (request, reply) => {
+      const rawText = request.body?.text ?? "";
+      const text = rawText.trim();
+
+      if (text.length < 5) {
+        return reply.status(400).send({ error: "Text too short", code: "TASK_TEXT_TOO_SHORT" });
+      }
+      if (text.length > 140) {
+        return reply.status(400).send({ error: "Text too long", code: "TASK_TEXT_TOO_LONG" });
+      }
+
+      const existing = await prisma.task.findFirst({
+        where: { text: { equals: text, mode: "insensitive" } },
+      });
+      if (existing) {
+        return reply.status(409).send({ error: "Task already exists", code: "TASK_DUPLICATE" });
+      }
+
+      const created = await prisma.task.create({
+        data: { text, isActive: true },
+      });
+
+      return {
+        id: created.id,
+        text: created.text,
+        isActive: created.isActive,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString(),
+      } as TaskItem;
+    }
+  );
+
+  // PUT /admin/tasks/:id - update task
+  fastify.put<{ Params: { id: string }; Body: { text?: string; isActive?: boolean } }>(
+    "/admin/tasks/:id",
+    { preHandler: [authMiddleware, adminMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params;
+      const rawText = request.body?.text;
+      const text = typeof rawText === "string" ? rawText.trim() : undefined;
+      const isActive = request.body?.isActive;
+
+      if (text !== undefined) {
+        if (text.length < 5) {
+          return reply.status(400).send({ error: "Text too short", code: "TASK_TEXT_TOO_SHORT" });
+        }
+        if (text.length > 140) {
+          return reply.status(400).send({ error: "Text too long", code: "TASK_TEXT_TOO_LONG" });
+        }
+
+        const existing = await prisma.task.findFirst({
+          where: { text: { equals: text, mode: "insensitive" }, id: { not: id } },
+        });
+        if (existing) {
+          return reply.status(409).send({ error: "Task already exists", code: "TASK_DUPLICATE" });
+        }
+      }
+
+      const updated = await prisma.task.update({
+        where: { id },
+        data: {
+          ...(text !== undefined ? { text } : {}),
+          ...(isActive !== undefined ? { isActive } : {}),
+        },
+      }).catch(() => null);
+
+      if (!updated) {
+        return reply.status(404).send({ error: "Task not found" });
+      }
+
+      return {
+        id: updated.id,
+        text: updated.text,
+        isActive: updated.isActive,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      } as TaskItem;
+    }
+  );
+
+  // POST /admin/tasks/:id/archive - disable task
+  fastify.post<{ Params: { id: string } }>(
+    "/admin/tasks/:id/archive",
+    { preHandler: [authMiddleware, adminMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params;
+      const updated = await prisma.task.update({
+        where: { id },
+        data: { isActive: false },
+      }).catch(() => null);
+
+      if (!updated) {
+        return reply.status(404).send({ error: "Task not found" });
+      }
+
+      return {
+        id: updated.id,
+        text: updated.text,
+        isActive: updated.isActive,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      } as TaskItem;
     }
   );
 };

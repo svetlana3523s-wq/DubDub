@@ -145,3 +145,18 @@ export interface ScenesListResponse {
   page: number;
   limit: number;
 }
+
+export interface TaskItem {
+  id: string;
+  text: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TasksListResponse {
+  tasks: TaskItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
