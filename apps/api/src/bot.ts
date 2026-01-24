@@ -56,6 +56,17 @@ function getNormalizedBotUsername(): string {
   return normalized;
 }
 
+function getCallbackData(ctx: Context): string | undefined {
+  const cb = ctx.callbackQuery;
+  if (!cb) {
+    return undefined;
+  }
+  if ("data" in cb) {
+    return cb.data;
+  }
+  return undefined;
+}
+
 // getVideoInfo imported from ./lib/video-utils.js
 
 async function downloadTelegramFile(
@@ -260,7 +271,7 @@ export function createBot(): Telegraf {
     if (ctx.state?.callbackHandled) {
       return;
     }
-    const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
+    const callbackData = getCallbackData(ctx);
     console.log("[Bot] callback_query unhandled", {
       userId: ctx.from?.id,
       chatId: ctx.chat?.id,
@@ -400,7 +411,7 @@ export function createBot(): Telegraf {
       ctx.state.callbackHandled = true;
       const userId = ctx.from?.id;
       if (!userId) return;
-      const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
+      const callbackData = getCallbackData(ctx);
       console.log("[Bot] callback join_game", {
         userId,
         chatId: ctx.chat?.id,
@@ -489,7 +500,7 @@ export function createBot(): Telegraf {
   bot.action("suggest_episode", async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     ctx.state.callbackHandled = true;
-    const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
+    const callbackData = getCallbackData(ctx);
     console.log("[Bot] callback suggest_episode", {
       userId: ctx.from?.id,
       callback: callbackData,
@@ -773,7 +784,7 @@ export function createBot(): Telegraf {
   bot.action(/^upload_url:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     ctx.state.callbackHandled = true;
-    const callbackData = (ctx.callbackQuery as { data?: string } | undefined)?.data;
+    const callbackData = getCallbackData(ctx);
     console.log("[Bot] callback upload_url", {
       userId: ctx.from?.id,
       callback: callbackData,
